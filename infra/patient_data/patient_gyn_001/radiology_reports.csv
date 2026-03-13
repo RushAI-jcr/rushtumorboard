@@ -1,0 +1,110 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+RAD001,patient_gyn_001,CT Chest Abdomen Pelvis with contrast,2025-09-20,"CT CHEST/ABDOMEN/PELVIS WITH IV CONTRAST
+
+CLINICAL INDICATION: Bilateral adnexal masses. Elevated CA-125. Evaluate for malignancy and staging.
+
+TECHNIQUE: Helical CT of the chest, abdomen, and pelvis performed after administration of 100 mL Omnipaque 350 IV contrast.
+
+FINDINGS:
+
+CHEST: Small bilateral pleural effusions, right greater than left. No pulmonary nodules or masses. No mediastinal or hilar lymphadenopathy. Heart size normal. No pericardial effusion.
+
+ABDOMEN:
+Liver: No focal hepatic lesions. No parenchymal metastases.
+Gallbladder and biliary: Unremarkable.
+Pancreas: Normal.
+Spleen: Normal size, no lesion.
+Adrenals: Normal bilaterally.
+Kidneys: Normal bilaterally. No hydronephrosis.
+Omentum: Diffuse omental thickening and nodularity consistent with omental caking, measuring approximately 4.2 cm in maximum AP thickness. Highly suspicious for carcinomatosis.
+Peritoneum: Nodular peritoneal thickening along the right paracolic gutter and right hemidiaphragm. Small-volume peritoneal disease noted along the mesentery.
+Ascites: Moderate free fluid in the pelvis and bilateral paracolic gutters.
+
+PELVIS:
+Right adnexal mass: Complex solid and cystic mass measuring 8.2 x 6.5 x 7.1 cm with irregular solid components and internal septations. Suspicious for malignancy.
+Left adnexal mass: Predominantly solid mass measuring 5.7 x 4.3 x 5.0 cm. Suspicious for malignancy.
+Uterus: Normal size with small intramural fibroid (1.3 cm). Endometrial stripe thin.
+Bladder: Normal.
+
+LYMPH NODES:
+Para-aortic lymphadenopathy: Multiple enlarged nodes, largest measuring 2.3 x 1.8 cm at the level of the renal hilum.
+Pelvic lymphadenopathy: Right external iliac node 1.4 cm (short axis), left obturator node 1.1 cm.
+No inguinal or supraclavicular lymphadenopathy.
+
+IMPRESSION:
+1. Bilateral complex adnexal masses (right 8.2 cm, left 5.7 cm) highly suspicious for ovarian malignancy.
+2. Omental caking consistent with peritoneal carcinomatosis.
+3. Peritoneal disease along right paracolic gutter and right hemidiaphragm.
+4. Para-aortic and pelvic lymphadenopathy suspicious for metastatic disease.
+5. Moderate ascites.
+6. Small bilateral pleural effusions, no pulmonary metastases.
+7. No hepatic metastases.
+
+Findings are consistent with FIGO Stage IIIC ovarian cancer."
+RAD002,patient_gyn_001,CT Chest Abdomen Pelvis with contrast - restaging,2025-11-20,"CT CHEST/ABDOMEN/PELVIS WITH IV CONTRAST - RESTAGING
+
+CLINICAL INDICATION: High-grade serous ovarian cancer, FIGO IIIC, s/p 3 cycles NACT (carboplatin/paclitaxel). Restaging prior to interval debulking surgery.
+
+COMPARISON: CT 2025-09-20
+
+FINDINGS:
+
+CHEST: Previously noted bilateral pleural effusions have resolved. No pulmonary nodules. No lymphadenopathy.
+
+ABDOMEN:
+Liver: No new hepatic lesions.
+Omentum: Marked improvement. Previously noted omental caking has significantly decreased. Residual omental thickening measuring 1.2 cm AP (previously 4.2 cm). Partial response.
+Peritoneum: Previously noted peritoneal nodularity along right paracolic gutter and diaphragm has resolved. No measurable peritoneal disease.
+Ascites: Resolved (previously moderate).
+
+PELVIS:
+Right adnexal mass: Decreased to 3.1 x 2.4 x 2.8 cm (previously 8.2 x 6.5 x 7.1 cm). Significant interval decrease.
+Left adnexal mass: Decreased to 2.8 x 2.0 x 2.3 cm (previously 5.7 x 4.3 x 5.0 cm). Significant interval decrease.
+Uterus: Unchanged.
+
+LYMPH NODES:
+Para-aortic: Largest node decreased to 1.1 cm (previously 2.3 cm). Near resolution.
+Pelvic: Previously noted pelvic lymphadenopathy has resolved.
+
+RECIST 1.1 ASSESSMENT:
+Target lesions:
+1. Right adnexal mass: 8.2 cm → 3.1 cm
+2. Left adnexal mass: 5.7 cm → 2.8 cm
+3. Para-aortic lymph node: 2.3 cm → 1.1 cm
+Sum of diameters: 16.2 cm → 7.0 cm (56.8% decrease)
+Response category: PARTIAL RESPONSE (>30% decrease)
+
+IMPRESSION:
+1. Excellent partial response to neoadjuvant chemotherapy.
+2. Bilateral adnexal masses significantly decreased.
+3. Near-resolution of omental carcinomatosis and lymphadenopathy.
+4. Resolution of ascites and pleural effusions.
+5. Patient appears to be a candidate for interval debulking surgery."
+RAD003,patient_gyn_001,CT Chest Abdomen Pelvis with contrast - post-treatment,2026-02-25,"CT CHEST/ABDOMEN/PELVIS WITH IV CONTRAST - POST-TREATMENT SURVEILLANCE
+
+CLINICAL INDICATION: High-grade serous ovarian cancer FIGO IIIC, BRCA1+, s/p NACT + IDS (R0) + adjuvant chemotherapy. Completed 6 cycles carboplatin/paclitaxel. Pre-maintenance baseline.
+
+COMPARISON: CT 2025-11-20
+
+FINDINGS:
+
+CHEST: Clear lungs. No effusions. No nodules. No lymphadenopathy.
+
+ABDOMEN:
+Liver: No lesions.
+Omentum: Post-surgical changes. No residual or recurrent omental disease.
+Peritoneum: No peritoneal carcinomatosis. No ascites.
+Post-surgical changes in the pelvis and retroperitoneum.
+
+PELVIS:
+Post-surgical changes from TAH/BSO. Vaginal cuff appears normal.
+No pelvic mass or fluid collection.
+No pelvic lymphadenopathy.
+
+LYMPH NODES: No retroperitoneal, pelvic, or inguinal lymphadenopathy.
+
+IMPRESSION:
+1. Complete radiologic response. No evidence of measurable disease.
+2. Post-surgical changes from interval debulking.
+3. No evidence of recurrent or progressive disease.
+4. Recommend continued surveillance per protocol."

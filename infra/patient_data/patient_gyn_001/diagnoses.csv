@@ -1,0 +1,10 @@
+PatientID,DiagnosisName,ICD10Code,DateOfEntry,Status
+patient_gyn_001,Malignant neoplasm of ovary,C56.9,2025-10-05,Active
+patient_gyn_001,Secondary malignant neoplasm of retroperitoneal lymph nodes,C77.2,2025-10-05,Active
+patient_gyn_001,Malignant ascites,R18.0,2025-09-15,Resolved
+patient_gyn_001,BRCA1 gene mutation carrier,Z15.01,2025-10-05,Active
+patient_gyn_001,Essential hypertension,I10,2020-01-15,Active
+patient_gyn_001,Type 2 diabetes mellitus without complications,E11.9,2019-06-01,Active
+patient_gyn_001,Family history of malignant neoplasm of breast,Z80.3,2025-09-15,Active
+patient_gyn_001,Family history of malignant neoplasm of ovary,Z80.41,2025-09-15,Active
+patient_gyn_001,Chemotherapy-induced peripheral neuropathy,G62.0,2026-01-15,Active

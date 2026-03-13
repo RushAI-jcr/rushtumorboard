@@ -1,0 +1,3 @@
+PatientID,StageDate,StagingSystem,TNM_T,TNM_N,TNM_M,StageGroup,FIGOStage
+patient_gyn_001,2025-10-05,AJCC 8th Edition,T3c,N1,M0,IIIC,IIIC
+patient_gyn_001,2025-12-12,AJCC 8th Edition (post-NACT),ypT3c,ypN1,ypM0,IIIC,IIIC
