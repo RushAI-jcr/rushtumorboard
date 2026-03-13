@@ -1,12 +1,12 @@
-# Agent Development Guide  
-Everything you need to define new agents and give them custom tools.
+# Agent Development Guide
+Everything you need to define new agents and give them custom tools for the GYN Oncology Tumor Board.
 
 ## Table of Contents
 - [Create / Modify Agents](#create--modify-agents)
 - [Deploy Changes](#deploy-changes)
 - [Adding tools (plugins) to your agents](#adding-tools-plugins-to-your-agents)
 
-## Create / Modify Agents  
+## Create / Modify Agents
 
 ### Adding a New Agent
 1. Open your scenario's `src/<SCENARIO>/config/agents.yaml` file
@@ -14,14 +14,14 @@ Everything you need to define new agents and give them custom tools.
 3. Include all required fields and any optional fields you need
 4. Save the file
 
-### Required YAML Fields  
+### Required YAML Fields
 | Field | Purpose |
 |-------|---------|
 | **name** | Unique identifier for the agent |
 | **instructions** | System prompt the LLM receives |
 | **description** | Brief text used in UI blurb and by orchestrator to determine when/how to use the agent |
 
-### Optional Fields  
+### Optional Fields
 | Field | Purpose |
 |-------|---------|
 | **tools** | List of Semantic-Kernel plugin names the agent can call. See [tools](#adding-tools-plugins-to-your-agents) |
@@ -31,74 +31,79 @@ Everything you need to define new agents and give them custom tools.
 
 ### Example Agent
 ```yaml
-# scenarios/Orchestrator/config/agents.yaml
-- name: patienteducator
+- name: OncologicHistory
   instructions: |
-    You are a patient-education specialist. Your goals are to:
-      - Detect jargon and explain it in ≤60 words at a 5th-grade level.  
-      - Maintain a glossary and provide summaries on demand.  
-      - End every response with 'back to you: *Orchestrator*'.
-  description: |
-    Translates medical jargon into plain English, keeps a glossary, and
-    summarizes conversations for patients.
+    You are **OncologicHistory**. Extract and present prior oncologic history
+    in clinical shorthand (s/p, dx, bx, LN, OSH, etc.) using dates as M/D/YY.
+    Use `extract_oncologic_history` tool. Present: opening line, staging block,
+    chronological cancer history (-date: event), current status, and reason
+    for referral. Flag OSH vs Rush events.
+    Yield back with "back to you: *Orchestrator*".
+  temperature: 0
   tools:
+    - name: oncologic_history_extractor
     - name: patient_data
-  temperature: 0.25
+  description: |
+    An oncologic history agent for GYN tumor board. **You provide**: structured
+    prior oncologic history including diagnosis timeline, treatments received,
+    recurrences, molecular profile, current status, and reason for referral.
+    **You need**: patient data loaded by PatientHistory.
 ```
 
 ### Add a Custom Icon (Optional)
-1. Place the PNG/SVG in `infra/botIcons/`  
+1. Place the PNG/SVG in `infra/botIcons/`
 2. Reference it inside `infra/modules/botservice.bicep`
 
 
 ## Deploy Changes
 
-1. Save your updated YAML and plugin code.  
-2. Run the standard deployment:  
+1. Save your updated YAML and plugin code.
+2. Run the standard deployment:
 ```bash
-azd up          # Azure best-practice: deploy infra + code together
+azd up
 ```
-3. Install/refresh the Teams app package if new agents or icons were added:  
+3. Install/refresh the Teams app package if new agents or icons were added:
 ```bash
 uploadPackage.sh ./output <chatId|meetingLink> [tenantId]
 ```
 
-## Adding tools (plugins) to your agents  
+## Adding tools (plugins) to your agents
 
 ### Understanding Tools and Function Calling
 
-Tools are Semantic-Kernel **plugins** that extend your agent's capabilities beyond text generation. Function calling enables an AI agent to interact with external tools, APIs, or code in a controlled and structured way. Instead of generating plain text instructions, the agent can "call" predefined functions with specific parameters as part of its reasoning and decision-making process.
+Tools are Semantic-Kernel **plugins** that extend your agent's capabilities. Function calling enables an agent to interact with external tools, APIs, or data in a controlled way. The framework automatically discovers any plugin that exposes a `create_plugin()` factory function.
 
-During runtime, the framework automatically discovers any plugin that exposes a `create_plugin()` factory function. These plugins serve as the bridge between your agent's reasoning capabilities and external systems or data sources. For detailed information on developing Semantic Kernel plugins, see the [official documentation](https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/?pivots=programming-language-python).  Below are some basics to get you started.
+For detailed information on SK plugins, see the [official documentation](https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/?pivots=programming-language-python).
 
-### Provided Tools
+### Provided Tools — GYN Tumor Board
+
 | Plugin | Function |
 |--------|----------|
-| `content_export` | Export tumor board summary to Word |
-| `clinical_trials` | Search clinicaltrials.gov |
-| `cxr_report_gen` | Run Microsoft CxrReportGen on images |
-| `graph_rag` | RAG search of research papers |
-| `med_image_insight` | Malignancy probability (MedImageInsight) |
-| `med_image_parse` | Tumour sizing (MedImageParse) |
-| `patient_data` | Timeline + Q&A over patient notes |
+| `content_export` | Export tumor board summary to landscape 4-column Word document |
+| `presentation_export` | Export 3-slide PPTX with CA-125 trend chart |
+| `oncologic_history_extractor` | Extract structured prior oncologic history from clinical notes |
+| `pathology_extractor` | Extract pathology findings (histology, IHC, molecular markers) |
+| `radiology_extractor` | Extract imaging findings from radiology reports |
+| `tumor_markers` | Extract and trend tumor markers (CA-125, HE4, etc.) |
+| `clinical_trials_nci` | Search NCI ClinicalTrials.gov for eligible GYN trials |
+| `clinical_trials` | Search clinicaltrials.gov (legacy) |
+| `graph_rag` | RAG search of research papers via GraphRAG |
+| `patient_data` | Timeline + Q&A over patient notes from Epic Caboodle |
 
 
-### Creating and Attaching Custom Tools to your Agents
+### Creating and Attaching Custom Tools
 
 1. Create either:
   - Single file: `src/<SCENARIO>/tools/my_new_tool_plugin.py` with `create_plugin()` function
   - Package: `src/<SCENARIO>/tools/my_new_tool_plugin/__init__.py` with `create_plugin()` function + other files
-  - OpenAPI: an OpenAPI specification. See PatientStatus definition in the [Agent with a OpenAPI Plugin Example](#agent-with-a-openapi-plugin-example) section and OpenAPI specification `src/default/config/openapi/time_api.yaml` as an example for adding OpenAPI service as tools.
+  - OpenAPI: an OpenAPI specification. See the [OpenAPI Plugin Example](#agent-with-an-openapi-plugin-example) section.
 
-The factory function must return your tool instance. The framework will automatically discover and load properly structured tools referenced in agent configs.
+The factory function must return your tool instance. The framework automatically discovers and loads tools referenced in agent configs.
 
-2. Reference the tool in your agent configuration  
-   Open your scenario’s `src/<SCENARIO>/config/agents.yaml` and list the plugin under the
-   agent’s `tools:` section:
+2. Reference the tool in your agent configuration:
 
    ```yaml
    - name: <AgentName>
-     # …other agent fields…
      tools:
        - name: <plugin_package>
          type: <function | openapi>
@@ -111,46 +116,39 @@ The factory function must return your tool instance. The framework will automati
 #### Instruction Field
 Tell the agent explicitly WHEN to use its tool, explain WHY the tool exists, provide output handling guidance and end with a hand-off phrase.
 
-**WHEN to use the tool example:**
+**WHEN to use the tool:**
 ```yaml
 Before proceeding, ensure you have the following information:
-  age (str): The age of the patient.
-  biomarker (str): The biomarker information of the patient.
-  # ...more fields...
+  patient_id (str): The patient ID to look up.
 ```
 
-**WHY the tool exists example:**
+**WHY the tool exists:**
 ```yaml
-# MedicalResearch agent:
-* Your responses must be based solely on the data retrieved using the Microsoft GraphRAG tool.
-...
-# ReportCreation agent:
-You are an AI agent that assembles a tumor board Word document using information previously prepared by other agents.
+# OncologicHistory agent:
+* Use `extract_oncologic_history` to extract structured prior cancer history from clinical notes.
+  This is especially valuable for OSH transfer patients.
 ```
 
-**HOW to handle output example:**
-```yaml 
-# ClinicalTrials agent - detailed response structure:
-3. Format the trial ID using a markdown link. For example, if the trial ID is "NCT123456", format it as [NCT123456](https://clinicaltrials.gov/study/NCT123456).
-4. Present the results in a clear and concise manner, including the trial ID, title, and an explanation of why the patient is eligible for the trial.
-```
-
-**Hand-off example**
+**HOW to handle output:**
 ```yaml
-# Common to almost all agents:
-- After replying, yield control by saying: **"back to you: Orchestrator"**.
+# ClinicalTrials agent - format trial links:
+Format the trial ID as [NCT123456](https://clinicaltrials.gov/study/NCT123456).
+Present results with trial ID, title, and eligibility rationale.
+```
+
+**Hand-off:**
+```yaml
+- After replying, yield control: **"back to you: Orchestrator"**.
 ```
 
 #### Description Field
 
-The Orchestrator scans these descriptions when deciding which agent to call for a user request, so clarity here directly affects routing accuracy.
+The Orchestrator scans descriptions when deciding which agent to call, so clarity directly affects routing.
 
 ```yaml
-# PatientHistory - standard format:
-A patient history agent. **You provide**: patient timeline and can answer information regarding the patient that you typically find in patient notes or history. **You need** a patient ID provided by the user.
-
-# ClinicalTrials agent - mentions dependency:
-An agent providing information on clinical trials. **You provide**: information on clinical trials. **You need**: patient status from PatientStatus.
+# OncologicHistory - mentions what it provides and needs:
+An oncologic history agent for GYN tumor board. **You provide**: structured
+prior oncologic history. **You need**: patient data loaded by PatientHistory.
 ```
 
 ### Agent with a Tool Plugin Example
@@ -180,83 +178,26 @@ class WeatherPlugin:
         return json.dumps(cur)
 ```
 
-
-> scenarios/<scenario>/config/agents.yaml:
-```yaml
-
-...
-- name: Weather
-  instructions: |
-    You are an AI agent that reports the current weather for a U.S. ZIP code.
-    - Always call the `current_weather_zip` tool to fetch data.  
-    - If no ZIP code is provided, ask the user for it.  
-    - Return: “Temperature: NN °F – Condition: <description>”.  
-    - After replying, yield control by saying: **“back to you: Orchestrator”**.
-  temperature: 0
-  tools:
-    - name: weather_app
-  description: |
-    Supplies current temperature and conditions. **Requires**: ZIP code.
-```
-
 ### Agent with an OpenAPI Plugin Example
 
 > [!NOTE]
-> The tool name that is passed to the LLM will be a concatenation of the tool name in `agents.yaml` and the operation ID in the OpenAPI definition. The total length of the tool name cannot exceed 64 characters. For more details, see the [Semantic Kernel OpenAPI plugins documentation](https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/adding-openapi-plugins?pivots=programming-language-python).
-
-Agents can be configured to call OpenAPI services as tools. The following example demonstrates the PatientStatus agent using an OpenAPI service that returns current time to calculate age. 
-
-To test this configuration:
-1. Replace PatientStatus configuration in `src/scenarios/default/config/agents.yaml` with the following configuration
-2. Run `azd deploy` to deploy changes
+> The tool name passed to the LLM is a concatenation of the tool name in `agents.yaml` and the operation ID in the OpenAPI definition. Total length cannot exceed 64 characters.
 
 ```yaml
 - name: PatientStatus
   instructions: |
-    You are an AI agent that provides the patient's current status. Make sure to explicitly mention these characteristics before presenting the patient's current status.
-      'age':
-      'patient_gender':
-      'staging':
-      'primary site':
-      'histology':
-      'biomarkers'
-      'treatment history':
-      'ecog performance status':
-
-    Don't proceed unless you have all of this information. 
-    You may infer this information from the conversation if it is available.
+    You are an AI agent that provides the patient's current status.
     If date of birth is available, calculate the age using the `time_plugin`.
-    If this information is not available, ask PatientHistory specifically for the missing information.
-    DO:
-      Ask PatientHistory. EXAMPLE: "*PatientHistory*, can you provide me with the patient's #BLANK?. Try to infer the information if not available".
   tools:
     - name: time_plugin
       type: openapi
       openapi_document_path: scenarios/default/config/openapi/time_api.yaml
-      server_url_override: http://localhost:8000 # Using localhost since Time API is deployed locally.
+      server_url_override: http://localhost:8000
   description: |
-    A PatientStatus agent. You provide current status of a patient using. **You provide**: current status of a patient. **You need**: age, staging, primary site, histology, biomarkers, treatment history, ecog performance status. This can be obtained by PatientHistory.
+    A PatientStatus agent. **You provide**: current status. **You need**: staging, molecular profile, treatment history from PatientHistory.
 ```
-
-#### Testing the OpenAPI Integration
-
-From Teams, send the following message to the PatientStatus agent:
-
-```
-@PatientStatus what's the age if date of birth is 1965-12-01
-```
-
-**Expected Response:**
-```
-age: 59 years old (calculated from date of birth 1965-12-01)
-...
-```
-
-The PatientStatus agent successfully calculates the patient's age using the current time and the provided date of birth.
 
 #### OpenAPI Tool Configuration
-
-The OpenAPI tool supports the following optional fields:
 
 ```yaml
 tools:
@@ -268,12 +209,7 @@ tools:
     debug_logging: false  # Optional: enable debug logging (default: false)
 ```
 
-**Note**: When enabling `debug_logging`, ensure debug logging is also configured in `app.py`:
-
-```python
-log_level = logging.INFO
-```
-
 ## Next Steps
 
-* [Define your own scenario](./scenarios.md)
+* [GYN Tumor Board Scenario Guide](./scenarios.md)
+* [Data Access & Epic Integration](./data_access.md)

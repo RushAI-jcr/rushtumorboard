@@ -1,61 +1,86 @@
 # Data Access
 
-This document covers the design of the data access layer used to load and format patient data in a persistent storage.
+This document covers the data access layer used to load and format patient data for the GYN Oncology Tumor Board.
 
 ## Overview
 
-The Data Access Layer (DAL) serves as an abstraction layer that encapsulates the data access logic used by agent tools. It provides a unified interface for interacting with various data sources, ensuring consistency, maintainability, and scalability across the system.
+The Data Access Layer (DAL) abstracts data retrieval from multiple sources — Azure Blob Storage for development/testing and Epic Clarity/Caboodle for production patient data. It provides a unified interface that agent tools use to access clinical notes, pathology reports, radiology reports, and imaging.
 
 ### Key Responsibilities
 
-- **Data Retrieval**: Fetch data from databases, APIs, or other external sources.
-- **Data Transformation**: Convert raw data into structured formats suitable for processing by agent tools.
-- **Data Validation**: Ensure the integrity and validity of the data being accessed.
-- **Error Handling**: Manage exceptions and errors that may occur during data access operations.
+- **Data Retrieval**: Fetch patient data from blob storage, FHIR servers, or Epic Caboodle
+- **Data Transformation**: Convert raw data into structured formats for agent processing
+- **Data Validation**: Ensure integrity of clinical data being accessed
+- **Error Handling**: Manage exceptions during data access operations
 
 ### Benefits
 
-- **Abstraction**: Decouples the data access logic from the business logic, promoting modularity.
-- **Reusability**: Centralizes data access logic, making it reusable across multiple agent tools.
-- **Maintainability**: Simplifies updates and changes to data access mechanisms without impacting the tools that rely on them.
+- **Abstraction**: Swap data sources (blob → Epic Caboodle) without changing agent tools
+- **Reusability**: Centralized data access logic shared across all GYN tumor board tools
+- **Maintainability**: Update data source connections without impacting agent logic
 
 ### Components
 
-1. **Data Models**: Define the structure and schema of the data being accessed.
-2. **Data Accessors**: Implement the logic for interacting with specific data sources.
+1. **Data Models**: Define the structure of clinical data (notes, reports, images)
+2. **Data Accessors**: Implement source-specific retrieval logic
 
-By leveraging the Data Access Layer, developers can focus on building robust agent tools without worrying about the complexities of data access and management.
+## Data Sources
 
+### Development: Azure Blob Storage
+For local development and testing, patient data is stored in Azure Blob Storage under `infra/patient_data/`. Synthetic GYN oncology test cases are provided:
+- `patient_gyn_001` — GYN oncology test case
+- `patient_gyn_002` — GYN oncology test case
+
+### Production: Epic Clarity/Caboodle
+For production deployments at Rush, data is retrieved from Epic's Clarity/Caboodle data warehouse. Configure the data source:
+
+```sh
+azd env set CLINICAL_NOTES_SOURCE fhir
+```
+
+See the [FHIR Integration Guide](./fhir_integration.md) for Azure Health Data Services or the [Fabric Integration Guide](./fabric/fabric_integration.md) for Microsoft Fabric.
 
 ## Data Models
 
-This table describes the available data models that are persisted in storage.
-| Data Model Name | Type |  Description |
+| Data Model | Type | Description |
 |-|-|-|
-| Chat Artifact | ChatArtifact | Stores generated data from Agents, such as patient timeline, patient data answers and relevant research paper search results. |
-| Chat Context | ChatContext | Contains contextual information related to a chat session, such as chat history and loaded patient data used throughout a chat session. |
-| Clinical Note | dict | Represents clinical notes or medical documentation for patient records. |
-| Image | binary | Stores medical images such as CT scans, X-rays or MRIs for diagnostic purposes. |
+| Chat Artifact | ChatArtifact | Stores generated data from agents: patient timeline, extracted findings, research results |
+| Chat Context | ChatContext | Chat session state including history and loaded patient data |
+| Clinical Note | dict | Clinical notes — H&P, consultation, progress notes, referral letters |
+| Pathology Report | dict | Surgical pathology, cytology, molecular testing reports |
+| Radiology Report | dict | CT, MRI, PET/CT, ultrasound reports |
+| Image | binary | Medical images for diagnostic review |
 
 ## Data Accessors
 
-This table describes the available data accessors to access persistent storage.
-| Data Accessor Name | Description |
+| Data Accessor | Description |
 |-|-|
-| Chat Artifact Accessor | Handles read/write/archive operations for ChatArtifact. |
-| Chat Context Accessor | Handles read/write/archive operations for ChatContext. |
-| Clinical Note Accessor | Handles read operation for clinical notes. |
-| Image Accessor | Handles read operation for patient images. |
+| Chat Artifact Accessor | Read/write/archive for ChatArtifact |
+| Chat Context Accessor | Read/write/archive for ChatContext |
+| Clinical Note Accessor | Read all clinical notes for a patient (used by OncologicHistory agent) |
+| Image Accessor | Read medical images |
 
 ## Usage of DataAccess in Agents
 
-Agents manage chat history and session data using `ChatContext`. Upon receiving a message, the agent will load `ChatContext` using `DataAccess` for an existing chat or create a new one. After responding to a message, the agent will save `ChatContext` using `DataAccess`.
+Agents manage chat history and session data using `ChatContext`. On each message, the agent loads existing `ChatContext` via `DataAccess` or creates a new one. After responding, it saves the updated context.
 
-When an agent receives a "clear" message, the `ChatContext` associated with the chat session will be archived.
+When an agent receives a "clear" message, the `ChatContext` is archived.
 
 ## Usage of DataAccess in Plugins
 
-Plugins are created with `PluginConfiguration`. Tools in the plugin can access data models via `PluginConfiguration.data_access`.
+Plugins receive `PluginConfiguration` at creation. Tools access data models via `PluginConfiguration.data_access`.
+
+```py
+class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
+
+    async def _get_clinical_notes(self, patient_id: str) -> list[dict]:
+        """Read all clinical notes for a patient."""
+        accessor = self.data_access.clinical_note_accessor
+        all_notes_json = await accessor.read_all(patient_id)
+        # Parse and return notes...
+```
+
+Generic pattern for any plugin:
 
 ```py
 class SamplePlugin:
@@ -66,7 +91,5 @@ class SamplePlugin:
     @kernel_function()
     async def tool1(self, patient_id: str) -> str:
         clinical_notes = await self.config.data_access.clinical_note_accessor.read_all(patient_id)
-
-        # Do something with clinical notes
-        ...
+        # Process clinical notes...
 ```
