@@ -59,6 +59,7 @@ Rules:
 - trial_entries: max 3 items, format each as "NCT# — Brief title (Phase X)".
 - overview_title: "Patient {patient_id} — {cancer_type}"
 - overview_subtitle: "FIGO {figo_stage} | {molecular_profile} | {date}"
+- If the patient is an outside transfer, include referral source and reason in overview_bullets.
 - findings_title: "Pathology & Imaging Findings"
 - findings_chart_title: name of primary tumor marker (e.g., "CA-125 Trend")
 - treatment_title: "Treatment Plan & Clinical Trials"
@@ -102,6 +103,7 @@ class PresentationExportPlugin:
         tumor_markers: str = "",
         surgical_findings: str = "",
         board_discussion: str = "",
+        oncologic_history: str = "",
     ) -> str:
         """Generate a 3-slide PPTX tumor board summary.
 
@@ -118,6 +120,7 @@ class PresentationExportPlugin:
             tumor_markers: Tumor marker trends (CA-125, HE4, etc.) as JSON or text.
             surgical_findings: Surgical/debulking findings.
             board_discussion: Tumor board consensus discussion points.
+            oncologic_history: Structured prior oncologic history (diagnosis, treatments, referral reason).
 
         Returns:
             str: HTML link to download the generated PPTX file.
@@ -140,6 +143,7 @@ class PresentationExportPlugin:
             "treatment_plan": treatment_plan,
             "clinical_trials": clinical_trials,
             "board_discussion": board_discussion,
+            "oncologic_history": oncologic_history,
         }
         slide_content = await self._summarize_for_slides(all_data)
 
