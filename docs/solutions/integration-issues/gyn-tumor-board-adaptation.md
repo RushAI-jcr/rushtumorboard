@@ -157,33 +157,49 @@ Key design decisions:
 
 ## Files Changed
 
-| File | Action |
-|------|--------|
-| `src/scenarios/default/config/agents.yaml` | Rewritten |
-| `src/scenarios/default/config/healthcare_agents.yaml` | Updated |
-| `src/data_models/epic/__init__.py` | New |
-| `src/data_models/epic/caboodle_file_accessor.py` | New |
-| `src/data_models/data_access.py` | Edited |
-| `src/mcp_servers/__init__.py` | New |
-| `src/mcp_servers/clinical_trials_mcp.py` | New |
-| `src/mcp_app.py` | Edited |
-| `src/scenarios/default/tools/pathology_extractor.py` | New |
-| `src/scenarios/default/tools/radiology_extractor.py` | New |
-| `src/scenarios/default/tools/tumor_markers.py` | New |
-| `src/scenarios/default/tools/content_export/content_export.py` | Edited |
-| `src/requirements.txt` | Edited |
-| `src/scenarios/default/tools/presentation_export.py` | New |
-| `src/scenarios/default/templates/tumor_board_slides.pptx` | New (generated) |
-| `scripts/generate_pptx_template.py` | New |
-| `src/data_models/tumor_board_summary.py` | Edited (added SlideContent) |
-| `src/scenarios/default/tools/clinical_trials_nci.py` | New |
-| `.claude/skills/word-export/SKILL.md` | New |
-| `.claude/skills/pptx-export/SKILL.md` | New |
-| `infra/patient_data/patient_gyn_001/` | New (7 CSV files) |
-| `infra/patient_data/patient_gyn_002/` | New (7 CSV files) |
-| `docs/plans/2026-03-12-001-feat-gyn-tumor-board-adaptation-plan.md` | New |
-| `docs/plans/2026-03-12-002-feat-clinical-trials-mcp-server-plan.md` | New |
-| `docs/brainstorms/2026-03-12-clinical-trials-mcp-server-brainstorm.md` | New |
+39 files total across the commit.
+
+| # | File | Action |
+|---|------|--------|
+| 1 | `src/scenarios/default/config/agents.yaml` | Rewritten |
+| 2 | `src/scenarios/default/config/healthcare_agents.yaml` | Updated |
+| 3 | `src/data_models/epic/__init__.py` | New |
+| 4 | `src/data_models/epic/caboodle_file_accessor.py` | New |
+| 5 | `src/data_models/data_access.py` | Edited |
+| 6 | `src/data_models/tumor_board_summary.py` | Edited (added SlideContent) |
+| 7 | `src/mcp_servers/__init__.py` | New |
+| 8 | `src/mcp_servers/clinical_trials_mcp.py` | New |
+| 9 | `src/mcp_app.py` | Edited |
+| 10 | `src/scenarios/default/tools/medical_report_extractor.py` | New (shared base class for pathology/radiology extractors) |
+| 11 | `src/scenarios/default/tools/pathology_extractor.py` | New |
+| 12 | `src/scenarios/default/tools/radiology_extractor.py` | New |
+| 13 | `src/scenarios/default/tools/tumor_markers.py` | New |
+| 14 | `src/scenarios/default/tools/clinical_trials_nci.py` | New |
+| 15 | `src/scenarios/default/tools/presentation_export.py` | New |
+| 16 | `src/scenarios/default/tools/content_export/content_export.py` | Edited |
+| 17 | `src/scenarios/default/templates/tumor_board_slides.pptx` | New (generated) |
+| 18 | `scripts/generate_pptx_template.py` | New |
+| 19 | `src/requirements.txt` | Edited |
+| 20 | `.claude/skills/word-export/SKILL.md` | New |
+| 21 | `.claude/skills/pptx-export/SKILL.md` | New |
+| 22 | `infra/patient_data/patient_gyn_001/clinical_notes.csv` | New |
+| 23 | `infra/patient_data/patient_gyn_001/pathology_reports.csv` | New |
+| 24 | `infra/patient_data/patient_gyn_001/radiology_reports.csv` | New |
+| 25 | `infra/patient_data/patient_gyn_001/lab_results.csv` | New |
+| 26 | `infra/patient_data/patient_gyn_001/cancer_staging.csv` | New |
+| 27 | `infra/patient_data/patient_gyn_001/medications.csv` | New |
+| 28 | `infra/patient_data/patient_gyn_001/diagnoses.csv` | New |
+| 29 | `infra/patient_data/patient_gyn_002/clinical_notes.csv` | New |
+| 30 | `infra/patient_data/patient_gyn_002/pathology_reports.csv` | New |
+| 31 | `infra/patient_data/patient_gyn_002/radiology_reports.csv` | New |
+| 32 | `infra/patient_data/patient_gyn_002/lab_results.csv` | New |
+| 33 | `infra/patient_data/patient_gyn_002/cancer_staging.csv` | New |
+| 34 | `infra/patient_data/patient_gyn_002/medications.csv` | New |
+| 35 | `infra/patient_data/patient_gyn_002/diagnoses.csv` | New |
+| 36 | `docs/plans/2026-03-12-001-feat-gyn-tumor-board-adaptation-plan.md` | New |
+| 37 | `docs/plans/2026-03-12-002-feat-clinical-trials-mcp-server-plan.md` | New |
+| 38 | `docs/brainstorms/2026-03-12-clinical-trials-mcp-server-brainstorm.md` | New |
+| 39 | `docs/solutions/integration-issues/gyn-tumor-board-adaptation.md` | New (this document) |
 
 ## Cross-References
 
@@ -191,6 +207,8 @@ Key design decisions:
 - Clinical trials MCP plan: `docs/plans/2026-03-12-002-feat-clinical-trials-mcp-server-plan.md`
 - Brainstorm: `docs/brainstorms/2026-03-12-clinical-trials-mcp-server-brainstorm.md`
 - Existing SK plugin pattern: `src/scenarios/default/tools/patient_data.py`
+- Shared extractor base class: `src/scenarios/default/tools/medical_report_extractor.py`
 - Existing MCP app: `src/mcp_app.py`
+- Claude Code skills: `.claude/skills/word-export/SKILL.md`, `.claude/skills/pptx-export/SKILL.md`
 - NCI API docs: https://clinicaltrialsapi.cancer.gov/api/v2
 - AACT database: https://aact.ctti-clinicaltrials.org/
