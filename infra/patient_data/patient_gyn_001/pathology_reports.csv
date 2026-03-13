@@ -1,0 +1,89 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+PATH001,patient_gyn_001,CT-guided biopsy omental mass,2025-09-28,"PATHOLOGY REPORT - OMENTAL BIOPSY
+
+SPECIMEN: Omental mass, CT-guided core biopsy (2 cores)
+
+DIAGNOSIS: High-grade serous carcinoma, consistent with ovarian/fallopian tube/peritoneal primary.
+
+MICROSCOPIC: Cores of fibroadipose tissue extensively infiltrated by a high-grade epithelial neoplasm arranged in papillary, solid, and slit-like glandular patterns. Marked nuclear atypia with prominent nucleoli and frequent mitotic figures (>12 per 10 HPF). Psammoma bodies present. No mucinous or clear cell components identified.
+
+IMMUNOHISTOCHEMISTRY:
+- PAX8: Positive (diffuse, strong)
+- WT1: Positive (diffuse, strong)
+- p53: Aberrant pattern (diffuse strong overexpression, consistent with TP53 missense mutation)
+- CK7: Positive
+- CK20: Negative
+- ER: Positive (80%, strong intensity)
+- PR: Positive (10%, weak intensity)
+- p16: Block positive (diffuse, strong)
+- Napsin-A: Negative
+- HER2: Negative (IHC 0)
+- Ki-67: 70%
+- MLH1: Intact
+- MSH2: Intact
+- MSH6: Intact
+- PMS2: Intact
+
+MOLECULAR TESTING:
+- BRCA1: Pathogenic variant detected (c.5266dupC / 5382insC) - GERMLINE
+- BRCA2: No pathogenic variant
+- HRD Score (Myriad myChoice CDx): 58 (Positive; cutoff ≥42)
+- MSI Status: Microsatellite Stable (MSS)
+- PD-L1 (22C3): Combined Positive Score (CPS) = 8
+- TMB: 4.2 mutations/Mb (low)
+- No NTRK fusions detected
+- Additional somatic variants: TP53 p.R248W (pathogenic), NF1 p.Q1336* (likely pathogenic)
+
+COMMENT: Morphology and immunoprofile are diagnostic of high-grade serous carcinoma. The aberrant p53 staining pattern is consistent with the detected TP53 missense mutation. BRCA1 germline pathogenic variant confirmed - patient is eligible for PARP inhibitor therapy. HRD-positive status further supports platinum and PARP inhibitor sensitivity. Intact MMR excludes Lynch syndrome-associated endometrial/ovarian cancer. Recommend genetic counseling for the patient and at-risk family members."
+PATH002,patient_gyn_001,Surgical pathology - interval debulking,2025-12-12,"PATHOLOGY REPORT - INTERVAL DEBULKING SURGERY
+
+SPECIMENS:
+A. Uterus with cervix and bilateral adnexa
+B. Omentum
+C. Right pelvic lymph nodes
+D. Left pelvic lymph nodes
+E. Para-aortic lymph nodes
+F. Appendix
+G. Right diaphragm peritoneal biopsy
+H. Left diaphragm peritoneal biopsy
+I. Right paracolic gutter biopsy
+J. Left paracolic gutter biopsy
+K. Cul-de-sac peritoneal biopsy
+L. Bladder peritoneal biopsy
+
+DIAGNOSIS:
+
+A. UTERUS, CERVIX, AND BILATERAL ADNEXA:
+- RIGHT OVARY: Residual high-grade serous carcinoma, 2.5 cm, with treatment effect (approximately 40% viable tumor, 60% fibrosis/necrosis). Ovarian surface involvement present.
+- LEFT FALLOPIAN TUBE: High-grade serous carcinoma involving fimbrial end, 1.8 cm, with treatment effect (approximately 30% viable tumor). Serous tubal intraepithelial carcinoma (STIC) identified in the fimbrial mucosa - likely site of origin.
+- LEFT OVARY: No residual carcinoma.
+- UTERUS: Inactive endometrium. Benign leiomyoma (1.2 cm). No carcinoma.
+- CERVIX: Benign. No dysplasia.
+
+B. OMENTUM: Residual high-grade serous carcinoma, single focus 0.5 cm, with extensive treatment effect (>90% fibrosis).
+
+C. RIGHT PELVIC LYMPH NODES: 0 of 12 lymph nodes positive for carcinoma.
+D. LEFT PELVIC LYMPH NODES: 0 of 10 lymph nodes positive for carcinoma.
+E. PARA-AORTIC LYMPH NODES: 1 of 8 lymph nodes positive for carcinoma (0.3 cm metastatic deposit with treatment effect). No extracapsular extension.
+
+F. APPENDIX: No carcinoma. Benign.
+G-L. PERITONEAL BIOPSIES (all sites): No residual carcinoma. Fibrosis consistent with treatment effect.
+
+PATHOLOGIC STAGING (post-neoadjuvant):
+- ypT3c: Tumor involves ovaries with peritoneal metastasis beyond pelvis (omentum) and retroperitoneal lymph node involvement
+- ypN1: Regional lymph node metastasis (1 para-aortic node)
+- ypM0: No distant metastasis
+- FIGO Stage IIIC
+- Chemotherapy Response Score (CRS): 2 (appreciable tumor response amid viable tumor readily identifiable)
+
+TREATMENT EFFECT: Partial response with 40-60% treatment effect across specimens. R0 resection achieved (no gross residual disease).
+
+SYNOPTIC SUMMARY:
+- Primary site: Right ovary and left fallopian tube (fimbrial STIC identified)
+- Histologic type: High-grade serous carcinoma
+- Grade: High grade (Grade 3)
+- LVSI: Present (focal)
+- Margins: Negative
+- Lymph nodes: 1/30 positive (para-aortic)
+- Treatment effect: CRS 2
+- Residual disease: R0"

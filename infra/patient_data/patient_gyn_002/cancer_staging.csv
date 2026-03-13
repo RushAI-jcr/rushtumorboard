@@ -1,0 +1,2 @@
+PatientID,StageDate,StagingSystem,TNM_T,TNM_N,TNM_M,StageGroup,FIGOStage
+patient_gyn_002,2025-10-28,FIGO 2023 (Endometrial),pT1b,pN0(sn),cM0,IB,IBm-MMRd

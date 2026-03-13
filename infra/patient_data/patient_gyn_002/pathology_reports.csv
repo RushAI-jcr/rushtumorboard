@@ -1,0 +1,105 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+PR-2001,patient_gyn_002,Endometrial Biopsy,2025-08-01,"SURGICAL PATHOLOGY REPORT
+
+Specimen: Endometrial biopsy (Pipelle)
+
+DIAGNOSIS: Endometrioid adenocarcinoma, FIGO Grade 3
+
+Microscopic Description:
+Fragments of endometrial tissue with markedly atypical glands showing solid growth pattern (>50% solid). High nuclear grade with prominent nucleoli and frequent mitotic figures (>10/10 HPF). Focal areas of squamous differentiation. No definite myometrial tissue for invasion assessment. Background atrophic endometrium.
+
+IMMUNOHISTOCHEMISTRY:
+- ER: Positive, 40% of tumor cells, moderate intensity
+- PR: Positive, 10% of tumor cells, weak intensity
+- p53: Wild-type pattern (heterogeneous staining)
+- p16: Patchy positive (not block positive)
+
+MISMATCH REPAIR PROTEIN IHC:
+- MLH1: LOSS of nuclear expression in tumor cells (intact in stroma)
+- PMS2: LOSS of nuclear expression in tumor cells (intact in stroma)
+- MSH2: INTACT nuclear expression
+- MSH6: INTACT nuclear expression
+
+Interpretation: Loss of MLH1 and PMS2 expression suggesting mismatch repair deficiency (dMMR). This pattern may be due to Lynch syndrome (germline MLH1 mutation) or MLH1 promoter hypermethylation. Clinical correlation and further testing recommended.
+
+Comment: Given grade 3 histology and MMR deficiency, further molecular testing including POLE exonuclease domain sequencing is recommended for 2023 FIGO molecular-integrated staging."
+PR-2002,patient_gyn_002,Hysterectomy - Synoptic,2025-10-28,"SURGICAL PATHOLOGY REPORT - SYNOPTIC
+
+Specimen: Uterus, cervix, bilateral fallopian tubes, bilateral ovaries, sentinel lymph nodes
+
+SYNOPTIC REPORT — ENDOMETRIAL CARCINOMA (CAP Protocol)
+
+Procedure: Total hysterectomy with bilateral salpingo-oophorectomy
+
+TUMOR:
+  Histologic Type: Endometrioid adenocarcinoma
+  Histologic Grade (FIGO): Grade 3 (>50% solid growth)
+  Tumor Size: 3.8 x 3.2 x 2.1 cm
+  Myometrial Invasion: Present
+    Depth of invasion: 14 mm
+    Myometrial thickness: 22 mm
+    Percent invasion: 64% (>50% = deep invasion)
+  Uterine Serosa: Not involved
+  Cervical Involvement:
+    Endocervical glandular involvement: Absent
+    Cervical stromal invasion: Absent
+  Lymphovascular Space Invasion: PRESENT (extensive, >5 foci)
+  Parametrial Involvement: Absent
+
+MARGINS:
+  Vaginal cuff margin: Negative (>10 mm)
+  Cervical margin: Negative
+  All other margins: Negative
+
+LYMPH NODES:
+  Left pelvic sentinel nodes: 0/2 (negative, including ultrastaging)
+  Right pelvic sentinel node: 0/1 (negative, including ultrastaging)
+  Total: 0/3 positive
+  Isolated tumor cells: Not identified
+
+ADDITIONAL FINDINGS:
+  Right ovary: Benign serous cystadenoma (1.5 cm), no malignancy
+  Left ovary: Unremarkable, no malignancy
+  Bilateral fallopian tubes: No significant pathology, no STIC lesions
+  Peritoneal washings: Negative for malignancy
+  Background endometrium: Atrophic
+
+IMMUNOHISTOCHEMISTRY (confirmed on hysterectomy specimen):
+  ER: Positive, 35% tumor cells
+  PR: Positive, 5% tumor cells
+  p53: Wild-type pattern
+  MLH1: LOSS
+  PMS2: LOSS
+  MSH2: Intact
+  MSH6: Intact
+  HER2: 1+ (negative)
+  Ki-67: 45%
+  L1CAM: Positive (>10% membranous staining)
+
+MOLECULAR TESTING:
+  POLE exonuclease domain: No pathogenic mutation detected (wild-type)
+  MSI testing (PCR): MSI-High (5/5 markers unstable)
+  MLH1 promoter methylation: NEGATIVE (not methylated)
+  TMB: 42 mutations/Mb (high)
+
+MOLECULAR CLASSIFICATION (2023 FIGO / ProMisE):
+  POLEmut: No
+  MMRd: YES (MLH1/PMS2 loss, MSI-H, germline MLH1 confirmed)
+  p53abn: No (wild-type p53)
+  NSMP: N/A (MMRd identified)
+  → Classification: MMRd
+
+PATHOLOGIC STAGING (FIGO 2023):
+  pT1b: Tumor invades >50% of myometrium
+  pN0(sn): No regional lymph node metastasis (sentinel)
+  Stage: IB
+  Molecular-integrated stage: IBm-MMRd
+
+ADDITIONAL MOLECULAR FINDINGS (NGS Panel):
+  PIK3CA: c.3140A>G (p.H1047R) - Pathogenic (hotspot mutation)
+  PTEN: c.388C>T (p.R130*) - Pathogenic (truncating)
+  ARID1A: c.5548C>T (p.R1850*) - Pathogenic (truncating)
+  KRAS: Wild-type
+  CTNNB1: Wild-type
+  NTRK1/2/3 fusions: Not detected
+  HRD score: Not applicable (not assessed)"

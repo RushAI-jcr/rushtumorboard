@@ -27,5 +27,7 @@ azure-monitor-opentelemetry==1.6.10
 azure-monitor-opentelemetry-exporter==1.0.0b39
 opentelemetry-instrumentation-fastapi==0.52b1
 opentelemetry-instrumentation-logging==0.52b1
+asyncpg>=0.29.0
+python-pptx>=0.6.23
 
 -r ./scenarios/${SCENARIO}/requirements.txt

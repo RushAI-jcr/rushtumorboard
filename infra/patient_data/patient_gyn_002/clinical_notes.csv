@@ -1,0 +1,216 @@
+NoteID,PatientID,NoteType,EntryDate,NoteText
+CN-2001,patient_gyn_002,H&P,2025-09-15,"HISTORY AND PHYSICAL - GYN ONCOLOGY CONSULT
+
+Patient: 55-year-old postmenopausal female (G3P3) referred for newly diagnosed endometrial cancer.
+
+Chief Complaint: Postmenopausal bleeding x 3 months.
+
+History of Present Illness:
+Patient presented to her PCP with intermittent postmenopausal bleeding starting June 2025. She underwent transvaginal ultrasound on 2025-07-20 showing thickened endometrial stripe at 14mm. Office endometrial biopsy performed 2025-08-01 revealed Grade 3 endometrioid adenocarcinoma of the endometrium. Referred to GYN oncology for surgical management.
+
+The bleeding has been intermittent, moderate in amount. No associated pain, weight loss, or urinary/bowel symptoms. Last menstrual period was at age 51. No history of hormone replacement therapy.
+
+Past Medical History:
+- Hypertension, controlled on lisinopril
+- Type 2 diabetes mellitus, on metformin
+- Obesity (BMI 38)
+- Hyperlipidemia
+- No prior surgeries
+
+Family History:
+- Mother: colon cancer at age 52
+- Maternal aunt: endometrial cancer at age 48
+- Brother: colon cancer at age 45
+- Pattern concerning for Lynch syndrome
+
+Social History:
+- Non-smoker, rare alcohol use
+- Retired school teacher
+- Lives with spouse
+- ECOG performance status: 0
+
+Physical Examination:
+- VS: BP 138/82, HR 76, BMI 38
+- General: Well-nourished, obese female in no distress
+- Abdomen: Soft, obese, no masses or tenderness
+- Pelvic: External genitalia normal. Speculum exam: small amount of blood in vault. Cervix appears normal. Bimanual: uterus slightly enlarged, mobile, no adnexal masses.
+
+Assessment:
+55-year-old with Grade 3 endometrioid adenocarcinoma of the endometrium. Family history concerning for Lynch syndrome. Recommend preoperative workup including MMR IHC, CT chest/abdomen/pelvis for staging, and genetic counseling referral.
+
+Plan:
+1. CT chest/abdomen/pelvis for staging
+2. Labs: CBC, CMP, CA-125, HE4
+3. MMR IHC on biopsy specimen
+4. Genetic counseling referral for Lynch syndrome evaluation
+5. Preoperative medical clearance given comorbidities
+6. Schedule for robotic-assisted total laparoscopic hysterectomy, bilateral salpingo-oophorectomy, sentinel lymph node mapping, and possible pelvic/para-aortic lymphadenectomy"
+CN-2002,patient_gyn_002,Pathology Consultation,2025-09-20,"PATHOLOGY CONSULTATION NOTE
+
+Reviewed pathology from office endometrial biopsy (2025-08-01):
+- Grade 3 endometrioid adenocarcinoma
+- IHC performed at outside facility: ER 40% positive, PR 10% positive
+
+MMR IHC ordered and resulted today:
+- MLH1: LOSS of expression
+- PMS2: LOSS of expression
+- MSH2: Intact expression
+- MSH6: Intact expression
+
+This pattern (MLH1/PMS2 loss) can be due to:
+1. Lynch syndrome (germline MLH1 mutation)
+2. MLH1 promoter hypermethylation (sporadic)
+
+Given strong family history (mother and brother with colon cancer, aunt with endometrial cancer), Lynch syndrome is highly suspected.
+
+Recommend:
+- MLH1 promoter methylation testing
+- Germline genetic testing for Lynch syndrome (MLH1, MSH2, MSH6, PMS2, EPCAM)
+- If Lynch negative, consider somatic testing panel
+
+Molecular classification per 2023 FIGO:
+- POLE mutation testing pending
+- MMR: deficient (MLH1/PMS2 loss)
+- Preliminary classification: MMRd (pending POLE result)
+- If POLE mutated → POLEmut (supersedes MMRd)
+- p53 IHC: wild-type pattern (normal staining)"
+CN-2003,patient_gyn_002,Genetic Counseling,2025-10-01,"GENETIC COUNSELING NOTE
+
+Patient seen for genetic counseling regarding concern for Lynch syndrome.
+
+Family History Assessment:
+- Amsterdam II criteria: MET (3 relatives with Lynch-associated cancers, 2 successive generations, 1 diagnosed <50)
+- Bethesda guidelines: MET (endometrial cancer <60 with MMR deficiency)
+
+Tumor Testing Results:
+- MLH1/PMS2 loss by IHC
+- MLH1 promoter methylation: NEGATIVE (not hypermethylated)
+- This strongly supports germline MLH1 mutation as cause
+
+Germline Testing:
+- Comprehensive Lynch syndrome panel sent (Invitae)
+- Results (2025-10-15): PATHOGENIC VARIANT detected in MLH1 gene
+  - MLH1 c.350C>T (p.Thr117Met) - Known pathogenic variant
+  - Classification: Pathogenic
+
+Diagnosis: Lynch Syndrome (MLH1 pathogenic variant)
+
+Implications for cancer management:
+- Endometrial cancer is Lynch-associated
+- dMMR/MSI-H status → eligible for immunotherapy if advanced/recurrent
+- Increased lifetime risk: colon (50-80%), ovarian (6-13%), gastric, urinary tract
+- Recommend colonoscopy every 1-2 years
+- BSO being performed with hysterectomy (risk-reducing)
+
+Family cascade testing recommended for first-degree relatives."
+CN-2004,patient_gyn_002,Preoperative Note,2025-10-20,"PREOPERATIVE NOTE
+
+Patient cleared for surgery. Preoperative staging workup complete.
+
+CT Chest/Abdomen/Pelvis (2025-10-05): See radiology report. No evidence of distant metastatic disease. Enlarged uterus with enhancing endometrial mass.
+
+Labs:
+- CA-125: 45 U/mL (mildly elevated)
+- HE4: 89 pmol/L (normal)
+- CBC: WNL
+- CMP: Glucose 142, otherwise WNL
+- HbA1c: 7.2%
+
+Staging summary:
+- Clinical stage: At least IA (Grade 3 endometrioid, depth of invasion unknown until surgical specimen)
+- MMRd (MLH1/PMS2 loss, germline MLH1 pathogenic variant - Lynch syndrome)
+- POLE mutation: NOT detected (wild-type)
+- p53: wild-type pattern
+
+Final 2023 FIGO molecular classification: MMRd
+- This affects staging: MMRd status may modify stage group per 2023 FIGO
+
+Surgical plan:
+- Robotic-assisted TLH/BSO
+- Sentinel lymph node mapping (ICG)
+- Pelvic and para-aortic lymph node assessment
+- Peritoneal washings"
+CN-2005,patient_gyn_002,Operative Note,2025-10-25,"OPERATIVE NOTE
+
+Procedure: Robotic-assisted total laparoscopic hysterectomy, bilateral salpingo-oophorectomy, bilateral sentinel lymph node mapping and biopsy, pelvic washings.
+
+Surgeon: Dr. Martinez, GYN Oncology
+Anesthesia: General endotracheal
+
+Findings:
+- Uterus enlarged to approximately 10-week size
+- Bilateral ovaries and fallopian tubes grossly normal
+- No evidence of peritoneal carcinomatosis
+- No omental disease
+- No ascites
+- Liver and diaphragm surfaces smooth
+- Bilateral sentinel lymph nodes identified (2 left pelvic, 1 right pelvic) - sent for ultrastaging
+
+Procedure Details:
+- ICG injected cervically for sentinel lymph node mapping
+- Bilateral pelvic sentinel nodes identified and removed
+- Standard robotic hysterectomy technique
+- Uterus, tubes, and ovaries removed intact via vaginal extraction in specimen bag
+- Peritoneal washings obtained
+- Vaginal cuff closed in standard fashion
+- All ports closed
+
+EBL: 75 mL
+Specimens:
+1. Uterus, cervix, bilateral tubes and ovaries
+2. Left pelvic sentinel lymph nodes (2)
+3. Right pelvic sentinel lymph node (1)
+4. Peritoneal washings
+
+Complications: None
+Patient tolerated procedure well, transferred to recovery in stable condition."
+CN-2006,patient_gyn_002,Surgical Pathology Final,2025-11-05,"SURGICAL PATHOLOGY - FINAL REPORT
+
+See pathology_reports.csv for full synoptic report.
+
+Summary discussed at GYN tumor board:
+- Grade 3 endometrioid adenocarcinoma
+- Myometrial invasion: 60% (>50% - deep invasion)
+- LVSI: Present (extensive)
+- Cervical stromal invasion: Absent
+- All 3 sentinel lymph nodes: NEGATIVE (including ultrastaging with cytokeratin IHC)
+- Peritoneal washings: Negative for malignancy
+- Both ovaries and tubes: No tumor
+
+FIGO 2023 Stage: IB (deep myometrial invasion, no cervical/nodal/distant disease)
+With molecular classification: Stage IBm-MMRd
+
+This is a high-intermediate risk case:
+- Grade 3
+- Deep myometrial invasion (>50%)
+- Extensive LVSI
+- MMR deficient (Lynch syndrome)
+
+Treatment discussion needed: adjuvant therapy decision."
+CN-2007,patient_gyn_002,Multidisciplinary Tumor Board,2025-11-12,"MULTIDISCIPLINARY TUMOR BOARD NOTE
+
+Case presented: 55yo with FIGO Stage IBm-MMRd endometrioid adenocarcinoma.
+
+Key features discussed:
+1. High-intermediate risk features: Grade 3, deep invasion, extensive LVSI
+2. MMR deficient (Lynch syndrome, germline MLH1 pathogenic variant)
+3. 2023 FIGO molecular-integrated staging: IBm-MMRd
+4. All sentinel lymph nodes negative
+
+Treatment Discussion:
+- Standard of care for high-intermediate risk: Vaginal cuff brachytherapy (VCB) +/- external beam radiation (EBRT)
+- MMRd status consideration: GOG-258 and PORTEC-3 data suggest chemotherapy may benefit high-risk patients
+- Immunotherapy consideration: dostarlimab (RUBY trial data) approved for dMMR advanced/recurrent endometrial cancer, but not yet standard in adjuvant setting
+- NRG-GY018 / KEYNOTE-868: pembrolizumab with chemotherapy for advanced endometrial → supports chemo + IO in appropriate setting
+
+Board Consensus:
+1. Adjuvant vaginal cuff brachytherapy (3 fractions)
+2. Consider adjuvant chemotherapy (carboplatin/paclitaxel x 4 cycles) given high-intermediate risk features
+3. Discuss clinical trial eligibility for adjuvant immunotherapy trials
+4. Continue Lynch syndrome surveillance (colonoscopy, upper GI screening)
+5. Close follow-up given elevated recurrence risk
+
+Follow-up plan:
+- Every 3 months x 2 years with exam and CA-125
+- CT imaging if symptoms arise
+- Colonoscopy per Lynch syndrome protocol"

@@ -3,6 +3,7 @@
 
 import contextlib
 import logging
+import os
 from secrets import token_hex
 
 import anyio
@@ -14,6 +15,7 @@ from starlette.routing import Mount
 
 import group_chat
 from data_models.app_context import AppContext
+from mcp_servers.clinical_trials_mcp import create_clinical_trials_mcp
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +69,7 @@ def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
             # Save chat context
             try:
                 await data_access.chat_context_accessor.write(chat_ctx)
-            except:
+            except Exception:
                 logger.exception("Failed to save chat context.")
 
             return responses
@@ -153,12 +155,53 @@ def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
 
             await http_transport.handle_request(scope, receive, send)
 
-    logger.setLevel(logging.DEBUG)
+    # Create the clinical trials MCP server
+    clinical_trials_mcp = create_clinical_trials_mcp()
+
+    async def handle_clinical_trials_http(scope, receive, send):
+        """Handle requests for the clinical trials MCP server."""
+        nonlocal task_group
+
+        logger.info("Handling clinical trials MCP HTTP request")
+        request = Request(scope, receive)
+        request_mcp_session_id = request.headers.get(MCP_SESSION_ID_HEADER)
+        if not request_mcp_session_id:
+            request_mcp_session_id = token_hex(16)
+
+        http_transport = StreamableHTTPServerTransport(
+            mcp_session_id=request_mcp_session_id,
+            is_json_response_enabled=False,
+        )
+
+        http_transport._check_accept_headers = lambda *args, **kwargs: (True, True)
+
+        async with http_transport.connect() as streams:
+            read_stream, write_stream = streams
+
+            async def run_clinical_trials_server():
+                try:
+                    logger.info("Running clinical trials MCP server...")
+                    await clinical_trials_mcp._mcp_server.run(
+                        read_stream=read_stream,
+                        write_stream=write_stream,
+                        initialization_options=clinical_trials_mcp._mcp_server.create_initialization_options(),
+                        stateless=True,
+                    )
+                except Exception as e:
+                    logger.error(f"Error running clinical trials MCP server: {e}")
+
+            if not task_group:
+                raise RuntimeError("Task group is not initialized")
+
+            task_group.start_soon(run_clinical_trials_server)
+            await http_transport.handle_request(scope, receive, send)
+
     # Create an ASGI application using the transport
     starlette_app = Starlette(
-        debug=True,
+        debug=os.environ.get("DEBUG", "").lower() in ("1", "true"),
         routes=[
             Mount("/orchestrator/", app=handle_streamable_http),
+            Mount("/clinical-trials/", app=handle_clinical_trials_http),
         ],
     )
 

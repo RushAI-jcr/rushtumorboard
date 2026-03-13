@@ -62,21 +62,31 @@ class ContentExportPlugin:
         pathology_findings: list[str],
         treatment_plan: str,
         clinical_trials: list[ClinicalTrial],
+        figo_stage: str = "",
+        molecular_profile: str = "",
+        tumor_markers: str = "",
+        surgical_findings: str = "",
+        board_discussion: str = "",
     ) -> str:
         """
-        Generate Word document.
+        Generate Word document for GYN Tumor Board review.
 
         Args:
             patient_gender (str): patient gender.
             patient_age (str): patient age.
             medical_history (str): Summarized medical history in 100 words or less.
             social_history (str): Summarized social history in 100 words or less.
-            cancer_type (str): Type of cancer.
-            ct_scan_findings (list[str]): CT scan findings.
-            x_ray_findings (list[str]): X-ray findings.
-            pathology_findings (list[str]): Pathology findings.
-            treatment_plan (str): Treatment.
+            cancer_type (str): Type of cancer (e.g., "High-grade serous ovarian carcinoma").
+            ct_scan_findings (list[str]): CT/MRI/PET-CT findings.
+            x_ray_findings (list[str]): Additional imaging findings (kept for backward compatibility).
+            pathology_findings (list[str]): Pathology findings including IHC and molecular.
+            treatment_plan (str): Treatment recommendation.
             clinical_trials (list[ClinicalTrial]): Eligible clinical trials.
+            figo_stage (str): FIGO stage (e.g., "IIIC").
+            molecular_profile (str): Molecular profile summary (BRCA, HRD, MMR, etc.).
+            tumor_markers (str): Tumor marker trends (CA-125, HE4, etc.).
+            surgical_findings (str): Surgical/debulking findings if applicable.
+            board_discussion (str): Tumor board consensus discussion points.
 
         Returns:
             str: HTTP link
@@ -97,10 +107,15 @@ class ContentExportPlugin:
             "medical_history": medical_history,
             "social_history": social_history,
             "cancer_type": cancer_type,
+            "figo_stage": figo_stage,
+            "molecular_profile": molecular_profile,
+            "tumor_markers": tumor_markers,
+            "surgical_findings": surgical_findings,
             "ct_scan_findings": ct_scan_findings,
             "x_ray_findings": x_ray_findings,
             "pathology_findings": pathology_findings,
             "treatment_plan": treatment_plan,
+            "board_discussion": board_discussion,
         }
         logger.info(f"doc_data: {doc_data}")
 

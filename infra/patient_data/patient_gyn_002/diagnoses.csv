@@ -1,0 +1,9 @@
+PatientID,DiagnosisName,ICD10Code,DateOfEntry,Status
+patient_gyn_002,Malignant neoplasm of endometrium,C54.1,2025-08-01,Active
+patient_gyn_002,Lynch syndrome (MLH1),Z15.09,2025-10-15,Active
+patient_gyn_002,Essential hypertension,I10,2020-01-15,Active
+patient_gyn_002,Type 2 diabetes mellitus without complications,E11.9,2019-06-01,Active
+patient_gyn_002,Obesity BMI 35-39.9,E66.01,2019-06-01,Active
+patient_gyn_002,Hyperlipidemia,E78.5,2021-03-10,Active
+patient_gyn_002,Postmenopausal bleeding,N95.0,2025-06-15,Resolved
+patient_gyn_002,Personal history of colonic polyps,Z86.010,2023-05-20,Active

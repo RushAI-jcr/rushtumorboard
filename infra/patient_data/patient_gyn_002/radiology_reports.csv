@@ -1,0 +1,59 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+RR-2001,patient_gyn_002,Transvaginal Ultrasound,2025-07-20,"TRANSVAGINAL ULTRASOUND
+
+Clinical Indication: Postmenopausal bleeding
+
+Findings:
+Uterus: Anteverted, measures 9.2 x 5.8 x 6.1 cm (mildly enlarged). Endometrial stripe measures 14 mm (thickened; normal postmenopausal <5 mm). The endometrium is heterogeneously echogenic with irregular borders, concerning for endometrial pathology.
+
+Myometrium: Heterogeneous with a small intramural fibroid in the posterior wall measuring 1.8 cm.
+
+Right ovary: 2.5 x 1.8 x 2.0 cm with a simple-appearing cyst measuring 1.5 cm. Likely benign serous cystadenoma. No solid components or internal vascularity.
+
+Left ovary: 1.8 x 1.2 x 1.5 cm, unremarkable. No masses.
+
+Cul-de-sac: No free fluid.
+
+Impression:
+1. Thickened endometrial stripe (14 mm) with heterogeneous echotexture - endometrial biopsy recommended.
+2. Right ovarian simple cyst (1.5 cm) - likely benign, follow-up if clinically indicated.
+3. Small posterior intramural fibroid (1.8 cm)."
+RR-2002,patient_gyn_002,CT Chest Abdomen Pelvis with Contrast,2025-10-05,"CT CHEST ABDOMEN PELVIS WITH IV CONTRAST
+
+Clinical Indication: Staging for newly diagnosed endometrial cancer, Grade 3 endometrioid
+
+Comparison: None
+
+CHEST:
+Heart: Normal size. No pericardial effusion.
+Lungs: Clear bilaterally. No pulmonary nodules or masses. No pleural effusion.
+Mediastinum: No lymphadenopathy. No suspicious mediastinal or hilar nodes.
+
+ABDOMEN:
+Liver: Normal size and attenuation. No focal hepatic lesions.
+Gallbladder: Normal. No cholelithiasis.
+Spleen: Normal.
+Pancreas: Normal.
+Adrenals: Normal bilaterally.
+Kidneys: Normal bilaterally. No hydronephrosis.
+Retroperitoneal lymph nodes: No para-aortic lymphadenopathy. No suspicious retroperitoneal nodes.
+
+PELVIS:
+Uterus: Enlarged, measuring approximately 9.5 x 6.0 x 6.5 cm. There is an irregularly enhancing endometrial mass extending through the majority of the endometrial cavity. The mass appears to extend into the inner myometrium. The outer myometrial margin appears intact. No definite serosal involvement.
+Cervix: Normal appearance. No cervical mass or suspicious enhancement.
+Ovaries: Right ovary contains a simple cyst measuring 1.6 cm (correlates with ultrasound). Left ovary unremarkable.
+Bladder: Normal.
+Rectum: Normal.
+Pelvic lymph nodes: No pelvic lymphadenopathy. Bilateral external iliac, internal iliac, and obturator nodes are within normal limits (<1 cm short axis).
+Inguinal nodes: Normal.
+Peritoneum: No peritoneal carcinomatosis. No omental thickening or caking. No ascites.
+
+Bones: No suspicious osseous lesions. Degenerative changes of the lumbar spine.
+
+Impression:
+1. Enhancing endometrial mass consistent with known endometrial carcinoma. Appears confined to the uterine corpus with inner myometrial invasion. No definite deep myometrial invasion by imaging (though MRI would be more sensitive).
+2. No evidence of cervical stromal invasion.
+3. No pelvic or para-aortic lymphadenopathy.
+4. No distant metastatic disease.
+5. Right ovarian simple cyst (1.6 cm) - likely benign.
+6. Staging: Imaging consistent with clinical Stage I disease."

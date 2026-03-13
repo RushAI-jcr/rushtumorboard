@@ -13,6 +13,7 @@ from azure.storage.blob.aio import BlobServiceClient
 from data_models.chat_artifact_accessor import ChatArtifactAccessor
 from data_models.chat_context_accessor import ChatContextAccessor
 from data_models.clinical_note_accessor import ClinicalNoteAccessor
+from data_models.epic.caboodle_file_accessor import CaboodleFileAccessor
 from data_models.fabric.fabric_clinical_note_accessor import FabricClinicalNoteAccessor
 from data_models.fhir.fhir_clinical_note_accessor import FhirClinicalNoteAccessor
 from data_models.image_accessor import ImageAccessor
@@ -106,6 +107,10 @@ def create_data_access(
         clinical_note_accessor = FabricClinicalNoteAccessor.from_credential(
             fabric_user_data_function_endpoint=os.getenv("FABRIC_USER_DATA_FUNCTION_ENDPOINT"),
             credential=credential,
+        )
+    elif clinical_notes_source == "epic" or clinical_notes_source == "caboodle":
+        clinical_note_accessor = CaboodleFileAccessor(
+            data_dir=os.getenv("CABOODLE_DATA_DIR"),
         )
     else:
         clinical_note_accessor = ClinicalNoteAccessor(blob_service_client)

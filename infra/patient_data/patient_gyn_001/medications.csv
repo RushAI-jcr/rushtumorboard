@@ -1,0 +1,8 @@
+PatientID,MedicationName,StartDate,EndDate,Route,Dose,Frequency,OrderClass
+patient_gyn_001,Carboplatin,2025-10-12,2026-02-15,IV,AUC 5,Every 21 days,Chemotherapy
+patient_gyn_001,Paclitaxel,2025-10-12,2026-02-15,IV,175 mg/m2,Every 21 days,Chemotherapy
+patient_gyn_001,Olaparib,2026-03-01,,Oral,300 mg BID,Twice daily,Targeted Therapy
+patient_gyn_001,Amlodipine,2020-01-15,,Oral,5 mg,Daily,Medication
+patient_gyn_001,Metformin,2019-06-01,,Oral,1000 mg,Twice daily,Medication
+patient_gyn_001,Ondansetron,2025-10-12,2026-02-15,IV/Oral,8 mg,As needed,Supportive Care
+patient_gyn_001,Dexamethasone,2025-10-12,2026-02-15,IV,20 mg,Pre-chemo,Supportive Care

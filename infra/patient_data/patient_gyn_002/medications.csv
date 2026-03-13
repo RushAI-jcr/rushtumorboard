@@ -1,0 +1,7 @@
+PatientID,MedicationName,StartDate,EndDate,Route,Dose,Frequency,OrderClass
+patient_gyn_002,Lisinopril,2020-01-15,,Oral,20 mg,Daily,Ambulatory
+patient_gyn_002,Metformin,2019-06-01,,Oral,1000 mg,Twice daily,Ambulatory
+patient_gyn_002,Atorvastatin,2021-03-10,,Oral,20 mg,Daily,Ambulatory
+patient_gyn_002,Enoxaparin,2025-10-24,2025-11-08,Subcutaneous,40 mg,Daily,Perioperative
+patient_gyn_002,Acetaminophen,2025-10-25,2025-10-30,Oral,1000 mg,Every 6 hours PRN,Postoperative
+patient_gyn_002,Ondansetron,2025-10-25,2025-10-27,IV/Oral,4 mg,Every 8 hours PRN,Postoperative
