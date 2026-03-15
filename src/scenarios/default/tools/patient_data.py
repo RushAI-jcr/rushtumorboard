@@ -96,7 +96,7 @@ class PatientDataPlugin:
             textwrap.dedent("""
                 Create a Patient Timeline: Organize the patient data in chronological order to create a
                 clear timeline of the patient's medical history and treatment. Use the provided clinical
-                notes. The timeline will be used as background for a molecular tumor board discussion.
+                notes. The timeline will be used as background for a GYN oncology tumor board discussion.
                 Be sure to include all relevant details such as:
                 - Initial presentation and diagnosis
                 - All biomarkers
