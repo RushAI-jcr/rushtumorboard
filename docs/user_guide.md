@@ -106,7 +106,7 @@ When possible, the underlying agents have been based on evaluated technology to 
 
 **Radiology**
 
-The Radiology agent employs Microsoft's Healthcare AI model [CXRReportGen](https://aka.ms/cxrreportgenmodelcard), which integrates multi-modal inputs—including current and prior images and report context—to generate grounded, interpretable radiology reports. The model has shown improved accuracy and transparency in automated chest X-ray interpretation, evaluated on both public and private data.
+The Radiology agent uses LLM-based extraction to structure findings from radiology report narratives (CT, MRI, PET/CT, ultrasound). It parses report text to identify key imaging findings, measurements, and impressions relevant to GYN oncology staging and treatment response assessment.
 
 **PatientHistory and PatientStatus**
 
