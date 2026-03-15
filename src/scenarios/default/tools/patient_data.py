@@ -68,11 +68,11 @@ class PatientDataPlugin:
             })
             logger.info(f"Loaded patient data for {patient_id}: {response}")
             return response
-        except:
+        except Exception as e:
             # try to retrieve valid patients:
             patients = await self.data_access.clinical_note_accessor.get_patients()
-            logger.exception(f"Error loading patient data for {patient_id}")
-            return f"Invalid patient ID: {patient_id}. Choose from following patient IDs: {", ".join(patients)}"
+            logger.exception(f"Error loading patient data for {patient_id}: {e}")
+            return f"Invalid patient ID: {patient_id}. Choose from following patient IDs: {', '.join(patients)}"
 
     @kernel_function()
     async def create_timeline(self, patient_id: str) -> str:
@@ -119,7 +119,11 @@ class PatientDataPlugin:
         chat_resp = await chat_completion_service.get_chat_message_content(chat_history=chat_history, settings=settings)
 
         # Parse the response to PatientTimeline object
-        timeline = PatientTimeline.model_validate_json(chat_resp.content)
+        try:
+            timeline = PatientTimeline.model_validate_json(chat_resp.content)
+        except Exception as e:
+            logger.error(f"Failed to parse timeline response for {patient_id}: {e}")
+            return f"Error parsing timeline response: {e}"
         timeline.patient_id = patient_id
 
         # Save patient timeline
@@ -179,7 +183,11 @@ class PatientDataPlugin:
         chat_resp = await chat_completion_service.get_chat_message_content(chat_history=chat_history, settings=settings)
 
         # Parse the response to PatientDataAnswer object
-        answer = PatientDataAnswer.model_validate_json(chat_resp.content)
+        try:
+            answer = PatientDataAnswer.model_validate_json(chat_resp.content)
+        except Exception as e:
+            logger.error(f"Failed to parse patient data answer for {patient_id}: {e}")
+            return f"Error parsing answer response: {e}"
         answer_id = str(uuid4())
 
         # Save PatientDataAnswer

@@ -69,6 +69,7 @@ def create_app_context() -> AppContext:
 def create_app(
     bots: dict,
     app_context: AppContext,
+    adapters: dict = None,
 ) -> FastAPI:
     app = FastAPI()
     app.include_router(messages_routes(adapters, bots))
@@ -127,7 +128,7 @@ bots = {
     for agent in app_context.all_agent_configs
 }
 
-teams_app = create_app(bots, app_context)
+teams_app = create_app(bots, app_context, adapters)
 fast_mcp_app, lifespan = create_fast_mcp_app(app_context)
 
 app = Starlette(

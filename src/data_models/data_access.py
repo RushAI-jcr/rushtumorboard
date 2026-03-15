@@ -113,6 +113,8 @@ def create_data_access(
             data_dir=os.getenv("CABOODLE_DATA_DIR"),
         )
     else:
+        if clinical_notes_source:
+            logger.warning(f"Unrecognized CLINICAL_NOTES_SOURCE value: {clinical_notes_source!r}. Falling back to default blob accessor.")
         clinical_note_accessor = ClinicalNoteAccessor(blob_service_client)
 
     return DataAccess(

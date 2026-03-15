@@ -76,7 +76,8 @@ def load_agent_config(scenario: str) -> dict:
     scenario_directory = os.path.join(src_dir, f"scenarios/{scenario}/config")
 
     agent_config_path = os.path.join(scenario_directory, "agents.yaml")
-    excluded_agents = os.getenv("EXCLUDED_AGENTS", "").split(",")
+    excluded_agents_env = os.getenv("EXCLUDED_AGENTS", "")
+    excluded_agents = excluded_agents_env.split(",") if excluded_agents_env else []
     logger.info(f"Excluding agents: {excluded_agents}")
 
     with open(agent_config_path, "r", encoding="utf-8") as f:
@@ -85,15 +86,27 @@ def load_agent_config(scenario: str) -> dict:
         logger.info(
             f"Loaded agent configuration for scenario '{scenario}': {[agent['name'] for agent in agent_config]}")
 
-    bot_ids = json.loads(os.getenv("BOT_IDS"))
-    hls_model_endpoints = json.loads(os.getenv("HLS_MODEL_ENDPOINTS"))
+    try:
+        bot_ids = json.loads(os.getenv("BOT_IDS", "{}"))
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON in BOT_IDS environment variable")
+        bot_ids = {}
+    try:
+        hls_model_endpoints = json.loads(os.getenv("HLS_MODEL_ENDPOINTS", "{}"))
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON in HLS_MODEL_ENDPOINTS environment variable")
+        hls_model_endpoints = {}
     for agent in agent_config:
         agent["bot_id"] = bot_ids.get(agent["name"])
         agent["hls_model_endpoint"] = hls_model_endpoints
         if agent.get("addition_instructions"):
             for file in agent["addition_instructions"]:
-                with open(os.path.join(scenario_directory, file)) as f:
-                    agent["instructions"] += f.read()
+                filepath = os.path.join(scenario_directory, file)
+                try:
+                    with open(filepath) as f:
+                        agent["instructions"] += f.read()
+                except FileNotFoundError:
+                    logger.warning(f"Additional instructions file not found: {filepath}")
 
     return agent_config
 

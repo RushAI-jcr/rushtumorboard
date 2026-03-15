@@ -111,7 +111,7 @@ def create_group_chat(
     app_ctx: AppContext, chat_ctx: ChatContext, participants: list[dict] = None
 ) -> Tuple[AgentGroupChat, ChatContext]:
     participant_configs = participants or app_ctx.all_agent_configs
-    participant_names = [cfg.get("name") for cfg in participant_configs]
+    participant_names = [cfg.get("name", "unnamed") for cfg in participant_configs]
     logger.info(f"Creating group chat with participants: {participant_names}")
 
     # Remove magentic agent from the list of agents. In the future, we could add agent type to deal with agents that should not be included in the Semantic Kernel group chat.
@@ -176,6 +176,8 @@ def create_group_chat(
 
         if model_supports_temperature():
             temperature = agent_config.get("temperature", DEFAULT_MODEL_TEMP)
+            if temperature is None:
+                temperature = DEFAULT_MODEL_TEMP
             logger.info(f"Setting model temperature for agent {agent_config['name']} to {temperature}")
         else:
             temperature = None

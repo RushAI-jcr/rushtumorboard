@@ -186,6 +186,9 @@ class ContentExportPlugin:
 
         # 3. Load template and render with RichText
         doc_template_path = os.path.join(self.root_dir, "templates", TEMPLATE_DOC_FILENAME)
+        if not os.path.exists(doc_template_path):
+            logger.error(f"Template not found: {doc_template_path}")
+            return f"Error: Word template not found at {doc_template_path}"
         doc = DocxTemplate(doc_template_path)
 
         doc_data = {
@@ -208,6 +211,7 @@ class ContentExportPlugin:
 
         stream = BytesIO()
         doc.save(stream)
+        stream.seek(0)
 
         artifact = ChatArtifact(artifact_id=artifact_id, data=stream.getvalue())
         await self.data_access.chat_artifact_accessor.write(artifact)
