@@ -79,7 +79,14 @@ class MedicalReportExtractorBase:
             chat_history=chat_history, settings=settings
         )
 
-        response_text = chat_resp.content
+        response_text = chat_resp.content if chat_resp.content else ""
+        if not response_text:
+            logger.warning(f"Empty LLM response for {self.report_type} extraction, patient {patient_id}")
+            return json.dumps({
+                "patient_id": patient_id,
+                "error": f"LLM returned empty response for {self.report_type} extraction.",
+                self.error_key: []
+            })
 
         # Parse JSON from response
         try:

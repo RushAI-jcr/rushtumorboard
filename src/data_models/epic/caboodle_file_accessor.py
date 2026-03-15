@@ -259,6 +259,8 @@ class CaboodleFileAccessor:
                 break
         if patient_col:
             df = df[df[patient_col].astype(str) == str(patient_id)]
+        else:
+            logger.warning(f"No patient ID column found in {filepath}. Returning all rows.")
         return df.to_dict("records")
 
     async def _read_legacy_json(self, patient_id: str) -> list[dict]:

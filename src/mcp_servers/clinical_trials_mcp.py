@@ -129,9 +129,12 @@ async def nci_search(
                     "trials": []
                 })
             data = await resp.json()
-    except aiohttp.ClientError as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
         logger.error(f"NCI API connection error: {e}")
         return json.dumps({"error": str(e), "total": 0, "trials": []})
+
+    if not isinstance(data, dict):
+        return json.dumps({"error": "Unexpected API response format", "total": 0, "trials": []})
 
     trials = []
     for trial in data.get("data", []):
@@ -204,7 +207,7 @@ async def gog_nrg_search(
                     "trials": []
                 })
             data = await resp.json()
-    except aiohttp.ClientError as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
         logger.error(f"ClinicalTrials.gov API connection error: {e}")
         return json.dumps({"error": str(e), "total": 0, "trials": []})
 
@@ -501,5 +504,13 @@ def create_clinical_trials_mcp() -> FastMCP:
         limit: int = 20,
     ) -> str:
         return await aact_search(condition, eligibility_keywords, intervention, status, limit)
+
+    @mcp.tool(description="Shutdown hook to close the shared HTTP session.")
+    async def cleanup():
+        global _http_session
+        if _http_session and not _http_session.closed:
+            await _http_session.close()
+            _http_session = None
+        return "Session closed."
 
     return mcp

@@ -81,7 +81,7 @@ class ClinicalTrialsPlugin:
             deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL"],
             api_version="2025-04-01-preview",
             endpoint=os.environ["AZURE_OPENAI_REASONING_MODEL_ENDPOINT"],
-            ad_token_provider=self.app_ctx.cognitive_services_token_provider if not hasattr(os.environ,"AZURE_OPENAI_API_KEY") else None,
+            ad_token_provider=self.app_ctx.cognitive_services_token_provider if "AZURE_OPENAI_API_KEY" not in os.environ else None,
         )
 
     @kernel_function()
@@ -158,12 +158,12 @@ class ClinicalTrialsPlugin:
             chat_history.add_system_message("Clinical Trial Eligibility Criteria:\n" +
                                             json.dumps(trial, indent=4))
 
-            chat_completion_response = self.chat_completion_service.get_chat_message_content(
+            chat_completion_response = await self.chat_completion_service.get_chat_message_content(
                 # We can't pass temperature here, because o3-mini doesn't support it. There are other settings we could customize here.
                 chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
             chat_completion_responses.append(chat_completion_response)
 
-        response_results = await asyncio.gather(*chat_completion_responses)
+        response_results = chat_completion_responses
 
         trial_dict_results = {
             trial["protocolSection"]["identificationModule"]["nctId"]:

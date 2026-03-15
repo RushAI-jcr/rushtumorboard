@@ -55,9 +55,9 @@ class GraphRagPlugin:
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{self.graph_rag_url}/query/local", json=body, headers=headers) as resp:
                 resp.raise_for_status()
-                resp = await resp.json()
-                result = resp["result"]
-                sources = resp["context_data"].get("sources", [])
+                resp_json = await resp.json()
+                result = resp_json["result"]
+                sources = resp_json["context_data"].get("sources", [])
 
             formatted_sources = {}
             for source in sources:
@@ -68,7 +68,11 @@ class GraphRagPlugin:
                 title = title_match.group(1) if title_match else None
                 pmid = pmid_match.group(1) if pmid_match else None
                 authors = authors_match.group(1) if authors_match else None
-                link = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else None
+
+                if pmid is None:
+                    continue
+
+                link = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
                 formatted_link = f"[{title}]({link})"
 
                 # The same link can be used for multiple sources, but we're only going to display one link for each source.
