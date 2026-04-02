@@ -46,45 +46,10 @@ logger = logging.getLogger(__name__)
 #   - Radiology layer 3: Progress Notes/Consults + imaging keywords
 #   - TumorMarkers fallback: Progress Notes/Consults + marker keywords
 # ---------------------------------------------------------------------------
-TIMELINE_NOTE_TYPES = (
-    # Primary clinical narrative
-    "Progress Notes",
-    "Progress Note",
-    "H&P",
-    "H&P (View-Only)",
-    "History and Physical",
-    "Interval H&P Note",
-    "Consults",
-    "Consult Note",
-    "Oncology Consultation",
-    "Discharge Summary",
-    # Procedural / operative
-    "Operative Report",
-    "Operative Note",
-    "Brief Op Note",
-    "Procedures",
-    "Procedure Note",
-    "Procedure Notes",
-    # Assessment / structured notes
-    "Assessment & Plan Note",
-    "AdmissionCare Note",
-    # Outside hospital / external records
-    "Unmapped External Note",
-    # ED clinical notes (not triage)
-    "ED Provider Notes",
-    "ED Notes",
-    "ED Provider Handoff Notes",
-    "ED Procedure Note",
-    # Oncology-specific
-    "Chemotherapy Treatment Note",
-    "Multidisciplinary Tumor Board",
-    "Genetic Counseling",
-    "Result Encounter Note",
-    # Addenda containing clinical updates
-    "Addendum Note",
-    # Pathology / radiology reports (from dedicated CSVs, normalized by accessor)
-    "pathology report",
-    "radiology report",
+from .note_type_constants import ALL_CLINICAL_TYPES, PATHOLOGY_REPORT_TYPES
+
+TIMELINE_NOTE_TYPES: tuple[str, ...] = (
+    ALL_CLINICAL_TYPES + PATHOLOGY_REPORT_TYPES + ("pathology report", "radiology report")
 )
 
 
@@ -149,15 +114,10 @@ class PatientDataPlugin:
 
         # Filter to clinically relevant note types — avoids sending Telephone Encounters,
         # Discharge Instructions, Anesthesia notes, etc. to the LLM.
-        # Falls back to read_all() if the accessor does not support type filtering
-        # (e.g., legacy JSON accessor).
+        # Falls back to read_all() if no notes match the type filter.
         accessor = self.data_access.clinical_note_accessor
-        if hasattr(accessor, "get_clinical_notes_by_type"):
-            filtered = await accessor.get_clinical_notes_by_type(patient_id, TIMELINE_NOTE_TYPES)
-            files = [json.dumps(r) for r in filtered]
-            if not files:
-                files = await accessor.read_all(patient_id)
-        else:
+        files: list = await accessor.get_clinical_notes_by_type(patient_id, list(TIMELINE_NOTE_TYPES))
+        if not files:
             files = await accessor.read_all(patient_id)
 
         if len(files) > _MAX_TIMELINE_NOTES:
@@ -201,10 +161,14 @@ class PatientDataPlugin:
         # https://devblogs.microsoft.com/semantic-kernel/using-json-schema-for-structured-output-in-python-for-openai-models/
         settings = self._get_chat_prompt_exec_settings(PatientTimeline)
         chat_resp = await chat_completion_service.get_chat_message_content(chat_history=chat_history, settings=settings)
+        if chat_resp is None or chat_resp.content is None:
+            logger.error("Empty LLM response for timeline, patient %s", patient_id)
+            return "Error processing timeline. Please try again."
+        timeline_content = chat_resp.content
 
         # Parse the response to PatientTimeline object
         try:
-            timeline = PatientTimeline.model_validate_json(chat_resp.content)
+            timeline = PatientTimeline.model_validate_json(timeline_content)
         except Exception:
             logger.error("Failed to parse timeline response for patient %s", patient_id, exc_info=True)
             return "Error processing timeline. Please try again."
@@ -216,7 +180,7 @@ class PatientDataPlugin:
             patient_id=patient_id,
             filename=ChatArtifactFilename.PATIENT_TIMELINE
         )
-        artifact = ChatArtifact(artifact_id, data=chat_resp.content.encode('utf-8'))
+        artifact = ChatArtifact(artifact_id, data=timeline_content.encode('utf-8'))
         await self.data_access.chat_artifact_accessor.write(artifact)
 
         # Format the timeline for display
@@ -226,7 +190,7 @@ class PatientDataPlugin:
             response += f"- {entry.date}: {entry.title}\n"
             response += f"{indent}- {entry.description}\n"
             for src_idx, src in enumerate(entry.sources):
-                note_url = get_patient_timeline_entry_source_url(conversation_id, patient_id, entry_index, src_idx)
+                note_url = get_patient_timeline_entry_source_url(conversation_id, patient_id, str(entry_index), str(src_idx))
                 source_text = " ".join(src.sentences) if src.sentences else "No text provided"
                 shortened_source_text = textwrap.shorten(source_text, width=160, placeholder="\u2026")
                 response += f"{indent}- Source: [{shortened_source_text}]({note_url})\n"
@@ -253,12 +217,8 @@ class PatientDataPlugin:
         conversation_id = self.chat_ctx.conversation_id
 
         accessor = self.data_access.clinical_note_accessor
-        if hasattr(accessor, "get_clinical_notes_by_type"):
-            filtered = await accessor.get_clinical_notes_by_type(patient_id, TIMELINE_NOTE_TYPES)
-            files = [json.dumps(r) for r in filtered]
-            if not files:
-                files = await accessor.read_all(patient_id)
-        else:
+        files: list = await accessor.get_clinical_notes_by_type(patient_id, list(TIMELINE_NOTE_TYPES))
+        if not files:
             files = await accessor.read_all(patient_id)
 
         if len(files) > _MAX_TIMELINE_NOTES:
@@ -285,10 +245,14 @@ class PatientDataPlugin:
         chat_completion_service: AzureChatCompletion = self.kernel.get_service(service_id="default")
         settings = self._get_chat_prompt_exec_settings(PatientDataAnswer)
         chat_resp = await chat_completion_service.get_chat_message_content(chat_history=chat_history, settings=settings)
+        if chat_resp is None or chat_resp.content is None:
+            logger.error("Empty LLM response for process_prompt, patient %s", patient_id)
+            return "Error processing response. Please try again."
+        answer_content = chat_resp.content
 
         # Parse the response to PatientDataAnswer object
         try:
-            answer = PatientDataAnswer.model_validate_json(chat_resp.content)
+            answer = PatientDataAnswer.model_validate_json(answer_content)
         except Exception:
             logger.error("Failed to parse answer response for patient %s", patient_id, exc_info=True)
             return "Error processing response. Please try again."
@@ -303,9 +267,9 @@ class PatientDataPlugin:
         try:
             answers_artifact = await self.data_access.chat_artifact_accessor.read(artifact_id)
             answers = json.loads(answers_artifact.data.decode('utf-8'))
-            answers[answer_id] = chat_resp.content
+            answers[answer_id] = answer_content
         except ResourceNotFoundError:
-            answers = {answer_id: chat_resp.content}
+            answers = {answer_id: answer_content}
         await self.data_access.chat_artifact_accessor.write(
             ChatArtifact(artifact_id, data=json.dumps(answers).encode('utf-8'))
         )
@@ -314,7 +278,7 @@ class PatientDataPlugin:
         response = f"{answer.text}\n\n**Sources**:\n"
         indent = " " * 4
         for src_idx, src in enumerate(answer.sources):
-            note_url = get_patient_data_answer_source_url(conversation_id, patient_id, answer_id, src_idx)
+            note_url = get_patient_data_answer_source_url(conversation_id, patient_id, answer_id, str(src_idx))
             source_text = " ".join(src.sentences) if src.sentences else "No text provided"
             shortened_source_text = textwrap.shorten(source_text, width=160, placeholder="\u2026")
             response += f"{indent}- Source: [{shortened_source_text}]({note_url})\n"

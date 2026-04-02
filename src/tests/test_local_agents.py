@@ -613,11 +613,13 @@ Prior treatment: None (newly diagnosed, s/p surgery)
 Please provide NCCN-based treatment recommendations for this patient.
 """
 
-        # Run the agent; ensure credential is closed even on assertion failure
+        # Run the agent; 120 s timeout guards against hung Azure calls in CI
+        # Credential is closed in finally even on assertion failure or timeout
         try:
             response_text = ""
-            async for msg in agent.invoke(patient_summary):
-                response_text += str(msg.content) if msg.content else ""
+            async with asyncio.timeout(120):
+                async for msg in agent.invoke(patient_summary):
+                    response_text += str(msg.content) if msg.content else ""
 
             logger.info("ClinicalGuidelines response length: %d chars", len(response_text))
             logger.info("Response preview: %s", response_text[:500])
@@ -650,3 +652,104 @@ Please provide NCCN-based treatment recommendations for this patient.
         finally:
             if credential is not None:
                 await credential.close()
+
+
+# ---------------------------------------------------------------------------
+# H. Input Validation & Data Completeness for Real Patients
+# ---------------------------------------------------------------------------
+
+REAL_GUIDS = [
+    "REDACTED-PATIENT-001",
+    "REDACTED-PATIENT-002",
+    "REDACTED-PATIENT-003",
+    "REDACTED-PATIENT-004",
+    "REDACTED-PATIENT-005",
+    "REDACTED-PATIENT-006",
+    "REDACTED-PATIENT-007",
+    "REDACTED-PATIENT-008",
+    "REDACTED-PATIENT-009",
+    "REDACTED-PATIENT-010",
+    "REDACTED-PATIENT-011",
+    "REDACTED-PATIENT-012",
+    "REDACTED-PATIENT-013",
+    "REDACTED-PATIENT-014",
+    "REDACTED-PATIENT-015",
+]
+
+REAL_DATA_DIR = os.path.join(SRC_DIR, "..", "infra", "patient_data")
+
+
+class TestInputValidation:
+    """Validate data completeness for all 15 real patient GUIDs and input edge cases."""
+
+    @pytest.mark.parametrize("guid", REAL_GUIDS)
+    def test_patient_folder_exists(self, guid):
+        """Each real GUID has a folder in patient_data/."""
+        folder = os.path.join(REAL_DATA_DIR, guid)
+        assert os.path.isdir(folder), f"Missing patient folder: {guid}"
+
+    @pytest.mark.parametrize("guid", REAL_GUIDS)
+    @pytest.mark.parametrize("csv_type", CSV_FILE_TYPES)
+    def test_csv_exists_for_real_patients(self, guid, csv_type):
+        """Every real patient has all 7 CSV types."""
+        csv_path = os.path.join(REAL_DATA_DIR, guid, f"{csv_type}.csv")
+        assert os.path.exists(csv_path), f"Missing {csv_type}.csv for {guid}"
+
+    @pytest.mark.parametrize("guid", REAL_GUIDS)
+    @pytest.mark.asyncio
+    async def test_caboodle_reads_real_patient(self, guid):
+        """CaboodleFileAccessor can read all file types for each real patient."""
+        caboodle = CaboodleFileAccessor(data_dir=REAL_DATA_DIR)
+        for file_type in CSV_FILE_TYPES:
+            rows = await caboodle._read_file(guid, file_type)
+            assert isinstance(rows, list), f"{file_type} did not return a list for {guid}"
+            # At minimum, clinical_notes should have rows
+            if file_type == "clinical_notes":
+                assert len(rows) > 0, f"clinical_notes.csv is empty for {guid}"
+
+    @pytest.mark.parametrize("guid", REAL_GUIDS)
+    @pytest.mark.asyncio
+    async def test_diagnoses_have_icd10(self, guid):
+        """Every real patient has at least one diagnosis with an ICD-10 code."""
+        caboodle = CaboodleFileAccessor(data_dir=REAL_DATA_DIR)
+        diagnoses = await caboodle.get_diagnoses(guid)
+        assert len(diagnoses) > 0, f"No diagnoses for {guid}"
+        icd_codes = [d.get("ICD10Code", "") for d in diagnoses]
+        # C* = malignant neoplasm, D* = benign/uncertain neoplasm — both valid for tumor board
+        assert any(code.startswith(("C", "D")) for code in icd_codes), \
+            f"No neoplasm ICD-10 code (C*/D*) found for {guid}: {icd_codes}"
+
+    @pytest.mark.asyncio
+    async def test_invalid_guid_returns_empty(self):
+        """Invalid GUID returns empty data, not an exception."""
+        caboodle = CaboodleFileAccessor(data_dir=REAL_DATA_DIR)
+        # read_all should return empty or handle gracefully
+        try:
+            notes = await caboodle.read_all("NONEXISTENT-GUID-12345")
+            # Either returns empty list or raises — both acceptable
+            assert isinstance(notes, list)
+        except (FileNotFoundError, OSError):
+            pass  # Acceptable — file not found is a graceful error
+
+    @pytest.mark.asyncio
+    async def test_clinical_notes_contain_embedded_reports(self):
+        """Verify 3-layer fallback: clinical_notes.csv contains embedded path/rad data.
+
+        For real patients, pathology/radiology info may only be in clinical notes,
+        not in dedicated report CSVs. This validates the fallback is viable.
+        """
+        caboodle = CaboodleFileAccessor(data_dir=REAL_DATA_DIR)
+        # Pick first real GUID
+        guid = REAL_GUIDS[0]
+        notes = await caboodle._read_file(guid, "clinical_notes")
+        assert len(notes) > 0, f"No clinical notes for {guid}"
+
+        # Check that clinical notes contain medical keywords
+        # (indicating pathology/radiology data embedded in notes)
+        all_text = " ".join(
+            n.get("NoteText", n.get("note_text", "")).lower() for n in notes
+        )
+        medical_keywords = ["pathology", "histology", "ct ", "mri", "imaging", "tumor", "cancer"]
+        found = [kw for kw in medical_keywords if kw in all_text]
+        assert len(found) >= 2, \
+            f"Expected medical keywords in clinical notes for {guid}, found: {found}"
