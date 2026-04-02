@@ -383,9 +383,19 @@ class ContentExportPlugin:
 
         try:
             parsed = json.loads(response.content)
-            return TumorBoardDocContent(**parsed)
+            doc = TumorBoardDocContent(**parsed)
+            # Validate action_items: cap length and filter suspicious content
+            _MAX_ACTION_ITEM_CHARS = 200
+            doc = doc.model_copy(update={
+                "action_items": [
+                    item[:_MAX_ACTION_ITEM_CHARS]
+                    for item in doc.action_items
+                    if item and len(item.strip()) > 0
+                ]
+            })
+            return doc
         except Exception as exc:
-            logger.warning("LLM response did not match TumorBoardDocContent schema, using fallback: %s", exc)
+            logger.warning("LLM response did not match TumorBoardDocContent schema, using fallback: %s", exc, exc_info=True)
             return self._fallback_doc_content(all_data)
 
     @staticmethod
