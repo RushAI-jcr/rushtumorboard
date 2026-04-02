@@ -1,47 +1,61 @@
-"""Shared filter helpers for clinical note accessor implementations.
+"""Shared filter utilities for clinical note accessor classes.
 
-Extracted from the three fallback accessors (blob, FHIR, Fabric) which previously
-contained byte-for-byte duplicate filter logic (~80 lines × 3 = 240 lines).
-All three now delegate here so field-name handling is consistent.
+Extracted from ClinicalNoteAccessor, FhirClinicalNoteAccessor, and
+FabricClinicalNoteAccessor to eliminate byte-for-byte duplication of
+get_clinical_notes_by_type and get_clinical_notes_by_keywords logic.
 """
+from __future__ import annotations
+
+import json
 from collections.abc import Sequence
 
 
-def filter_notes_by_type(notes: list[dict], note_types: Sequence[str]) -> list[dict]:
-    """Return notes whose NoteType matches any value in note_types (case-insensitive).
+def filter_notes_by_type(
+    notes_json: list[str | dict],
+    note_types: Sequence[str],
+) -> list[dict]:
+    """Filter a list of raw note JSON strings or dicts by NoteType.
 
-    Checks both Epic Caboodle key spellings: ``NoteType`` and ``note_type``.
-    Returns all notes when *note_types* is empty.
+    Args:
+        notes_json: List of note JSON strings or already-parsed dicts.
+        note_types: NoteType values to include (case-insensitive).
+
+    Returns:
+        List of parsed note dicts matching any of the given note types.
+        If note_types is empty, returns all notes as parsed dicts.
     """
+    parsed = [json.loads(n) if isinstance(n, str) else n for n in notes_json]
     if not note_types:
-        return list(notes)
+        return parsed
     type_set = {t.lower() for t in note_types}
     return [
-        n for n in notes
-        if n.get("NoteType", n.get("note_type", "")).lower() in type_set
+        note for note in parsed
+        if note.get("note_type", note.get("NoteType", "")).lower() in type_set
     ]
 
 
 def filter_notes_by_keywords(
     notes: list[dict],
-    note_types: Sequence[str],
     keywords: Sequence[str],
 ) -> list[dict]:
-    """Return notes matching the type filter AND containing at least one keyword.
+    """Filter a list of parsed note dicts by keyword presence in text.
 
-    Applies :func:`filter_notes_by_type` first, then checks note text for any
-    keyword (case-insensitive).  Checks ``NoteText``, ``note_text``, and ``text``
-    key spellings — the same precedence used across all four accessor backends.
-    Returns all type-matched notes when *keywords* is empty.
+    Args:
+        notes: Already-parsed note dicts (output of filter_notes_by_type).
+        keywords: Keywords to search for (case-insensitive).
+                  A note is included if ANY keyword appears in its text.
+
+    Returns:
+        List of note dicts containing at least one keyword.
+        If keywords is empty, returns all notes unchanged.
     """
-    typed = filter_notes_by_type(notes, note_types)
     if not keywords:
-        return typed
+        return notes
     kw_lower = [k.lower() for k in keywords]
     return [
-        n for n in typed
+        note for note in notes
         if any(
-            kw in n.get("NoteText", n.get("note_text", n.get("text", ""))).lower()
+            kw in str(note.get("text", note.get("NoteText", note.get("note_text", "")))).lower()
             for kw in kw_lower
         )
     ]

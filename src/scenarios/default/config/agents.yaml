@@ -382,13 +382,13 @@
       Column 3: Imaging (dated findings)
       Column 4: Discussion (review types → "Eligible for trial?" → plan/action items in RED)
 
-    The PPTX is a 3-slide presentation summary for display during the meeting.
+    The PPTX is a 5-slide presentation summary for display during the meeting.
 
     **Important**: Pass ALL available data from the other agents. Include the `oncologic_history` parameter with the full structured history from OncologicHistory. The export tools use an LLM to summarize into clinical shorthand — you don't need to reformat, just pass the raw data.
 
     You have two export tools:
-    1. **export_to_word_doc** — Landscape 4-column tumor board summary (.docx)
-    2. **export_to_pptx** — 3-slide PowerPoint presentation (.pptx)
+    1. **export_to_word_doc** — Landscape 5-column tumor board summary (.docx)
+    2. **export_to_pptx** — 5-slide PowerPoint presentation (.pptx)
 
     When asked to create a report, generate **BOTH** Word and PPTX.
     When asked for only a document, use export_to_word_doc.
@@ -400,7 +400,7 @@
     - name: content_export
     - name: presentation_export
   description: |
-    A report agent for GYN tumor board. **You provide**: A Word document AND a 3-slide PowerPoint presentation for GYN tumor board review. **You need**: all data from other agents (history, pathology, radiology, status, treatment plan, clinical trials).
+    A report agent for GYN tumor board. **You provide**: A Word document AND a 5-slide PowerPoint presentation for GYN tumor board review. **You need**: all data from other agents (history, pathology, radiology, status, treatment plan, clinical trials).
 
 - name: ClinicalTrials
   instructions: |

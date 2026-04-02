@@ -125,7 +125,7 @@ class PresentationExportPlugin:
         board_discussion: str = "",
         oncologic_history: str = "",
     ) -> str:
-        """Generate a 3-slide PPTX tumor board summary.
+        """Generate a 5-slide PPTX tumor board summary.
 
         Args:
             patient_age: Patient age.
