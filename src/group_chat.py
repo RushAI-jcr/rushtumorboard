@@ -121,14 +121,18 @@ def create_group_chat(
 
     def _create_kernel_with_chat_completion() -> Kernel:
         kernel = Kernel()
-        kernel.add_service(
-            AzureChatCompletion(
-                service_id="default",
-                deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
-                api_version="2025-04-01-preview",
-                ad_token_provider=app_ctx.cognitive_services_token_provider
-            )
-        )
+        service_kwargs = {
+            "service_id": "default",
+            "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+            "api_version": "2025-04-01-preview",
+        }
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+        if api_key:
+            service_kwargs["api_key"] = api_key
+            service_kwargs["endpoint"] = os.environ["AZURE_OPENAI_ENDPOINT"]
+        else:
+            service_kwargs["ad_token_provider"] = app_ctx.cognitive_services_token_provider
+        kernel.add_service(AzureChatCompletion(**service_kwargs))
         return kernel
 
     def _create_agent(agent_config: dict):

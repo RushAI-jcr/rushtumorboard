@@ -13,6 +13,8 @@ from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
+from .validation import validate_patient_id
+
 logger = logging.getLogger(__name__)
 
 # Common date formats seen in Epic/Caboodle exports (time-aware first)
@@ -20,28 +22,19 @@ _DATE_FORMATS = ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%m/%d/%Y", "%d-%b-%Y"]
 
 
 def _parse_date(date_str: str) -> datetime:
-    """Parse a date string, trying common formats. Returns datetime.min on failure."""
-    # Strip timezone for naive datetime comparison
-    cleaned = date_str.strip().replace("Z", "")
-    # Remove timezone offset (+00:00, -05:00, etc.)
-    if "+" in cleaned and cleaned.index("+") > 10:
-        cleaned = cleaned[:cleaned.index("+")]
-    elif cleaned.count("-") > 2:
-        # Handle trailing -HH:MM timezone offset
-        parts = cleaned.rsplit("-", 1)
-        if len(parts[1]) <= 5 and ":" in parts[1]:
-            cleaned = parts[0]
-
+    """Parse a date string. Returns datetime.min on failure."""
+    cleaned = date_str.strip()
+    try:
+        return datetime.fromisoformat(cleaned).replace(tzinfo=None)
+    except ValueError:
+        pass
     for fmt in _DATE_FORMATS:
         try:
             return datetime.strptime(cleaned, fmt)
         except ValueError:
             continue
-    try:
-        return datetime.fromisoformat(cleaned)
-    except ValueError:
-        logger.warning(f"Could not parse date: {date_str!r}")
-        return datetime.min
+    logger.warning("Could not parse date: %r", date_str)
+    return datetime.min
 
 
 def create_plugin(plugin_config: PluginConfiguration):
@@ -64,9 +57,71 @@ GYN_MARKERS = {
 
 
 class TumorMarkerPlugin:
+    # Note types and keywords for layered fallback when no lab data exists
+    # NoteType values confirmed in real Epic Caboodle exports at Rush:
+    #   "Progress Notes"    — all outpatient visits incl. new-patient H&Ps
+    #   "Consults"          — confirmed; IR/other service consults with inline labs
+    #   "ED Provider Notes" — confirmed for germ cell/complex patients
+    #   "Discharge Summary" — inpatient stays often summarize marker trends
+    #   "H&P"               — kept for non-Rush sources (FHIR/Fabric)
+    _MARKER_NOTE_TYPES = [
+        "Progress Notes",
+        "Consults",
+        "ED Provider Notes",
+        "Discharge Summary",
+        "H&P",
+    ]
+    _MARKER_KEYWORDS = [
+        "ca-125", "ca125", "ca 125", "he4", "he-4",
+        "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",
+        "ca 27", "ca2729", "ca 15", "ca153", "tumor marker",
+    ]
+
     def __init__(self, config: PluginConfiguration):
         self.chat_ctx = config.chat_ctx
         self.data_access = config.data_access
+
+    async def _get_marker_notes_fallback(self, patient_id: str, marker: str) -> str | None:
+        """Layer 2/3 fallback: extract marker mentions from clinical notes.
+
+        When no structured lab data exists, search H&P, Progress Notes, and Consults
+        for tumor marker values mentioned by physicians.
+
+        Returns a JSON string with extracted note excerpts for the LLM to parse.
+        """
+        accessor = self.data_access.clinical_note_accessor
+
+        # Build keyword list: requested marker + all known marker keywords
+        keywords = [marker.lower()] + list(self._MARKER_KEYWORDS)
+
+        if hasattr(accessor, "get_clinical_notes_by_keywords"):
+            notes = await accessor.get_clinical_notes_by_keywords(
+                patient_id, self._MARKER_NOTE_TYPES, keywords
+            )
+        else:
+            return None
+
+        if not notes:
+            return None
+
+        # Return a structured summary for the caller
+        excerpts = []
+        for n in notes[:20]:  # Cap at 20 notes to avoid token overload
+            note_type = n.get("NoteType", n.get("note_type", ""))
+            date = n.get("EntryDate", n.get("date", ""))
+            text = n.get("NoteText", n.get("note_text", n.get("text", "")))
+            excerpts.append({"note_type": note_type, "date": date, "text_preview": text[:2000]})
+
+        return json.dumps({
+            "patient_id": patient_id,
+            "marker": marker,
+            "source": "clinical_notes_fallback",
+            "source_description": (
+                f"No structured lab data for {marker}. Found {len(notes)} clinical notes "
+                f"mentioning tumor markers. Marker values may be embedded in physician notes."
+            ),
+            "note_excerpts": excerpts,
+        }, indent=2)
 
     @kernel_function(
         description="Get tumor marker trends for a patient. "
@@ -87,9 +142,13 @@ class TumorMarkerPlugin:
         Returns:
             JSON with time series data and trend analysis.
         """
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
+
         accessor = self.data_access.clinical_note_accessor
 
-        # Get lab results
+        # Layer 1: Get structured lab results
+        labs = []
         if hasattr(accessor, "get_lab_results"):
             labs = await accessor.get_lab_results(patient_id, component_name=marker)
         elif hasattr(accessor, "get_tumor_markers"):
@@ -99,19 +158,17 @@ class TumorMarkerPlugin:
                 if marker.lower().replace("-", "") in
                    m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
             ]
-        else:
-            return json.dumps({
-                "patient_id": patient_id,
-                "marker": marker,
-                "error": "Data accessor does not support lab results.",
-                "data_points": []
-            })
 
         if not labs:
+            # Layer 2/3: Fallback to clinical notes
+            fallback = await self._get_marker_notes_fallback(patient_id, marker)
+            if fallback:
+                logger.info("Tumor marker fallback to clinical notes for %s/%s", patient_id, marker)
+                return fallback
             return json.dumps({
                 "patient_id": patient_id,
                 "marker": marker,
-                "error": f"No {marker} results found.",
+                "error": f"No {marker} results found in labs or clinical notes.",
                 "data_points": []
             })
 
@@ -147,7 +204,6 @@ class TumorMarkerPlugin:
             })
 
         # Trend analysis
-        values = [dp["value"] for dp in data_points]
         analysis = self._analyze_trend(marker, data_points)
 
         result = {
@@ -157,7 +213,7 @@ class TumorMarkerPlugin:
             "analysis": analysis,
         }
 
-        logger.info(f"Tumor marker trend for {patient_id}/{marker}: {len(data_points)} data points")
+        logger.info("Tumor marker trend for %s/%s: %d data points", patient_id, marker, len(data_points))
         return json.dumps(result, indent=2)
 
     @kernel_function(
@@ -172,6 +228,9 @@ class TumorMarkerPlugin:
         Returns:
             JSON with all available marker summaries.
         """
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
+
         accessor = self.data_access.clinical_note_accessor
 
         if hasattr(accessor, "get_tumor_markers"):
@@ -185,10 +244,15 @@ class TumorMarkerPlugin:
             })
 
         if not all_markers:
+            # Fallback to clinical notes
+            fallback = await self._get_marker_notes_fallback(patient_id, "tumor markers")
+            if fallback:
+                logger.info("All tumor markers fallback to clinical notes for %s", patient_id)
+                return fallback
             return json.dumps({
                 "patient_id": patient_id,
                 "markers": {},
-                "message": "No tumor marker results found."
+                "message": "No tumor marker results found in labs or clinical notes."
             })
 
         # Group by marker name
@@ -233,7 +297,6 @@ class TumorMarkerPlugin:
     def _analyze_trend(self, marker: str, data_points: list[dict]) -> dict:
         """Analyze tumor marker trend."""
         values = [dp["value"] for dp in data_points]
-        dates = [dp["date"] for dp in data_points]
 
         analysis = {
             "first_value": values[0],
@@ -327,7 +390,7 @@ class TumorMarkerPlugin:
             return "no definitive response or progression"
 
     @staticmethod
-    def _doubling_time(data_points: list[dict]):
+    def _doubling_time(data_points: list[dict]) -> float | None:
         """Calculate doubling time in days between last two rising values."""
         if len(data_points) < 2:
             return None

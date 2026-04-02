@@ -75,14 +75,19 @@ class ClinicalTrialsPlugin:
         self.chat_ctx = chat_ctx
         self.app_ctx = app_ctx
 
-        # Clinical trial matching works better with a reasoning model
-        self.chat_completion_service = AzureChatCompletion(
-            service_id="reasoning-model",
-            deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL"],
-            api_version="2025-04-01-preview",
-            endpoint=os.environ["AZURE_OPENAI_REASONING_MODEL_ENDPOINT"],
-            ad_token_provider=self.app_ctx.cognitive_services_token_provider if "AZURE_OPENAI_API_KEY" not in os.environ else None,
-        )
+        # Clinical trial matching works better with a reasoning model (gpt-5.4 or o3)
+        reasoning_kwargs = {
+            "service_id": "reasoning-model",
+            "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL"],
+            "api_version": "2025-04-01-preview",
+            "endpoint": os.environ["AZURE_OPENAI_REASONING_MODEL_ENDPOINT"],
+        }
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+        if api_key:
+            reasoning_kwargs["api_key"] = api_key
+        else:
+            reasoning_kwargs["ad_token_provider"] = self.app_ctx.cognitive_services_token_provider
+        self.chat_completion_service = AzureChatCompletion(**reasoning_kwargs)
 
     @kernel_function()
     async def generate_clinical_trial_search_criteria(self, biomarkers: list[str], histology: str, staging: str):
@@ -158,9 +163,9 @@ class ClinicalTrialsPlugin:
             chat_history.add_system_message("Clinical Trial Eligibility Criteria:\n" +
                                             json.dumps(trial, indent=4))
 
+            settings = AzureChatPromptExecutionSettings(temperature=0)
             chat_completion_response = await self.chat_completion_service.get_chat_message_content(
-                # We can't pass temperature here, because o3-mini doesn't support it. There are other settings we could customize here.
-                chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
+                chat_history=chat_history, settings=settings)
             chat_completion_responses.append(chat_completion_response)
 
         response_results = chat_completion_responses
@@ -197,9 +202,9 @@ class ClinicalTrialsPlugin:
         chat_history.add_system_message("Summarize the clinical trial information. Focus on relevant information for a oncologist or patient:\n" +
                                         json.dumps(result, indent=4))
 
+        settings = AzureChatPromptExecutionSettings(temperature=0)
         chat_completion_response = await self.chat_completion_service.get_chat_message_content(
-            # We can't pass temperature here, because o3-mini doesn't support it. There are other settings we could customize here.
-            chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
+            chat_history=chat_history, settings=settings)
         self.chat_ctx.display_clinical_trials.append(
             self.clinical_trial_display + trial)
         return str(chat_completion_response)

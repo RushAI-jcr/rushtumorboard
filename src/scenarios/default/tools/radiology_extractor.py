@@ -4,11 +4,14 @@
 # Replaces the CXR deep learning model — uses LLM to interpret radiology
 # report narratives for CT, MRI, PET/CT, and ultrasound.
 
+import json
+
 from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
 from .medical_report_extractor import MedicalReportExtractorBase
+from .validation import validate_patient_id
 
 RADIOLOGY_SYSTEM_PROMPT = """
     You are a gynecologic oncology radiology specialist. Extract structured findings
@@ -75,6 +78,8 @@ RADIOLOGY_SYSTEM_PROMPT = """
 
     If a field is not mentioned in the report, use "not reported" or null.
     Only include information explicitly stated in the reports.
+    CHRONOLOGICAL ORDER IS MANDATORY: The "studies" array must be sorted oldest study_date first,
+    most recent last. This allows the reader to follow disease progression over time.
     For RECIST: calculate percent change as ((current - prior) / prior * 100).
     CR = complete resolution, PR = >=30% decrease, PD = >=20% increase, SD = neither.
 """
@@ -87,9 +92,34 @@ def create_plugin(plugin_config: PluginConfiguration):
 class RadiologyExtractorPlugin(MedicalReportExtractorBase):
     report_type = "radiology"
     accessor_method = "get_radiology_reports"
-    fallback_note_type = "radiology"
     system_prompt = RADIOLOGY_SYSTEM_PROMPT
     error_key = "studies"
+
+    # Layer 2: No dedicated radiology note types in typical Epic exports —
+    # radiology_reports.csv (layer 1) is the primary source.
+    layer2_note_types = ()
+    # Layer 3: General notes where physicians summarize imaging findings.
+    # Confirmed NoteTypes in real Rush Epic Clarity exports.
+    layer3_note_types = (
+        "Progress Notes", "Progress Note",
+        "H&P", "History and Physical",
+        "Consults", "Consult Note", "Oncology Consultation",
+        "ED Provider Notes", "ED Notes",
+        "Discharge Summary",
+        "Assessment & Plan Note",
+        "Multidisciplinary Tumor Board",
+        "Unmapped External Note",
+        "Addendum Note",
+    )
+    layer3_keywords = (
+        "ct scan", "ct chest", "ct abdomen", "ct pelvis", "ct a/p", "ct cap",
+        "mri", "mri pelvis", "mri abdomen",
+        "pet", "pet-ct", "pet/ct", "suv",
+        "ultrasound", "transvaginal", "tvus",
+        "imaging", "radiolog",
+        "recist", "lesion", "mass", "tumor", "nodule",
+        "ascites", "peritoneal", "omental", "lymph node",
+    )
 
     @kernel_function(
         description="Extract structured radiology findings from a patient's imaging reports. "
@@ -105,4 +135,6 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
         Returns:
             Structured JSON with radiology findings.
         """
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
         return await self._extract(patient_id)

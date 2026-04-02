@@ -4,11 +4,16 @@
 # for outside hospital transfer patients (~20-30% of cases).
 # Produces a clear timeline: diagnosis, treatments received, reason for referral.
 
+import json
+import re
+
 from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
 from .medical_report_extractor import MedicalReportExtractorBase
+
+_PATIENT_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_\-\.]{0,63}$')
 
 ONCOLOGIC_HISTORY_SYSTEM_PROMPT = """
     You are a gynecologic oncology clinical documentation specialist. Your task is
@@ -81,6 +86,8 @@ ONCOLOGIC_HISTORY_SYSTEM_PROMPT = """
     - If a field is not mentioned in any note, use "not reported" or an empty list.
     - Only include information explicitly stated in the notes.
     - Sort the treatment_timeline chronologically by date.
+    - CHRONOLOGICAL ORDER IS MANDATORY: treatment_timeline must be sorted ascending by date (oldest first). recurrence_history must be sorted ascending. This is non-negotiable — the reader must be able to follow the patient's journey from diagnosis to present.
+    - DATES ARE MANDATORY: Every event in treatment_timeline and recurrence_history must have a date_range or date. Every molecular_profile result must include the date it was tested in parentheses, e.g., "BRCA1 pathogenic variant (tested 10/5/25)". Every tumor marker in current_tumor_markers must include its date, e.g., "CA-125 12 U/mL (3/15/26)".
     - For outside patients, clearly distinguish what was done at the outside institution vs. at this institution.
     - Calculate platinum-free interval if the patient had platinum-based chemotherapy and later recurred.
     - The summary_for_tumor_board should be written as if a physician is presenting the case:
@@ -98,22 +105,62 @@ def create_plugin(plugin_config: PluginConfiguration):
 class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
     report_type = "clinical notes"
     accessor_method = "get_metadata_list"  # not used directly; overrides _extract
-    fallback_note_type = ""
     system_prompt = ONCOLOGIC_HISTORY_SYSTEM_PROMPT
     error_key = "history"
 
+    # Note types most relevant to oncologic history (lowercase for case-insensitive match).
+    # Narrower than TIMELINE_NOTE_TYPES in patient_data.py — focused on narrative notes
+    # that contain prior oncologic history, OSH transfers, and treatment summaries.
+    # Confirmed in real Rush Epic Clarity exports (see scripts/validate_patient_csvs.py output).
+    _RELEVANT_NOTE_TYPES = {
+        # Primary oncologic narrative
+        "h&p", "h&p (view-only)", "history and physical", "interval h&p note",
+        "consults", "consult note", "oncology consultation",
+        "progress notes", "progress note",
+        "discharge summary",
+        # Procedural / operative (contain prior surgery details)
+        "operative report", "operative note", "brief op note",
+        "procedures", "procedure note", "procedure notes",
+        # Assessment notes
+        "assessment & plan note",
+        "admissioncare note",
+        # Outside hospital / external records (OSH transfers, prior treatment)
+        "unmapped external note",
+        # ED (contains acute oncologic presentations)
+        "ed provider notes", "ed notes", "ed provider handoff notes",
+        # Oncology-specific
+        "chemotherapy treatment note",
+        "multidisciplinary tumor board",
+        "genetic counseling",
+        # Addenda containing updated staging / molecular results
+        "addendum note",
+    }
+    MAX_NOTES = 30
+    MAX_CHARS_PER_NOTE = 4000
+    MAX_TOTAL_CHARS = 120_000  # ~30K tokens
+
     async def _get_clinical_notes(self, patient_id: str) -> list[dict]:
-        """Get all clinical notes — H&P, consults, referral letters, progress notes."""
+        """Get clinical notes — H&P, consults, referral letters, progress notes.
+
+        Filters to relevant note types and caps volume to prevent context overflow.
+        """
         accessor = self.data_access.clinical_note_accessor
 
-        # Read all notes and filter for relevant types
         all_notes_json = await accessor.read_all(patient_id)
         import json
         notes = []
         for note_json in all_notes_json:
             note = json.loads(note_json) if isinstance(note_json, str) else note_json
-            notes.append(note)
-        return notes
+            note_type = note.get("note_type", note.get("NoteType", "")).lower()
+            if note_type in self._RELEVANT_NOTE_TYPES:
+                notes.append(note)
+
+        # Sort by date descending (most recent first) and cap count
+        notes.sort(
+            key=lambda n: n.get("date", n.get("EntryDate", n.get("OrderDate", ""))),
+            reverse=True,
+        )
+        return notes[:self.MAX_NOTES]
 
     async def _extract(self, patient_id: str) -> str:
         """Override base to read clinical notes instead of specific report type."""
@@ -138,13 +185,24 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
                 self.error_key: []
             })
 
-        # Build combined text from all clinical notes
+        # Build combined text from clinical notes with volume caps
         note_texts = []
+        total_chars = 0
         for n in notes:
             text = n.get("text", n.get("NoteText", n.get("note_text", "")))
+            if len(text) > self.MAX_CHARS_PER_NOTE:
+                text = text[:self.MAX_CHARS_PER_NOTE] + "\n[...truncated...]"
             note_type = n.get("note_type", n.get("NoteType", "Note"))
             date = n.get("date", n.get("EntryDate", n.get("OrderDate", "")))
-            note_texts.append(f"--- {note_type} ({date}) ---\n{text}")
+            entry = f"--- {note_type} ({date}) ---\n{text}"
+            if total_chars + len(entry) > self.MAX_TOTAL_CHARS:
+                logger.info(
+                    "Hit total char cap (%d) for oncologic history, patient %s — using %d of %d notes",
+                    self.MAX_TOTAL_CHARS, patient_id, len(note_texts), len(notes),
+                )
+                break
+            note_texts.append(entry)
+            total_chars += len(entry)
 
         combined_text = "\n\n".join(note_texts)
 
@@ -161,7 +219,7 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
             chat_history=chat_history, settings=settings
         )
 
-        response_text = chat_resp.content or ""
+        response_text = (chat_resp.content if chat_resp is not None else None) or ""
 
         # Parse JSON from response
         try:
@@ -183,7 +241,7 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
                 "raw_extraction": response_text,
             }, indent=2)
 
-        logger.info(f"Extracted oncologic history for patient {patient_id} from {len(notes)} notes")
+        logger.info("Extracted oncologic history for patient %s from %d notes", patient_id, len(notes))
         return result
 
     @kernel_function(
@@ -207,4 +265,6 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
         Returns:
             Structured JSON with complete oncologic history timeline.
         """
+        if not _PATIENT_ID_RE.fullmatch(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
         return await self._extract(patient_id)
