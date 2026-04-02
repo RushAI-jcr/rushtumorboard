@@ -223,7 +223,7 @@ class PresentationExportPlugin:
     # ── Helpers ──
 
     @staticmethod
-    def _parse_markers_raw(tumor_markers_str: str) -> list | None:
+    def _parse_markers_raw(tumor_markers_str: str) -> list[dict] | None:
         """Parse tumor marker JSON string into a list for PptxGenJS chart.
         Returns None if not parseable or fewer than 2 data points.
         """
@@ -263,7 +263,7 @@ class PresentationExportPlugin:
             parsed = json.loads(response.content)
             return SlideContent(**parsed)
         except Exception as exc:
-            logger.warning("LLM response did not match SlideContent schema, using fallback: %s", exc)
+            logger.warning("LLM response did not match SlideContent schema, using fallback: %s", exc, exc_info=True)
             pid = all_data.get("patient_id", "Unknown")
             return SlideContent(
                 patient_title=f"Case — {pid}",
