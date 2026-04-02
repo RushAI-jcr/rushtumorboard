@@ -10,7 +10,6 @@ import logging
 import os
 from pathlib import Path
 from collections.abc import Sequence
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +65,7 @@ class CaboodleFileAccessor:
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "infra", "patient_data")
         )
         self.data_dir = os.path.abspath(self.data_dir)
+        self._resolved_data_dir = Path(self.data_dir).resolve()
         self._cache: dict[tuple[str, str], list[dict]] = {}
         logger.info("CaboodleFileAccessor initialized with data_dir: %s", self.data_dir)
 
@@ -157,7 +157,7 @@ class CaboodleFileAccessor:
         """Get radiology reports for a patient."""
         return await self._read_file(patient_id, "radiology_reports")
 
-    async def get_lab_results(self, patient_id: str, component_name: Optional[str] = None) -> list[dict]:
+    async def get_lab_results(self, patient_id: str, component_name: str | None = None) -> list[dict]:
         """Get lab results, optionally filtered by component name (e.g., 'CA-125')."""
         labs = await self._read_file(patient_id, "lab_results")
         if component_name:
@@ -195,7 +195,7 @@ class CaboodleFileAccessor:
         """Get cancer staging records (FIGO and TNM)."""
         return await self._read_file(patient_id, "cancer_staging")
 
-    async def get_medications(self, patient_id: str, order_class: Optional[str] = None) -> list[dict]:
+    async def get_medications(self, patient_id: str, order_class: str | None = None) -> list[dict]:
         """Get medications, optionally filtered by order class (e.g., 'Chemotherapy')."""
         meds = await self._read_file(patient_id, "medications")
         if order_class:
@@ -270,7 +270,7 @@ class CaboodleFileAccessor:
 
         # Validate patient_id to prevent path traversal
         patient_dir = os.path.join(self.data_dir, patient_id)
-        if not Path(patient_dir).resolve().is_relative_to(Path(self.data_dir).resolve()):
+        if not Path(patient_dir).resolve().is_relative_to(self._resolved_data_dir):
             raise ValueError(f"Invalid patient_id {patient_id!r}: path traversal detected")
 
         # Try parquet first, then CSV
@@ -307,7 +307,7 @@ class CaboodleFileAccessor:
             for row in reader:
                 # Filter by patient_id if the file contains multiple patients
                 row_patient = row.get("PatientID", row.get("patient_id", patient_id))
-                if str(row_patient) == str(patient_id) or row_patient == patient_id:
+                if str(row_patient) == str(patient_id):
                     rows.append(dict(row))
         return rows
 

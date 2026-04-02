@@ -10,7 +10,10 @@
 
 import json
 import logging
+import re
 import textwrap
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
     AzureChatPromptExecutionSettings,
@@ -74,11 +77,10 @@ class MedicalReportExtractorBase:
                 )
 
         # --- Layer 3: General notes with keyword filtering ---
-        if not reports and self.layer3_note_types and self.layer3_keywords:
-            if hasattr(accessor, "get_clinical_notes_by_keywords"):
-                reports = await accessor.get_clinical_notes_by_keywords(
-                    patient_id, self.layer3_note_types, self.layer3_keywords
-                )
+        if not reports and self.layer3_note_types and self.layer3_keywords and hasattr(accessor, "get_clinical_notes_by_keywords"):
+            reports = await accessor.get_clinical_notes_by_keywords(
+                patient_id, self.layer3_note_types, self.layer3_keywords
+            )
             if reports:
                 source_layer = 3
                 logger.info(
@@ -101,7 +103,8 @@ class MedicalReportExtractorBase:
         reports = sorted(reports, key=_report_date_key)
 
         # Cap report count to prevent context window overflow
-        if len(reports) > self.MAX_REPORTS:
+        total_available = len(reports)
+        if total_available > self.MAX_REPORTS:
             logger.info(
                 "Capping %s reports from %d to %d for patient %s (layer %d)",
                 self.report_type, len(reports), self.MAX_REPORTS, patient_id, source_layer,
@@ -168,21 +171,28 @@ class MedicalReportExtractorBase:
 
         # Parse JSON from response
         try:
-            if "```json" in response_text:
-                json_str = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                json_str = response_text.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = response_text
-
+            match = _JSON_FENCE_RE.search(response_text)
+            json_str = match.group(1).strip() if match else response_text.strip()
             findings = json.loads(json_str)
             findings["patient_id"] = patient_id
             findings["report_count"] = len(reports)
+            findings["data_source_layer"] = source_layer
+            findings["data_source_description"] = {
+                1: "Dedicated report CSV",
+                2: "Domain-specific clinical notes (operative/procedure notes)",
+                3: "Keyword-matched general clinical notes (progress notes, H&P, consults)",
+            }.get(source_layer, "Unknown")
+            if total_available > self.MAX_REPORTS:
+                findings["truncation_note"] = (
+                    f"{total_available} {self.report_type} sources available; "
+                    f"{self.MAX_REPORTS} sent to LLM due to context limits."
+                )
             result = json.dumps(findings, indent=2)
-        except (json.JSONDecodeError, IndexError):
+        except json.JSONDecodeError:
             result = json.dumps({
                 "patient_id": patient_id,
                 "report_count": len(reports),
+                "data_source_layer": source_layer,
                 "raw_extraction": response_text,
             }, indent=2)
 
