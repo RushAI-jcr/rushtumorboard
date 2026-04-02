@@ -8,17 +8,16 @@ import csv
 import json
 import logging
 import os
+from collections import OrderedDict
 from pathlib import Path
 from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
-# Optional parquet support
-try:
-    import pandas as pd
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
+# Optional parquet support — check availability without binding pd at module level
+import importlib.util as _importlib_util
+HAS_PANDAS: bool = _importlib_util.find_spec("pandas") is not None
+del _importlib_util  # keep namespace clean
 
 
 class CaboodleFileAccessor:
@@ -59,6 +58,32 @@ class CaboodleFileAccessor:
         PatientID, DiagnosisName, ICD10Code, DateOfEntry, Status
     """
 
+    # Max patients' data kept in cache before evicting oldest (HIPAA: limit PHI in heap)
+    _CACHE_MAX_PATIENTS: int = 5
+
+    # Allowlist of valid file types for _read_file — prevents cross-patient PHI reads via
+    # adversarial file_type values like "../../other_patient/lab_results".
+    _VALID_FILE_TYPES: frozenset[str] = frozenset({
+        "clinical_notes",
+        "pathology_reports",
+        "radiology_reports",
+        "lab_results",
+        "cancer_staging",
+        "medications",
+        "diagnoses",
+    })
+
+    _TUMOR_MARKER_NAMES: frozenset[str] = frozenset([
+        "ca-125", "ca125", "ca 125",
+        "he4", "he 4",
+        "hcg", "beta-hcg", "beta hcg", "quant b-hcg",
+        "cea",
+        "afp", "alpha fetoprotein",
+        "ldh",
+        "scc", "scc ag", "squamous cell carcinoma antigen",
+        "inhibin",
+    ])
+
     def __init__(self, data_dir: str | None = None):
         self.data_dir = data_dir or os.getenv(
             "CABOODLE_DATA_DIR",
@@ -66,7 +91,7 @@ class CaboodleFileAccessor:
         )
         self.data_dir = os.path.abspath(self.data_dir)
         self._resolved_data_dir = Path(self.data_dir).resolve()
-        self._cache: dict[tuple[str, str], list[dict]] = {}
+        self._cache: OrderedDict[tuple[str, str], list[dict]] = OrderedDict()
         logger.info("CaboodleFileAccessor initialized with data_dir: %s", self.data_dir)
 
     async def get_patients(self) -> list[str]:
@@ -169,25 +194,12 @@ class CaboodleFileAccessor:
 
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
         """Get tumor marker results (CA-125, HE4, hCG, CEA, AFP, LDH)."""
-        marker_names = [
-            # Hyphen variants (synthetic data + some FHIR sources)
-            "ca-125", "ca125",
-            # Epic Caboodle actual ComponentName values (space-separated)
-            "ca 125",
-            "he4", "he 4",
-            "hcg", "beta-hcg", "beta hcg", "quant b-hcg",
-            "cea",
-            "afp", "alpha fetoprotein",
-            "ldh",
-            "scc", "scc ag", "squamous cell carcinoma antigen",
-            "inhibin",
-        ]
         labs = await self._read_file(patient_id, "lab_results")
         return [
             lab for lab in labs
             if any(
                 marker in lab.get("ComponentName", lab.get("component_name", "")).lower()
-                for marker in marker_names
+                for marker in CaboodleFileAccessor._TUMOR_MARKER_NAMES
             )
         ]
 
@@ -264,8 +276,14 @@ class CaboodleFileAccessor:
         is immutable within a session. Eliminates redundant I/O when multiple
         agents read the same file.
         """
+        if file_type not in self._VALID_FILE_TYPES:
+            raise ValueError(
+                f"Invalid file_type {file_type!r}. Must be one of: {sorted(self._VALID_FILE_TYPES)}"
+            )
+
         cache_key = (patient_id, file_type)
         if cache_key in self._cache:
+            self._cache.move_to_end(cache_key)  # LRU: mark as recently used
             return self._cache[cache_key]
 
         # Validate patient_id to prevent path traversal
@@ -286,6 +304,15 @@ class CaboodleFileAccessor:
             rows = await self._read_legacy_json(patient_id)
         else:
             rows = []
+
+        # Evict oldest entries if we've exceeded the per-patient limit
+        patients_in_cache = dict.fromkeys(k[0] for k in self._cache)  # preserves insertion order
+        if patient_id not in patients_in_cache and len(patients_in_cache) >= self._CACHE_MAX_PATIENTS:
+            oldest_patient = next(iter(patients_in_cache))
+            evict_keys = [k for k in list(self._cache) if k[0] == oldest_patient]
+            for k in evict_keys:
+                del self._cache[k]
+            logger.info("Cache evicted %d entries for patient %s (limit: %d patients)", len(evict_keys), oldest_patient, self._CACHE_MAX_PATIENTS)
 
         self._cache[cache_key] = rows
         return rows
@@ -322,6 +349,7 @@ class CaboodleFileAccessor:
 
     def _read_parquet_sync(self, filepath: str, patient_id: str) -> list[dict]:
         """Synchronous Parquet read."""
+        import pandas as pd  # local import: caller already checked HAS_PANDAS
         df = pd.read_parquet(filepath)
         # Filter by patient_id if column exists
         patient_col = None
@@ -333,7 +361,7 @@ class CaboodleFileAccessor:
             df = df[df[patient_col].astype(str) == str(patient_id)]
         else:
             logger.warning("No patient ID column found in %s. Returning all rows.", filepath)
-        return df.to_dict("records")
+        return df.to_dict("records")  # type: ignore[return-value]
 
     async def _read_legacy_json(self, patient_id: str) -> list[dict]:
         """Read legacy JSON clinical notes (backward compatibility with existing sample data)."""

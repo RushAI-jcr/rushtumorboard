@@ -18,6 +18,10 @@ from semantic_kernel.functions import kernel_function
 from data_models.plugin_configuration import PluginConfiguration
 
 from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE
+from .note_type_constants import (
+    ADDENDUM_TYPES, CONSULT_NOTE_TYPES, DISCHARGE_TYPES,
+    ED_NOTE_TYPES, HP_TYPES, OPERATIVE_TYPES, PROGRESS_NOTE_TYPES,
+)
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -110,7 +114,6 @@ def create_plugin(plugin_config: PluginConfiguration):
 
 class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
     report_type = "clinical notes"
-    accessor_method = "get_metadata_list"  # not used directly; overrides _extract
     system_prompt = ONCOLOGIC_HISTORY_SYSTEM_PROMPT
     error_key = "history"
 
@@ -124,16 +127,12 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
     #   "addendum note" — molecular/IHC results appended after surgical notes
     #   "genetic counseling" — BRCA/Lynch germline results
     #   "chemotherapy treatment note" — regimen details for treatment_timeline
-    _RELEVANT_NOTE_TYPES = {
-        "h&p", "consults", "progress notes", "discharge summary",
-        "operative report", "procedures", "brief op note",
-        "ed provider notes", "procedure note", "procedure notes",
-        "unmapped external note",
-        "oncology consultation",
-        "addendum note",
-        "genetic counseling",
-        "chemotherapy treatment note",
-    }
+    _RELEVANT_NOTE_TYPES: frozenset[str] = frozenset(
+        t.lower() for t in (
+            PROGRESS_NOTE_TYPES + CONSULT_NOTE_TYPES + HP_TYPES + DISCHARGE_TYPES
+            + OPERATIVE_TYPES + ED_NOTE_TYPES + ADDENDUM_TYPES
+        )
+    )
     MAX_NOTES = 30
     MAX_CHARS_PER_NOTE = 4000
     MAX_TOTAL_CHARS = 120_000  # ~30K tokens
@@ -151,12 +150,12 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
                 patient_id, list(self._RELEVANT_NOTE_TYPES)
             )
         else:
-            all_notes_json = await accessor.read_all(patient_id)
+            # Fallback for FHIR/Fabric accessors that only implement read_all()
+            all_notes_raw = await accessor.read_all(patient_id)
             notes = []
-            for note_json in all_notes_json:
-                note = json.loads(note_json) if isinstance(note_json, str) else note_json
-                note_type = note.get("note_type", note.get("NoteType", "")).lower()
-                if note_type in self._RELEVANT_NOTE_TYPES:
+            for raw in all_notes_raw:
+                note = json.loads(raw) if isinstance(raw, str) else raw
+                if note.get("NoteType", note.get("note_type", "")).lower() in self._RELEVANT_NOTE_TYPES:
                     notes.append(note)
 
         # Sort by date descending (most recent first) and cap count
@@ -211,7 +210,7 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
             chat_history=chat_history, settings=settings
         )
 
-        response_text = chat_resp.content or ""
+        response_text = (chat_resp.content or "") if chat_resp is not None else ""
 
         # Parse JSON from response
         try:

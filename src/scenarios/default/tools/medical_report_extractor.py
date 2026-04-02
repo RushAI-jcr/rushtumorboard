@@ -13,13 +13,6 @@ import logging
 import re
 import textwrap
 
-_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
-
-
-def _report_date_key(r: dict) -> str:
-    """Sort key for clinical reports: OrderDate → EntryDate → date → order_date."""
-    return r.get("OrderDate", r.get("EntryDate", r.get("date", r.get("order_date", ""))))
-
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
     AzureChatPromptExecutionSettings,
 )
@@ -29,6 +22,13 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from data_models.plugin_configuration import PluginConfiguration
 
 logger = logging.getLogger(__name__)
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+
+def _report_date_key(r: dict) -> str:
+    """Sort key for clinical reports: OrderDate → EntryDate → date → order_date."""
+    return r.get("OrderDate", r.get("EntryDate", r.get("date", r.get("order_date", ""))))
 
 
 class MedicalReportExtractorBase:
@@ -56,6 +56,13 @@ class MedicalReportExtractorBase:
     MAX_CHARS_PER_REPORT = 4000
     MAX_TOTAL_CHARS = 80_000  # ~20K tokens, leaves room for system prompt
 
+    # Human-readable descriptions of the 3 fallback layers (keyed by source_layer int)
+    _LAYER_DESCRIPTIONS: dict[int, str] = {
+        1: "Dedicated report CSV",
+        2: "Domain-specific clinical notes (operative/procedure notes)",
+        3: "Keyword-matched general clinical notes (progress notes, H&P, consults)",
+    }
+
     def __init__(self, config: PluginConfiguration):
         self.kernel = config.kernel
         self.chat_ctx = config.chat_ctx
@@ -72,7 +79,7 @@ class MedicalReportExtractorBase:
             reports = await getattr(accessor, self.accessor_method)(patient_id)
 
         # --- Layer 2: Domain-specific NoteTypes ---
-        if not reports and self.layer2_note_types and hasattr(accessor, "get_clinical_notes_by_type"):
+        if not reports and self.layer2_note_types:
             reports = await accessor.get_clinical_notes_by_type(patient_id, self.layer2_note_types)
             if reports:
                 source_layer = 2
@@ -82,7 +89,7 @@ class MedicalReportExtractorBase:
                 )
 
         # --- Layer 3: General notes with keyword filtering ---
-        if not reports and self.layer3_note_types and self.layer3_keywords and hasattr(accessor, "get_clinical_notes_by_keywords"):
+        if not reports and self.layer3_note_types and self.layer3_keywords:
             reports = await accessor.get_clinical_notes_by_keywords(
                 patient_id, self.layer3_note_types, self.layer3_keywords
             )
@@ -183,11 +190,7 @@ class MedicalReportExtractorBase:
             findings["patient_id"] = patient_id
             findings["report_count"] = len(reports)
             findings["data_source_layer"] = source_layer
-            findings["data_source_description"] = {
-                1: "Dedicated report CSV",
-                2: "Domain-specific clinical notes (operative/procedure notes)",
-                3: "Keyword-matched general clinical notes (progress notes, H&P, consults)",
-            }.get(source_layer, "Unknown")
+            findings["data_source_description"] = self._LAYER_DESCRIPTIONS[source_layer]
             if total_available > self.MAX_REPORTS:
                 findings["truncation_note"] = (
                     f"{total_available} {self.report_type} sources available; "
