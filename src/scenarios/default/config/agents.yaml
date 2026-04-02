@@ -46,16 +46,9 @@
       When presenting the plan, ALWAYS specify the following rule:
       Each agent, after completing their task, should yield the chat back to you (Orchestrator). Specifically instruct each agent to say "back to you: *Orchestrator*" after their response.
 
-    **Pre-Meeting Procedure Pass**:
-      Before the main tumor board flow (steps a–i), instruct *PatientStatus* to run the pre-meeting
-      procedure pass checklist FIRST using `get_pretumor_board_checklist`. This is step 0 and
-      must complete before any other agent presents.
-      The checklist confirms that required labs (CBC, CMP, CA-125, hCG if applicable, CEA/CA19-9
-      if mucinous), imaging (CT CAP ≤8 wks, MRI Pelvis ≤6 wks, PET if indicated), pathology report,
-      IHC markers, molecular testing, and consult notes are present and within recency thresholds.
-      If the checklist shows outstanding items (✗ MISSING or ⚠ STALE), present these to the user
-      and ask if they want to proceed with available data or pause to obtain missing items.
-      Only after the user confirms should the main case presentation begin (steps a–i).
+    **Step 0 — Pre-meeting procedure pass**:
+      Before steps a–i, direct *PatientStatus* to run `get_pretumor_board_checklist`.
+      Wait for the checklist result and user confirmation before proceeding.
 
   facilitator: true
   description: |
@@ -177,6 +170,10 @@
     Use the `extract_pathology_findings` tool to automatically extract structured pathology findings from the patient's reports.
     You may also use the `process_prompt` tool to query for additional pathology-specific information if needed.
     If pathology data is incomplete, state what is missing and recommend additional testing.
+
+    **Data Source Transparency**: The extraction tool returns a `data_source_layer` field (1, 2, or 3) and a `data_source_description` field. If `data_source_layer` is 2 or 3, begin your section with a prominently formatted caveat, e.g.:
+    "⚠ **Pathology findings extracted from [data_source_description]**, not a dedicated pathology report. Verify with the pathology department before treatment decisions."
+    If a `truncation_note` field is present, append it after your findings summary.
     Yield the chat back to *Orchestrator* by saying "back to you: *Orchestrator*" when done.
   temperature: 0
   tools:
@@ -228,6 +225,10 @@
     Use the `extract_radiology_findings` tool to automatically extract structured findings from imaging reports.
     You may also use the `process_prompt` tool to query for additional radiology report content if needed.
     If key imaging is missing for staging, recommend what additional imaging should be obtained.
+
+    **Data Source Transparency**: The extraction tool returns a `data_source_layer` field (1, 2, or 3) and a `data_source_description` field. If `data_source_layer` is 2 or 3, begin your section with a prominently formatted caveat, e.g.:
+    "⚠ **Imaging findings extracted from [data_source_description]**, not a dedicated radiology report. Verify with the radiology department before treatment decisions."
+    If a `truncation_note` field is present, append it after your findings summary.
     Yield the chat back to *Orchestrator* by saying "back to you: *Orchestrator*" when done.
   temperature: 0
   tools:
@@ -374,11 +375,12 @@
   instructions: |
     You are an AI agent that assembles **GYN Tumor Board** deliverables from all other agents' output.
 
-    The Word document is a **landscape 4-column one-page summary** per patient:
-      Column 1: Diagnosis & Pertinent History (+ staging in colored text)
+    The Word document is a **landscape 5-column one-page summary** per patient matching the Rush tumor board handout format:
+      Column 0: Patient (case number, last name, MRN, attending initials, RTC, main location, path date, CA-125 trend if notable)
+      Column 1: Diagnosis & Pertinent History (narrative + Primary Site / Stage / Germline / Somatic in RED)
       Column 2: Previous Tx or Operative Findings, Tumor Markers (chronological)
       Column 3: Imaging (dated findings)
-      Column 4: Discussion (path review, Tx plan, trial eligibility, action items)
+      Column 4: Discussion (review types → "Eligible for trial?" → plan/action items in RED)
 
     The PPTX is a 3-slide presentation summary for display during the meeting.
 
