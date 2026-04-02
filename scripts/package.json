@@ -1,0 +1,12 @@
+{
+  "name": "tumor-board-scripts",
+  "version": "1.0.0",
+  "description": "Node.js scripts for GYN tumor board document generation",
+  "private": true,
+  "scripts": {
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Generate the GYN Tumor Board PPTX template programmatically.
 
-Produces tumor_board_slides.pptx with 3 slide layouts:
-  Layout 0 — Patient Overview (title + subtitle + 6-bullet body)
-  Layout 1 — Clinical Findings (two-column: bullets left, chart right)
-  Layout 2 — Treatment & Trials (full-width bullets)
+Produces tumor_board_slides.pptx with 5 slides — one per tumor board column:
+  Slide 1 — Patient          (Col 0: case #, MRN, attending, RTC, location, path)
+  Slide 2 — Diagnosis        (Col 1: narrative + staging/genetics in red)
+  Slide 3 — Previous Tx      (Col 2: treatment history + CA-125 chart)
+  Slide 4 — Imaging          (Col 3: dated imaging studies)
+  Slide 5 — Discussion       (Col 4: review types, trial eligibility, plan)
 
 Run: python scripts/generate_pptx_template.py
 Output: src/scenarios/default/templates/tumor_board_slides.pptx
@@ -20,12 +22,18 @@ from pptx.util import Inches, Pt
 # Medical color palette
 NAVY = RGBColor(0x1B, 0x36, 0x5D)
 TEAL = RGBColor(0x00, 0x7C, 0x91)
+RED = RGBColor(0xFF, 0x00, 0x00)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 LIGHT_GRAY = RGBColor(0xF5, 0xF5, 0xF5)
 DARK_TEXT = RGBColor(0x33, 0x33, 0x33)
+FOOTER_GRAY = RGBColor(0x99, 0x99, 0x99)
 
 SLIDE_WIDTH = Inches(13.333)
 SLIDE_HEIGHT = Inches(7.5)
+FOOTER_Y = Inches(7.0)
+FOOTER_H = Inches(0.4)
+MARGIN_L = Inches(0.8)
+CONTENT_W = Inches(11.5)
 
 
 def _set_slide_bg(slide, color):
@@ -33,6 +41,15 @@ def _set_slide_bg(slide, color):
     fill = bg.fill
     fill.solid()
     fill.fore_color.rgb = color
+
+
+def _add_header_bar(slide, height=Inches(1.2)):
+    bar = slide.shapes.add_shape(1, Inches(0), Inches(0), SLIDE_WIDTH, height)
+    bar.fill.solid()
+    bar.fill.fore_color.rgb = NAVY
+    bar.line.fill.background()
+    bar.name = "header_bar"
+    return bar
 
 
 def _add_textbox(slide, left, top, width, height, text="", font_size=14,
@@ -51,133 +68,163 @@ def _add_textbox(slide, left, top, width, height, text="", font_size=14,
     return txBox
 
 
+def _add_teal_divider(slide, top):
+    div = slide.shapes.add_shape(1, MARGIN_L, top, Inches(1.5), Inches(0.05))
+    div.fill.solid()
+    div.fill.fore_color.rgb = TEAL
+    div.line.fill.background()
+
+
+def _add_footer(slide):
+    _add_textbox(slide, MARGIN_L, FOOTER_Y, CONTENT_W, FOOTER_H,
+                 text="GYN Oncology Tumor Board", font_size=10,
+                 color=FOOTER_GRAY, alignment=PP_ALIGN.CENTER, name="footer")
+
+
+def _add_slide_number_badge(slide, number, total=5):
+    """Small teal badge showing slide number (e.g. '2 / 5') in top-right corner."""
+    badge_w = Inches(1.2)
+    badge = slide.shapes.add_textbox(
+        SLIDE_WIDTH - badge_w - Inches(0.1), Inches(0.1), badge_w, Inches(0.35)
+    )
+    badge.name = "slide_badge"
+    tf = badge.text_frame
+    p = tf.paragraphs[0]
+    p.text = f"{number} / {total}"
+    p.font.size = Pt(11)
+    p.font.color.rgb = TEAL
+    p.alignment = PP_ALIGN.RIGHT
+
+
 def create_template():
     prs = Presentation()
     prs.slide_width = SLIDE_WIDTH
     prs.slide_height = SLIDE_HEIGHT
 
-    # ── Slide 1: Patient Overview ──
-    slide1 = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
-    _set_slide_bg(slide1, WHITE)
+    # ── Slide 1: Patient (Col 0) ──────────────────────────────────────────────
+    s1 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s1, WHITE)
+    _add_header_bar(s1, height=Inches(1.2))
+    _add_slide_number_badge(s1, 1)
 
-    # Navy header bar
-    header = slide1.shapes.add_shape(
-        1, Inches(0), Inches(0), SLIDE_WIDTH, Inches(1.4)  # MSO_SHAPE.RECTANGLE = 1
-    )
-    header.fill.solid()
-    header.fill.fore_color.rgb = NAVY
-    header.line.fill.background()
-    header.name = "header_bar"
+    _add_textbox(s1, MARGIN_L, Inches(0.25), Inches(10), Inches(0.6),
+                 text="Patient", font_size=32, bold=True, color=WHITE, name="title")
+    _add_textbox(s1, MARGIN_L, Inches(0.85), Inches(10), Inches(0.3),
+                 text="Col 0 — Case logistics", font_size=13, color=TEAL, name="subtitle")
 
-    # Title (white on navy)
-    _add_textbox(slide1, Inches(0.8), Inches(0.2), Inches(11), Inches(0.6),
-                 text="Patient Overview", font_size=32, bold=True, color=WHITE,
-                 name="title")
+    _add_teal_divider(s1, Inches(1.35))
 
-    # Subtitle (teal on navy)
-    _add_textbox(slide1, Inches(0.8), Inches(0.8), Inches(11), Inches(0.5),
-                 text="FIGO Stage | Molecular Profile | Date",
-                 font_size=18, color=TEAL, name="subtitle")
-
-    # Teal accent line
-    line = slide1.shapes.add_shape(
-        1, Inches(0.8), Inches(1.6), Inches(1.5), Inches(0.05)
-    )
-    line.fill.solid()
-    line.fill.fore_color.rgb = TEAL
-    line.line.fill.background()
-
-    # Bullet area
-    _add_textbox(slide1, Inches(0.8), Inches(1.9), Inches(11.5), Inches(5.0),
+    _add_textbox(s1, MARGIN_L, Inches(1.55), CONTENT_W, Inches(5.2),
                  text="", font_size=16, name="body")
+    _add_footer(s1)
 
-    # Footer
-    _add_textbox(slide1, Inches(0.8), Inches(7.0), Inches(11.5), Inches(0.4),
-                 text="GYN Oncology Tumor Board", font_size=10,
-                 color=RGBColor(0x99, 0x99, 0x99), alignment=PP_ALIGN.CENTER,
-                 name="footer")
+    # ── Slide 2: Diagnosis & Pertinent History (Col 1) ────────────────────────
+    s2 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s2, WHITE)
+    _add_header_bar(s2, height=Inches(1.2))
+    _add_slide_number_badge(s2, 2)
 
-    # ── Slide 2: Clinical Findings (two-column) ──
-    slide2 = prs.slides.add_slide(prs.slide_layouts[6])
-    _set_slide_bg(slide2, WHITE)
+    _add_textbox(s2, MARGIN_L, Inches(0.25), Inches(10), Inches(0.6),
+                 text="Diagnosis & Pertinent History", font_size=28, bold=True,
+                 color=WHITE, name="title")
+    _add_textbox(s2, MARGIN_L, Inches(0.85), Inches(10), Inches(0.3),
+                 text="Col 1 — Narrative + staging", font_size=13, color=TEAL, name="subtitle")
 
-    # Header bar
-    header2 = slide2.shapes.add_shape(
-        1, Inches(0), Inches(0), SLIDE_WIDTH, Inches(1.2)
-    )
-    header2.fill.solid()
-    header2.fill.fore_color.rgb = NAVY
-    header2.line.fill.background()
+    _add_teal_divider(s2, Inches(1.35))
 
-    _add_textbox(slide2, Inches(0.8), Inches(0.3), Inches(11), Inches(0.6),
-                 text="Clinical Findings", font_size=28, bold=True, color=WHITE,
-                 name="title")
-
-    # Left column — bullets
-    _add_textbox(slide2, Inches(0.8), Inches(1.5), Inches(6.0), Inches(5.5),
-                 text="", font_size=14, name="body_left")
-
-    # Right column — chart area (placeholder text)
-    chart_box = _add_textbox(slide2, Inches(7.5), Inches(1.5), Inches(5.3), Inches(0.4),
-                              text="Tumor Marker Trend", font_size=14, bold=True,
-                              color=TEAL, alignment=PP_ALIGN.CENTER, name="chart_title")
-
-    # Chart image placeholder (light gray box)
-    chart_placeholder = slide2.shapes.add_shape(
-        1, Inches(7.5), Inches(2.0), Inches(5.3), Inches(4.5)
-    )
-    chart_placeholder.fill.solid()
-    chart_placeholder.fill.fore_color.rgb = LIGHT_GRAY
-    chart_placeholder.line.color.rgb = RGBColor(0xDD, 0xDD, 0xDD)
-    chart_placeholder.name = "chart_area"
-
-    # Footer
-    _add_textbox(slide2, Inches(0.8), Inches(7.0), Inches(11.5), Inches(0.4),
-                 text="GYN Oncology Tumor Board", font_size=10,
-                 color=RGBColor(0x99, 0x99, 0x99), alignment=PP_ALIGN.CENTER,
-                 name="footer")
-
-    # ── Slide 3: Treatment & Trials ──
-    slide3 = prs.slides.add_slide(prs.slide_layouts[6])
-    _set_slide_bg(slide3, WHITE)
-
-    header3 = slide3.shapes.add_shape(
-        1, Inches(0), Inches(0), SLIDE_WIDTH, Inches(1.2)
-    )
-    header3.fill.solid()
-    header3.fill.fore_color.rgb = NAVY
-    header3.line.fill.background()
-
-    _add_textbox(slide3, Inches(0.8), Inches(0.3), Inches(11), Inches(0.6),
-                 text="Treatment Plan & Clinical Trials", font_size=28,
-                 bold=True, color=WHITE, name="title")
-
-    # Teal divider
-    div = slide3.shapes.add_shape(
-        1, Inches(0.8), Inches(1.35), Inches(1.5), Inches(0.05)
-    )
-    div.fill.solid()
-    div.fill.fore_color.rgb = TEAL
-    div.line.fill.background()
-
-    # Main body
-    _add_textbox(slide3, Inches(0.8), Inches(1.6), Inches(11.5), Inches(3.5),
+    # Narrative bullets (left, ~60% width)
+    _add_textbox(s2, MARGIN_L, Inches(1.55), Inches(7.5), Inches(3.8),
                  text="", font_size=14, name="body")
 
-    # Trials section header
-    _add_textbox(slide3, Inches(0.8), Inches(5.2), Inches(11.5), Inches(0.4),
+    # Staging block in red (right-bottom area)
+    _add_textbox(s2, MARGIN_L, Inches(5.5), Inches(11.5), Inches(0.35),
+                 text="Primary Site:", font_size=13, bold=False, color=RED, name="staging_label")
+    _add_textbox(s2, MARGIN_L, Inches(5.5), CONTENT_W, Inches(1.35),
+                 text="", font_size=13, color=RED, name="staging_body")
+
+    _add_footer(s2)
+
+    # ── Slide 3: Previous Tx or Operative Findings, Tumor Markers (Col 2) ─────
+    s3 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s3, WHITE)
+    _add_header_bar(s3, height=Inches(1.2))
+    _add_slide_number_badge(s3, 3)
+
+    _add_textbox(s3, MARGIN_L, Inches(0.25), Inches(10), Inches(0.6),
+                 text="Previous Tx or Operative Findings", font_size=26, bold=True,
+                 color=WHITE, name="title")
+    _add_textbox(s3, MARGIN_L, Inches(0.85), Inches(10), Inches(0.3),
+                 text="Col 2 — Treatment history & tumor markers", font_size=13,
+                 color=TEAL, name="subtitle")
+
+    _add_teal_divider(s3, Inches(1.35))
+
+    # Left column — treatment history bullets
+    _add_textbox(s3, MARGIN_L, Inches(1.55), Inches(6.0), Inches(5.2),
+                 text="", font_size=14, name="body_left")
+
+    # Right column — chart area
+    _add_textbox(s3, Inches(7.5), Inches(1.55), Inches(5.3), Inches(0.4),
+                 text="CA-125 Trend", font_size=14, bold=True,
+                 color=TEAL, alignment=PP_ALIGN.CENTER, name="chart_title")
+
+    chart_ph = s3.shapes.add_shape(1, Inches(7.5), Inches(2.05), Inches(5.3), Inches(4.5))
+    chart_ph.fill.solid()
+    chart_ph.fill.fore_color.rgb = LIGHT_GRAY
+    chart_ph.line.color.rgb = RGBColor(0xDD, 0xDD, 0xDD)
+    chart_ph.name = "chart_area"
+
+    _add_footer(s3)
+
+    # ── Slide 4: Imaging (Col 3) ──────────────────────────────────────────────
+    s4 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s4, WHITE)
+    _add_header_bar(s4, height=Inches(1.2))
+    _add_slide_number_badge(s4, 4)
+
+    _add_textbox(s4, MARGIN_L, Inches(0.25), Inches(10), Inches(0.6),
+                 text="Imaging", font_size=32, bold=True, color=WHITE, name="title")
+    _add_textbox(s4, MARGIN_L, Inches(0.85), Inches(10), Inches(0.3),
+                 text="Col 3 — Dated imaging studies", font_size=13, color=TEAL, name="subtitle")
+
+    _add_teal_divider(s4, Inches(1.35))
+
+    # Full-width body (imaging studies are verbose)
+    _add_textbox(s4, MARGIN_L, Inches(1.55), CONTENT_W, Inches(5.2),
+                 text="", font_size=13, name="body")
+
+    _add_footer(s4)
+
+    # ── Slide 5: Discussion (Col 4) ───────────────────────────────────────────
+    s5 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s5, WHITE)
+    _add_header_bar(s5, height=Inches(1.2))
+    _add_slide_number_badge(s5, 5)
+
+    _add_textbox(s5, MARGIN_L, Inches(0.25), Inches(10), Inches(0.6),
+                 text="Discussion", font_size=32, bold=True, color=WHITE, name="title")
+    _add_textbox(s5, MARGIN_L, Inches(0.85), Inches(10), Inches(0.3),
+                 text="Col 4 — Review · Trial eligibility · Plan", font_size=13,
+                 color=TEAL, name="subtitle")
+
+    _add_teal_divider(s5, Inches(1.35))
+
+    # Review types + trial eligibility (upper area)
+    _add_textbox(s5, MARGIN_L, Inches(1.55), CONTENT_W, Inches(0.9),
+                 text="", font_size=14, name="review_header")
+
+    # Plan / action bullets (middle)
+    _add_textbox(s5, MARGIN_L, Inches(2.55), CONTENT_W, Inches(2.8),
+                 text="", font_size=14, name="body")
+
+    # Trials section
+    _add_textbox(s5, MARGIN_L, Inches(5.45), CONTENT_W, Inches(0.4),
                  text="Eligible Clinical Trials", font_size=16, bold=True,
                  color=TEAL, name="trials_header")
-
-    # Trials body
-    _add_textbox(slide3, Inches(0.8), Inches(5.7), Inches(11.5), Inches(1.2),
+    _add_textbox(s5, MARGIN_L, Inches(5.95), CONTENT_W, Inches(0.9),
                  text="", font_size=13, name="trials_body")
 
-    # Footer
-    _add_textbox(slide3, Inches(0.8), Inches(7.0), Inches(11.5), Inches(0.4),
-                 text="GYN Oncology Tumor Board", font_size=10,
-                 color=RGBColor(0x99, 0x99, 0x99), alignment=PP_ALIGN.CENTER,
-                 name="footer")
+    _add_footer(s5)
 
     return prs
 

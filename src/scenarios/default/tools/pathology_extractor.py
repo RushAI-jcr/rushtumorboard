@@ -11,6 +11,10 @@ from semantic_kernel.functions import kernel_function
 from data_models.plugin_configuration import PluginConfiguration
 
 from .medical_report_extractor import MedicalReportExtractorBase
+from .note_type_constants import (
+    ADDENDUM_TYPES, ASSESSMENT_PLAN_TYPES, EXTERNAL_TYPES,
+    GENERAL_CLINICAL_TYPES, OPERATIVE_TYPES, PATHOLOGY_REPORT_TYPES,
+)
 from .validation import validate_patient_id
 
 PATHOLOGY_SYSTEM_PROMPT = """
@@ -104,23 +108,11 @@ class PathologyExtractorPlugin(MedicalReportExtractorBase):
 
     # Layer 2: Operative/procedure notes often contain pathology details.
     # Confirmed in real Rush Epic Clarity exports.
-    layer2_note_types = (
-        "Operative Report", "Operative Note",
-        "Procedures", "Brief Op Note", "Procedure Note", "Procedure Notes",
-        "Surgical Pathology Final", "Pathology Consultation",  # note-form path reports
-        "Unmapped External Note",  # outside hospital pathology
-    )
+    layer2_note_types: tuple[str, ...] = OPERATIVE_TYPES + PATHOLOGY_REPORT_TYPES + EXTERNAL_TYPES
     # Layer 3: General notes where physicians summarize pathology findings.
     # Confirmed NoteTypes in real Rush exports.
-    layer3_note_types = (
-        "Progress Notes", "Progress Note",
-        "Consults", "Consult Note", "Oncology Consultation",
-        "Discharge Summary",
-        "H&P", "History and Physical",
-        "Assessment & Plan Note",
-        "ED Provider Notes",
-        "Addendum Note",
-        "Multidisciplinary Tumor Board",
+    layer3_note_types: tuple[str, ...] = (
+        GENERAL_CLINICAL_TYPES + ASSESSMENT_PLAN_TYPES + ADDENDUM_TYPES + ("Multidisciplinary Tumor Board",)
     )
     layer3_keywords = (
         "pathology", "histolog", "biopsy", "immunohistochem",

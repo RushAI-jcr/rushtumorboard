@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+import html
+
 from data_models.patient_data import PatientDataSource
 from routes.views.evidence import Evidence, find_evidence
 
@@ -11,8 +13,14 @@ def render_grounded_clinical_note(patient_id: str, note_dict: dict, source: Pati
     """
     note_id = source.note_id
     evidences = _find_evidences_in_source(note_dict, source)
-    highlighted_note_text = _highlight_note_text(note_dict["text"], evidences) if evidences \
-        else note_dict.get("text", "No text provided")
+    note_text = str(note_dict.get("text") or "")
+    highlighted_note_text = _highlight_note_text(note_text, evidences) if evidences \
+        else html.escape(note_text) or "No text provided"
+
+    safe_patient_id = html.escape(str(patient_id))
+    safe_note_id = html.escape(str(note_id))
+    safe_date = html.escape(str(note_dict.get("date", "N/A")))
+    safe_note_type = html.escape(str(note_dict.get("note_type", "N/A")))
 
     return f"""
         <html>
@@ -36,10 +44,10 @@ def render_grounded_clinical_note(patient_id: str, note_dict: dict, source: Pati
             </head>
             <body>
                 <h1>Clinical Note</h1>
-                <p>Patient ID: {patient_id}</p>
-                <p>Note ID: {note_id}</p>
-                <p>Date: {note_dict.get("date", "N/A")}</p>
-                <p>Note Type: {note_dict.get("note_type", "N/A")}</p>
+                <p>Patient ID: {safe_patient_id}</p>
+                <p>Note ID: {safe_note_id}</p>
+                <p>Date: {safe_date}</p>
+                <p>Note Type: {safe_note_type}</p>
                 <pre>{highlighted_note_text}</pre>
             </body>
         </html>
@@ -83,14 +91,14 @@ def _highlight_note_text(note_text: str, evidences: list[Evidence]) -> str:
 
     for evidence in evidences:
         # Add the text before the evidence to the highlighted note text
-        highlighted_note_text += note_text[highlighted_note_text_index:evidence.begin]
+        highlighted_note_text += html.escape(note_text[highlighted_note_text_index:evidence.begin])
         highlighted_note_text_index = evidence.begin
 
         # Highlight the evidence in the note text
-        highlighted_note_text += f"<span class=\"highlight\">{note_text[evidence.begin:evidence.end]}</span>"
+        highlighted_note_text += f"<span class=\"highlight\">{html.escape(note_text[evidence.begin:evidence.end])}</span>"
         highlighted_note_text_index = evidence.end
 
     # Add the remaining text after the last evidence
-    highlighted_note_text += note_text[highlighted_note_text_index:]
+    highlighted_note_text += html.escape(note_text[highlighted_note_text_index:])
 
     return highlighted_note_text

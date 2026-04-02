@@ -4,6 +4,7 @@
 # Supports CA-125, HE4, hCG, and other GYN-relevant markers.
 # Calculates nadir, doubling time, and GCIG response criteria.
 
+import asyncio
 import json
 import logging
 import math
@@ -13,6 +14,7 @@ from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
+from .note_type_constants import CONSULT_NOTE_TYPES, DISCHARGE_TYPES, ED_NOTE_TYPES, HP_TYPES, PROGRESS_NOTE_TYPES
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -64,13 +66,9 @@ class TumorMarkerPlugin:
     #   "ED Provider Notes" — confirmed for germ cell/complex patients
     #   "Discharge Summary" — inpatient stays often summarize marker trends
     #   "H&P"               — kept for non-Rush sources (FHIR/Fabric)
-    _MARKER_NOTE_TYPES = [
-        "Progress Notes",
-        "Consults",
-        "ED Provider Notes",
-        "Discharge Summary",
-        "H&P",
-    ]
+    _MARKER_NOTE_TYPES: list[str] = list(
+        PROGRESS_NOTE_TYPES + CONSULT_NOTE_TYPES + ED_NOTE_TYPES + DISCHARGE_TYPES + HP_TYPES
+    )
     _MARKER_KEYWORDS = [
         "ca-125", "ca125", "ca 125", "he4", "he-4",
         "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",
@@ -94,12 +92,9 @@ class TumorMarkerPlugin:
         # Build keyword list: requested marker + all known marker keywords
         keywords = [marker.lower()] + list(self._MARKER_KEYWORDS)
 
-        if hasattr(accessor, "get_clinical_notes_by_keywords"):
-            notes = await accessor.get_clinical_notes_by_keywords(
-                patient_id, self._MARKER_NOTE_TYPES, keywords
-            )
-        else:
-            return None
+        notes = await accessor.get_clinical_notes_by_keywords(
+            patient_id, self._MARKER_NOTE_TYPES, keywords
+        )
 
         if not notes:
             return None
@@ -147,17 +142,21 @@ class TumorMarkerPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        # Layer 1: Get structured lab results
-        labs = []
-        if hasattr(accessor, "get_lab_results"):
-            labs = await accessor.get_lab_results(patient_id, component_name=marker)
-        elif hasattr(accessor, "get_tumor_markers"):
-            all_markers = await accessor.get_tumor_markers(patient_id)
-            labs = [
-                m for m in all_markers
-                if marker.lower().replace("-", "") in
-                   m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
-            ]
+        # Layer 1: Get structured lab results — both calls are independent, gather concurrently
+        labs_result, all_markers_result = await asyncio.gather(
+            accessor.get_lab_results(patient_id, component_name=marker),
+            accessor.get_tumor_markers(patient_id),
+            return_exceptions=True,
+        )
+        if isinstance(labs_result, BaseException):
+            labs_result = []
+        if isinstance(all_markers_result, BaseException):
+            all_markers_result = []
+        labs = labs_result or [
+            m for m in all_markers_result
+            if marker.lower().replace("-", "") in
+               m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
+        ]
 
         if not labs:
             # Layer 2/3: Fallback to clinical notes
@@ -233,15 +232,9 @@ class TumorMarkerPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        if hasattr(accessor, "get_tumor_markers"):
-            all_markers = await accessor.get_tumor_markers(patient_id)
-        elif hasattr(accessor, "get_lab_results"):
+        all_markers = await accessor.get_tumor_markers(patient_id)
+        if not all_markers:
             all_markers = await accessor.get_lab_results(patient_id)
-        else:
-            return json.dumps({
-                "patient_id": patient_id,
-                "error": "Data accessor does not support lab results.",
-            })
 
         if not all_markers:
             # Fallback to clinical notes

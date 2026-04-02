@@ -11,6 +11,10 @@ from semantic_kernel.functions import kernel_function
 from data_models.plugin_configuration import PluginConfiguration
 
 from .medical_report_extractor import MedicalReportExtractorBase
+from .note_type_constants import (
+    ADDENDUM_TYPES, ASSESSMENT_PLAN_TYPES, EXTERNAL_TYPES,
+    GENERAL_CLINICAL_TYPES,
+)
 from .validation import validate_patient_id
 
 RADIOLOGY_SYSTEM_PROMPT = """
@@ -100,16 +104,9 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
     layer2_note_types = ()
     # Layer 3: General notes where physicians summarize imaging findings.
     # Confirmed NoteTypes in real Rush Epic Clarity exports.
-    layer3_note_types = (
-        "Progress Notes", "Progress Note",
-        "H&P", "History and Physical",
-        "Consults", "Consult Note", "Oncology Consultation",
-        "ED Provider Notes", "ED Notes",
-        "Discharge Summary",
-        "Assessment & Plan Note",
-        "Multidisciplinary Tumor Board",
-        "Unmapped External Note",
-        "Addendum Note",
+    layer3_note_types: tuple[str, ...] = (
+        GENERAL_CLINICAL_TYPES + ASSESSMENT_PLAN_TYPES
+        + ("Multidisciplinary Tumor Board",) + EXTERNAL_TYPES + ADDENDUM_TYPES
     )
     layer3_keywords = (
         "ct scan", "ct chest", "ct abdomen", "ct pelvis", "ct a/p", "ct cap",
