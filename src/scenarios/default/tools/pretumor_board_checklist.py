@@ -235,32 +235,20 @@ class PreTumorBoardChecklistPlugin:
     # ------------------------------------------------------------------
 
     async def _get_labs(self, accessor, patient_id: str) -> list[dict]:
-        if hasattr(accessor, "get_lab_results"):
-            return await accessor.get_lab_results(patient_id)
-        return []
+        return await accessor.get_lab_results(patient_id)
 
     async def _get_radiology(self, accessor, patient_id: str) -> list[dict]:
-        if hasattr(accessor, "get_radiology_reports"):
-            return await accessor.get_radiology_reports(patient_id)
-        return []
+        return await accessor.get_radiology_reports(patient_id)
 
     async def _get_pathology(self, accessor, patient_id: str) -> list[dict]:
-        if hasattr(accessor, "get_pathology_reports"):
-            return await accessor.get_pathology_reports(patient_id)
-        return []
+        return await accessor.get_pathology_reports(patient_id)
 
     async def _get_clinical_notes(self, accessor, patient_id: str) -> list[dict]:
         consult_types = (
             "Consults", "Consult Note", "Oncology Consultation",
             "Genetic Counseling", "Procedures",
         )
-        if hasattr(accessor, "get_clinical_notes_by_type"):
-            return await accessor.get_clinical_notes_by_type(patient_id, consult_types)
-        if hasattr(accessor, "read_all"):
-            import json as _j
-            raw = await accessor.read_all(patient_id)
-            return [_j.loads(r) if isinstance(r, str) else r for r in raw]
-        return []
+        return await accessor.get_clinical_notes_by_type(patient_id, consult_types)
 
     # ------------------------------------------------------------------
     # Lab checks

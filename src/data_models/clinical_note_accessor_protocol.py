@@ -9,8 +9,7 @@ class ClinicalNoteAccessorProtocol(Protocol):
     async def read(self, patient_id: str, note_id: str) -> str: ...
     async def read_all(self, patient_id: str) -> list[str]: ...
 
-    # --- Filter methods: Caboodle + FHIR; NOT Fabric ---
-    # Gate with hasattr() before calling on an unknown accessor.
+    # --- Filter methods: implemented by all accessors ---
     async def get_clinical_notes_by_type(
         self, patient_id: str, note_types: Sequence[str]
     ) -> list[dict]: ...
@@ -18,8 +17,7 @@ class ClinicalNoteAccessorProtocol(Protocol):
         self, patient_id: str, note_types: Sequence[str], keywords: Sequence[str]
     ) -> list[dict]: ...
 
-    # --- GYN-specific report/lab methods: Caboodle only ---
-    # Gate with hasattr() before calling — FHIR and Fabric do not implement these.
+    # --- GYN-specific report/lab methods: implemented by all accessors ---
     async def get_pathology_reports(self, patient_id: str) -> list[dict]: ...
     async def get_radiology_reports(self, patient_id: str) -> list[dict]: ...
     async def get_lab_results(

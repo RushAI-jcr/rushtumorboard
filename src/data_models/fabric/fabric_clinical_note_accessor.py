@@ -4,7 +4,7 @@
 import asyncio
 import logging
 from collections.abc import Sequence
-from typing import Any, Callable, Coroutine, List, Optional, Tuple
+from typing import Any, Callable, Coroutine
 import json
 import base64
 from datetime import date, timedelta
@@ -23,11 +23,21 @@ class FabricClinicalNoteAccessor:
         bearer_token_provider: Callable[[], Coroutine[Any, Any, str]],
     ):
         self.fabric_user_data_function_endpoint = fabric_user_data_function_endpoint
-        workspace_id, data_function_id = self.__parse_fabric_endpoint(fabric_user_data_function_endpoint)
+        parsed = self.__parse_fabric_endpoint(fabric_user_data_function_endpoint)
+        if parsed is None:
+            raise ValueError(
+                f"Could not parse Fabric endpoint URL. Expected format: "
+                f"https://api.fabric.microsoft.com/v1/workspaces/{{workspace_id}}/userDataFunctions/{{data_function_id}} "
+                f"or https://msit.powerbi.com/groups/{{workspace_id}}/userdatafunctions/{{data_function_id}}. "
+                f"Got: {fabric_user_data_function_endpoint}"
+            )
+        workspace_id, data_function_id = parsed
         self.api_endpoint = f"https://api.fabric.microsoft.com/v1/workspaces/{workspace_id}/userDataFunctions/{data_function_id}"
         self.bearer_token_provider = bearer_token_provider
+        self._note_cache: dict[str, list[str]] = {}
+        self._CACHE_MAX_PATIENTS: int = 5
 
-    def __parse_fabric_endpoint(self, url: str) -> Optional[Tuple[str, str]]:
+    def __parse_fabric_endpoint(self, url: str) -> tuple[str, str] | None:
         """
         Parses a Fabric API URL to extract the workspace_id and data_function_id.
 
@@ -130,13 +140,11 @@ class FabricClinicalNoteAccessor:
 
         return json.dumps(note_json)
 
-    async def read_all(self, patient_id: str) -> List[str]:
-        """
-        Retrieves all clinical notes for a given patient ID.
+    async def read_all(self, patient_id: str) -> list[str]:
+        """Retrieves all clinical notes for a given patient ID (cached per-patient, LRU eviction)."""
+        if patient_id in self._note_cache:
+            return self._note_cache[patient_id]
 
-        :param patient_id: The ID of the patient.
-        :return: A list of clinical note contents.
-        """
         metadata_list = await self.get_metadata_list(patient_id)
 
         notes = []
@@ -146,6 +154,13 @@ class FabricClinicalNoteAccessor:
             batch = [self.read(patient_id, note["id"]) for note in batch_input]
             batch_results = await asyncio.gather(*batch)
             notes.extend(batch_results)
+
+        # LRU eviction
+        if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
+            oldest = next(iter(self._note_cache))
+            del self._note_cache[oldest]
+        self._note_cache[patient_id] = notes
+
         return notes
 
     async def get_clinical_notes_by_type(

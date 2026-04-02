@@ -20,7 +20,7 @@ def patient_data_routes(blob_service_client: BlobServiceClient):
         ''' Get a file generated from an Azure AI Agent '''
 
         filename = os.path.basename(blob_path)
-        logger.info(f"blob_path: {blob_path}")
+        logger.info("Serving blob request (container=%s)", container_name)
 
         try:
             container_client = blob_service_client.get_container_client(container_name)
@@ -37,7 +37,7 @@ def patient_data_routes(blob_service_client: BlobServiceClient):
 
             return Response(media_type=mime_type(filename), content=blob_data, headers=headers)
         except ResourceNotFoundError:
-            return Response(status_code=404, content=f"Blob not found: {blob_path}")
+            return Response(status_code=404, content="Requested resource not found")
 
     @router.get("/chat_artifacts/{blob_path:path}")
     async def get_chat_artifact(blob_path: str):

@@ -1,27 +1,24 @@
 # Presentation Export Plugin for GYN Oncology Tumor Board
 #
-# Generates a 3-slide PPTX summary from all agent outputs:
-#   Slide 1: Patient Overview (demographics, FIGO, molecular profile)
-#   Slide 2: Clinical Findings (pathology, radiology, tumor marker chart)
-#   Slide 3: Treatment & Trials (NCCN recs, clinical trials, consensus)
+# Generates a 5-slide PPTX — one slide per tumor board column:
+#   Slide 1 — Patient          (Col 0: case logistics)
+#   Slide 2 — Diagnosis        (Col 1: narrative + staging in RED)
+#   Slide 3 — Previous Tx      (Col 2: treatment history + CA-125 native chart)
+#   Slide 4 — Imaging          (Col 3: dated imaging studies)
+#   Slide 5 — Discussion       (Col 4: review types, trial eligibility, plan)
 #
-# Uses python-pptx with a pre-generated template (tumor_board_slides.pptx).
-# Content is summarized via Azure ChatCompletion with SlideContent structured output.
+# Rendering: PptxGenJS (Node.js) via scripts/tumor_board_slides.js
+# Follows the Anthropic PPTX skill (.claude/skills/pptx/SKILL.md)
+# Content summarized via Azure ChatCompletion with SlideContent structured output.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-from io import BytesIO
-from typing import Optional
+import tempfile
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from pptx import Presentation
-from pptx.dml.color import RGBColor
-from pptx.util import Pt
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
     AzureChatPromptExecutionSettings,
 )
@@ -39,30 +36,56 @@ from utils.model_utils import model_supports_temperature
 logger = logging.getLogger(__name__)
 
 OUTPUT_PPTX_FILENAME = "tumor_board_slides-{}.pptx"
-TEMPLATE_PPTX_FILENAME = "tumor_board_slides.pptx"
 
-# Colors matching the template
-NAVY = RGBColor(0x1B, 0x36, 0x5D)
-TEAL = RGBColor(0x00, 0x7C, 0x91)
-DARK_TEXT = RGBColor(0x33, 0x33, 0x33)
-BULLET_COLOR = RGBColor(0x44, 0x44, 0x44)
+# Path to the PptxGenJS script (relative to this file's location in src/)
+_SCRIPT_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "scripts")
+)
+_JS_SCRIPT = os.path.join(_SCRIPT_DIR, "tumor_board_slides.js")
 
 SLIDE_SUMMARIZATION_PROMPT = """\
-You are a medical presentation writer for a GYN Oncology Tumor Board.
-Given the full agent outputs below, create concise slide content.
+You are preparing a GYN Oncology Tumor Board case presentation.
+The primary purpose is to present clinical history so the attending team can discuss the case.
+Use clinical shorthand (yo, s/p, dx, bx, LN, mets, etc.) and M/D/YY dates.
+Stick to facts from the source data — do not invent or infer.
 
-Rules:
-- Each bullet must be ≤20 words, clear, and clinically precise.
-- overview_bullets: max 6 items covering demographics, history, FIGO stage, molecular profile, ECOG, key diagnoses.
-- findings_bullets: max 6 items covering pathology (histology, grade, IHC, molecular classification), radiology (key imaging findings), and tumor markers.
-- treatment_bullets: max 6 items covering NCCN recommendations, board consensus, and follow-up plan.
-- trial_entries: max 3 items, format each as "NCT# — Brief title (Phase X)".
-- overview_title: "Patient {patient_id} — {cancer_type}"
-- overview_subtitle: "FIGO {figo_stage} | {molecular_profile} | {date}"
-- If the patient is an outside transfer, include referral source and reason in overview_bullets.
-- findings_title: "Pathology & Imaging Findings"
-- findings_chart_title: name of primary tumor marker (e.g., "CA-125 Trend")
-- treatment_title: "Treatment Plan & Clinical Trials"
+Slide 1 — Patient logistics (Col 0):
+  patient_title: "Case {N} — {LastName}" (use patient_id if name unavailable)
+  patient_bullets: max 6 — MRN (ONLY if explicitly in records, else "[MRN - VERIFY]"),
+    Attending initials (ONLY if explicitly in records, else "[Attending - VERIFY]"),
+    RTC date, Main location, Path date or "NO SLIDES", CA-125 trend only if actively monitored.
+    NEVER fabricate an MRN or attending initials.
+
+Slide 2 — Diagnosis & Pertinent History (Col 1):
+  diagnosis_title: "Diagnosis & Pertinent History"
+  diagnosis_bullets: max 6 — age/sex/cancer dx, key clinical history, reason for
+    this tumor board presentation (≤20 words each, facts only)
+  primary_site: e.g. "Ovary", "Uterus", "Cervix"
+  stage: FIGO stage string, e.g. "IIIC", "IA", "IVB"
+  germline_genetics: e.g. "BRCA1+ (c.5266dupC)" or "Negative" or "Not tested"
+  somatic_genetics: IHC/molecular one-liner from pathology data
+
+Slide 3 — Previous Tx or Operative Findings (Col 2):
+  prevtx_title: "Previous Tx or Operative Findings"
+  prevtx_bullets: max 6 — chronological (M/D/YY: event), surgeries, chemo regimens,
+    best responses. Facts from the record only.
+  findings_chart_title: primary tumor marker name, e.g. "CA-125 Trend"
+
+Slide 4 — Imaging (Col 3):
+  imaging_title: "Imaging"
+  imaging_bullets: max 8 — one bullet per study: "M/D/YY [Modality]: key findings"
+    Chronological, most recent first.
+
+Slide 5 — Discussion agenda (Col 4):
+  discussion_title: "Discussion"
+  review_types: list the review types needed — ["Path Review", "Imaging Review", "Tx Disc"]
+  trial_eligible_note: one-line eligibility summary from the clinical trials data,
+    or empty string if no trial data provided
+  discussion_bullets: max 6 — open clinical questions and agenda items FOR the
+    tumor board to discuss (not recommendations). Drawn from the case facts.
+    e.g. "Surgical candidacy given ECOG 2?" or "Platinum sensitivity status?"
+  trial_entries: max 3 — only if trial data was provided: "NCT# — Brief title (Phase X)"
+    Leave empty list if no trials were identified in the source data.
 
 Respond with valid JSON matching the SlideContent schema exactly.
 """
@@ -78,16 +101,13 @@ def create_plugin(plugin_config: PluginConfiguration):
 
 class PresentationExportPlugin:
     def __init__(self, kernel, chat_ctx: ChatContext, data_access: DataAccess):
-        # presentation_export.py is at tools/presentation_export.py (2 levels below scenarios/default/)
-        self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.kernel = kernel
         self.chat_ctx = chat_ctx
         self.data_access = data_access
 
     @kernel_function(
-        description="Generate a 3-slide PowerPoint presentation summarizing the GYN tumor board case. "
-        "Produces slides for Patient Overview, Clinical Findings (with tumor marker chart), "
-        "and Treatment Plan with Clinical Trials."
+        description="Generate a 5-slide PowerPoint presentation for the GYN tumor board — one slide "
+        "per column: Patient, Diagnosis, Previous Tx (with CA-125 chart), Imaging, Discussion."
     )
     async def export_to_pptx(
         self,
@@ -128,7 +148,7 @@ class PresentationExportPlugin:
         patient_id = self.chat_ctx.patient_id
         conversation_id = self.chat_ctx.conversation_id
 
-        # 1. Summarize all agent data into slide-friendly content via LLM
+        # 1. Summarize all agent data into 5-column SlideContent via LLM
         all_data = {
             "patient_id": patient_id,
             "patient_age": patient_age,
@@ -147,21 +167,39 @@ class PresentationExportPlugin:
         }
         slide_content = await self._summarize_for_slides(all_data)
 
-        # 2. Generate tumor marker chart
-        marker_chart = self._create_marker_chart(tumor_markers)
+        # 2. Parse raw tumor marker data for native PptxGenJS chart
+        markers_raw = self._parse_markers_raw(tumor_markers)
 
-        # 3. Load template and build slides
-        template_path = os.path.join(self.root_dir, "templates", TEMPLATE_PPTX_FILENAME)
-        prs = Presentation(template_path)
+        # 3. Write PPTX via PptxGenJS (scripts/tumor_board_slides.js)
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as tmp:
+            tmp_path = tmp.name
 
-        self._build_slide_1(prs.slides[0], slide_content)
-        self._build_slide_2(prs.slides[1], slide_content, marker_chart)
-        self._build_slide_3(prs.slides[2], slide_content)
+        js_input = json.dumps({
+            "slides": slide_content.model_dump(),
+            "tumor_markers_raw": markers_raw,
+            "output_path": tmp_path,
+        })
 
-        # 4. Save to blob storage
-        stream = BytesIO()
-        prs.save(stream)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "node", _JS_SCRIPT,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate(input=js_input.encode())
+            if proc.returncode != 0:
+                err = stderr.decode()
+                logger.error("tumor_board_slides.js failed: %s", err)
+                return f"Error generating PPTX: {err[:200]}"
 
+            with open(tmp_path, "rb") as f:
+                pptx_bytes = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+        # 4. Upload to blob storage
         artifact_id = ChatArtifactIdentifier(
             conversation_id=conversation_id,
             patient_id=patient_id,
@@ -170,178 +208,36 @@ class PresentationExportPlugin:
         blob_path = self.data_access.chat_artifact_accessor.get_blob_path(artifact_id)
         output_url = get_chat_artifacts_url(blob_path)
 
-        artifact = ChatArtifact(artifact_id=artifact_id, data=stream.getvalue())
+        artifact = ChatArtifact(artifact_id=artifact_id, data=pptx_bytes)
         await self.data_access.chat_artifact_accessor.write(artifact)
 
+        import html as _html
+        safe_url = _html.escape(output_url, quote=True)
+        safe_name = _html.escape(artifact_id.filename)
         return (
             f"The PowerPoint presentation has been successfully created. "
             f'You can download it using the link below:<br><br>'
-            f'<a href="{output_url}">{artifact_id.filename}</a>'
+            f'<a href="{safe_url}">{safe_name}</a>'
         )
-
-    # ── Slide builders ──
-
-    def _build_slide_1(self, slide, sc: SlideContent):
-        """Patient Overview slide."""
-        for shape in slide.shapes:
-            if shape.name == "title":
-                self._set_text(shape, sc.overview_title, size=32, bold=True, color=RGBColor(0xFF, 0xFF, 0xFF))
-            elif shape.name == "subtitle":
-                self._set_text(shape, sc.overview_subtitle, size=18, color=TEAL)
-            elif shape.name == "body":
-                self._set_bullets(shape, sc.overview_bullets)
-
-    def _build_slide_2(self, slide, sc: SlideContent, chart_buf: Optional[BytesIO]):
-        """Clinical Findings slide with tumor marker chart."""
-        for shape in slide.shapes:
-            if shape.name == "title":
-                self._set_text(shape, sc.findings_title, size=28, bold=True, color=RGBColor(0xFF, 0xFF, 0xFF))
-            elif shape.name == "body_left":
-                self._set_bullets(shape, sc.findings_bullets)
-            elif shape.name == "chart_title":
-                self._set_text(shape, sc.findings_chart_title, size=14, bold=True, color=TEAL)
-
-        # Replace chart placeholder with actual chart image
-        if chart_buf:
-            # Find and remove the gray placeholder
-            chart_placeholder = None
-            for shape in slide.shapes:
-                if shape.name == "chart_area":
-                    chart_placeholder = shape
-                    break
-
-            if chart_placeholder:
-                left = chart_placeholder.left
-                top = chart_placeholder.top
-                width = chart_placeholder.width
-                height = chart_placeholder.height
-                # Remove placeholder shape
-                sp = chart_placeholder._element
-                sp.getparent().remove(sp)
-                # Add chart image
-                slide.shapes.add_picture(chart_buf, left, top, width, height)
-
-    def _build_slide_3(self, slide, sc: SlideContent):
-        """Treatment & Trials slide."""
-        for shape in slide.shapes:
-            if shape.name == "title":
-                self._set_text(shape, sc.treatment_title, size=28, bold=True, color=RGBColor(0xFF, 0xFF, 0xFF))
-            elif shape.name == "body":
-                self._set_bullets(shape, sc.treatment_bullets)
-            elif shape.name == "trials_body":
-                self._set_bullets(shape, sc.trial_entries, color=NAVY)
 
     # ── Helpers ──
 
     @staticmethod
-    def _set_text(shape, text: str, size: int = 14, bold: bool = False, color=DARK_TEXT):
-        tf = shape.text_frame
-        tf.clear()
-        p = tf.paragraphs[0]
-        run = p.add_run()
-        run.text = text
-        run.font.size = Pt(size)
-        run.font.bold = bold
-        run.font.color.rgb = color
-
-    @staticmethod
-    def _set_bullets(shape, items: list[str], color=BULLET_COLOR):
-        tf = shape.text_frame
-        tf.clear()
-        for i, item in enumerate(items[:6]):  # hard cap at 6
-            if i == 0:
-                p = tf.paragraphs[0]
-            else:
-                p = tf.add_paragraph()
-            p.space_after = Pt(6)
-            run = p.add_run()
-            run.text = f"\u2022  {item}"
-            run.font.size = Pt(14)
-            run.font.color.rgb = color
-
-    def _create_marker_chart(self, tumor_markers_str: str) -> Optional[BytesIO]:
-        """Generate a tumor marker trend chart as PNG in BytesIO.
-
-        Expects tumor_markers_str to be JSON with a list of
-        {date, value, marker_name} entries, or a text summary.
-        Returns None if no plottable data.
+    def _parse_markers_raw(tumor_markers_str: str) -> list | None:
+        """Parse tumor marker JSON string into a list for PptxGenJS chart.
+        Returns None if not parseable or fewer than 2 data points.
         """
         if not tumor_markers_str:
             return None
-
-        # Try parsing as JSON
         try:
             data = json.loads(tumor_markers_str)
         except (json.JSONDecodeError, TypeError):
             return None
-
-        # Support both list format and dict-with-markers format
         if isinstance(data, dict):
-            # Try extracting from common formats
-            markers = data.get("markers", data.get("results", []))
-            if not markers:
-                return None
-            data = markers
-
-        if not isinstance(data, list) or len(data) == 0:
+            data = data.get("markers", data.get("results", []))
+        if not isinstance(data, list) or len(data) < 2:
             return None
-
-        # Extract dates and values
-        dates = []
-        values = []
-        for entry in data:
-            date_str = entry.get("date", entry.get("OrderDate", entry.get("ResultDate", "")))
-            val_str = entry.get("value", entry.get("ResultValue", entry.get("result_value", "")))
-            if date_str and val_str:
-                try:
-                    values.append(float(str(val_str).replace(",", "")))
-                    dates.append(date_str)
-                except (ValueError, TypeError):
-                    continue
-
-        if len(dates) < 2:
-            return None
-
-        # Get reference range if available
-        ref_upper = None
-        marker_name = data[0].get("marker_name", data[0].get("ComponentName", "Tumor Marker"))
-        if "ca-125" in marker_name.lower() or "ca125" in marker_name.lower():
-            ref_upper = 35.0
-        elif "he4" in marker_name.lower():
-            ref_upper = 140.0
-        elif "hcg" in marker_name.lower():
-            ref_upper = 5.0
-
-        # Create chart (try/finally ensures figure is always closed)
-        fig = None
-        try:
-            fig, ax = plt.subplots(figsize=(6, 4))
-
-            ax.plot(range(len(dates)), values, marker="o", color="#007C91",
-                    linewidth=2, markersize=6, markerfacecolor="#1B365D")
-            ax.set_xticks(range(len(dates)))
-            ax.set_xticklabels(dates, rotation=45, ha="right", fontsize=8)
-            ax.set_ylabel(f"{marker_name}", fontsize=10, color="#333333")
-            ax.set_title(f"{marker_name} Trend", fontsize=12, fontweight="bold", color="#1B365D")
-
-            if ref_upper is not None:
-                ax.axhline(y=ref_upper, color="#CC0000", linestyle="--", linewidth=1,
-                            label=f"Upper Normal ({ref_upper})")
-                ax.legend(fontsize=8)
-
-            ax.grid(axis="y", alpha=0.3)
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-
-            plt.tight_layout()
-
-            buf = BytesIO()
-            plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-            buf.seek(0)
-            return buf
-        finally:
-            if fig is not None:
-                plt.close(fig)
+        return data
 
     async def _summarize_for_slides(self, all_data: dict) -> SlideContent:
         """Use LLM to summarize all agent data into SlideContent structure."""
@@ -366,27 +262,34 @@ class PresentationExportPlugin:
         try:
             parsed = json.loads(response.content)
             return SlideContent(**parsed)
-        except Exception:
-            logger.warning("LLM response did not match SlideContent schema, using fallback")
+        except Exception as exc:
+            logger.warning("LLM response did not match SlideContent schema, using fallback: %s", exc)
+            pid = all_data.get("patient_id", "Unknown")
             return SlideContent(
-                overview_title=f"Patient {all_data.get('patient_id', 'Unknown')} — {all_data.get('cancer_type', '')}",
-                overview_subtitle=f"FIGO {all_data.get('figo_stage', 'N/A')} | {all_data.get('molecular_profile', '')}",
-                overview_bullets=[
-                    f"Age: {all_data.get('patient_age', 'N/A')}, Gender: {all_data.get('patient_gender', 'N/A')}",
+                patient_title=f"Case — {pid}",
+                patient_bullets=[
+                    f"Age: {all_data.get('patient_age', 'N/A')}",
                     f"Cancer: {all_data.get('cancer_type', 'N/A')}",
-                    f"FIGO Stage: {all_data.get('figo_stage', 'N/A')}",
-                    f"Molecular: {all_data.get('molecular_profile', 'N/A')}",
                 ],
-                findings_title="Pathology & Imaging Findings",
-                findings_bullets=[
-                    all_data.get("pathology_findings", "No pathology data")[:80],
-                    all_data.get("radiology_findings", "No radiology data")[:80],
+                diagnosis_title="Diagnosis & Pertinent History",
+                diagnosis_bullets=[
+                    f"{all_data.get('patient_age', '?')} yo with {all_data.get('cancer_type', 'unknown cancer')}",
                 ],
+                primary_site=all_data.get("cancer_type", "Unknown")[:30],
+                stage=all_data.get("figo_stage", "Unknown"),
+                germline_genetics=all_data.get("molecular_profile", "Not reported")[:80],
+                somatic_genetics="See pathology findings",
+                prevtx_title="Previous Tx & Operative Findings",
+                prevtx_bullets=[all_data.get("oncologic_history", "No history available")[:100]],
                 findings_chart_title="Tumor Marker Trend",
-                treatment_title="Treatment Plan & Clinical Trials",
-                treatment_bullets=[
+                imaging_title="Imaging",
+                imaging_bullets=[all_data.get("radiology_findings", "No imaging data")[:100]],
+                discussion_title="Discussion",
+                review_types=["Tx Disc"],
+                trial_eligible_note="",
+                discussion_bullets=[
                     all_data.get("treatment_plan", "No treatment plan")[:80],
-                    all_data.get("board_discussion", "No discussion")[:80],
+                    all_data.get("board_discussion", "")[:80],
                 ],
                 trial_entries=[all_data.get("clinical_trials", "No trials identified")[:80]],
             )

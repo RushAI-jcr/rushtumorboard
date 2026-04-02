@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 from collections.abc import Sequence
-from typing import Any, Callable, Coroutine, Dict, List
+from typing import Any, Callable, Coroutine
 
 import aiohttp
 from azure.core.credentials_async import AsyncTokenCredential
@@ -58,6 +58,8 @@ class FhirClinicalNoteAccessor:
 
         self.fhir_url = fhir_url
         self.bearer_token_provider = bearer_token_provider
+        self._note_cache: dict[str, list[str]] = {}
+        self._CACHE_MAX_PATIENTS: int = 5
 
     async def get_headers(self) -> dict:
         """
@@ -83,7 +85,7 @@ class FhirClinicalNoteAccessor:
         result_count_limit: int = 100,
         extract_entries=lambda r: r.get("entry", []),
         extract_continuation_token=lambda r: FhirClinicalNoteAccessor.get_continuation_token(r.get("link", []))
-    ) -> List[dict]:
+    ) -> list[dict]:
         """
         Generic function to fetch all entries from a paginated FHIR resource endpoint.
         :param base_url: The initial FHIR resource URL (e.g., f"{fhir_url}/Patient").
@@ -114,7 +116,7 @@ class FhirClinicalNoteAccessor:
                     url = None
         return entries[:result_count_limit]
 
-    async def get_patients(self) -> List[str]:
+    async def get_patients(self) -> list[str]:
         """
         Retrieves a list of patient IDs from the FHIR server.
 
@@ -126,7 +128,7 @@ class FhirClinicalNoteAccessor:
         )
         return [entry["resource"]['name'][0]['given'][0] for entry in entries]
 
-    async def get_patient_id_map(self) -> List[str]:
+    async def get_patient_id_map(self) -> dict[str, str]:
         """
         Retrieves a list of patient IDs from the FHIR server.
 
@@ -139,7 +141,7 @@ class FhirClinicalNoteAccessor:
 
         return {entry["resource"]['name'][0]['given'][0]: entry["resource"]['id'] for entry in entries}
 
-    async def get_metadata_list(self, patient_id: str) -> List[Dict[str, str]]:
+    async def get_metadata_list(self, patient_id: str) -> list[dict[str, str]]:
         """
         Retrieves metadata for clinical notes associated with a given patient ID.
         :param patient_id: The ID of the patient.
@@ -191,13 +193,11 @@ class FhirClinicalNoteAccessor:
 
         return json.dumps(note_json)
 
-    async def read_all(self, patient_id: str) -> List[str]:
-        """
-        Retrieves all clinical notes for a given patient ID.
+    async def read_all(self, patient_id: str) -> list[str]:
+        """Retrieves all clinical notes for a given patient ID (cached per-patient, LRU eviction)."""
+        if patient_id in self._note_cache:
+            return self._note_cache[patient_id]
 
-        :param patient_id: The ID of the patient.
-        :return: A list of clinical note contents.
-        """
         metadata_list = await self.get_metadata_list(patient_id)
 
         notes = []
@@ -207,6 +207,13 @@ class FhirClinicalNoteAccessor:
             batch = [self.read(patient_id, note["id"]) for note in batch_input]
             batch_results = await asyncio.gather(*batch)
             notes.extend(batch_results)
+
+        # LRU eviction
+        if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
+            oldest = next(iter(self._note_cache))
+            del self._note_cache[oldest]
+        self._note_cache[patient_id] = notes
+
         return notes
 
     async def get_clinical_notes_by_type(

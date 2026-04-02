@@ -3,7 +3,8 @@
 #
 # Content Export Plugin for GYN Oncology Tumor Board
 #
-# Generates a landscape 4-column Word document matching the clinical tumor board format:
+# Generates a landscape 5-column Word document matching the clinical tumor board format:
+#   Col 0: Patient metadata (case #, MRN, attending, RTC, location, path date)
 #   Col 1: Diagnosis & Pertinent History (+ staging in red)
 #   Col 2: Previous Tx or Operative Findings, Tumor Markers
 #   Col 3: Imaging
@@ -13,6 +14,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -47,16 +49,15 @@ TEMPLATE_DOC_FILENAME = "tumor_board_template.docx"
 
 logger = logging.getLogger(__name__)
 
-# Color constants
-RED = "cc0000"
-TEAL = "007C91"
+# Color constants — RED matches real Rush tumor board handout (REDTEXT style = FF0000)
+RED = "FF0000"
 DARK_TEXT = "333333"
 GRAY = "666666"
 
-# Prompt for LLM summarization into 4-column clinical shorthand
+# Prompt for LLM summarization into 5-column clinical shorthand
 TUMOR_BOARD_DOC_PROMPT = """\
 You are a GYN oncology tumor board coordinator. Summarize all agent data into
-the 4-column tumor board document format using **clinical shorthand**.
+the 5-column tumor board document format using **clinical shorthand**.
 
 Style rules:
 - Use standard clinical abbreviations: yo, s/p, dx, bx, LN, mets, c/w, NACT,
@@ -68,6 +69,16 @@ Style rules:
 
 Return valid JSON matching the TumorBoardDocContent schema:
 {
+  "case_number": 1,
+  "patient_last_name": "Last name only from patient_id or records",
+  "mrn": "MRN number ONLY if explicitly stated in patient records. If not found, use '[MRN - VERIFY]'. NEVER fabricate an MRN.",
+  "attending_initials": "Attending physician initials ONLY if explicitly stated in records. If not found, use '[Attending - VERIFY]'. NEVER fabricate initials.",
+  "is_inpatient": false,
+  "rtc": "Return to clinic date and attending, e.g. '3/10 AL', or 'None'",
+  "main_location": "Clinic location abbreviation, e.g. 'RAB', 'BG', 'Copley'",
+  "path_date": "Date path slides available, e.g. '20-Feb', or 'NO SLIDES'",
+  "ca125_trend_in_col0": "CA-125 trend list only if actively trending/being monitored. Format: '1/16/25 657\\n3/4/25 241\\n...' or empty string.",
+
   "diagnosis_narrative": "Brief patient summary in clinical shorthand. Include age, sex, cancer type, key history, and current reason for presentation. Max 150 words.",
   "primary_site": "e.g., Ovary, Uterus, Cervix",
   "stage": "FIGO stage, e.g., IIIC, IA, IBm-MMRd",
@@ -81,9 +92,16 @@ Return valid JSON matching the TumorBoardDocContent schema:
 
   "imaging_findings": "Dated imaging findings. Each study: Modality M/D/YY OSH/Rush\\nFindings. Include impression.",
 
-  "discussion": "Tumor board discussion points: path review needs, treatment discussion, trial eligibility, plan.",
-  "action_items": ["Short action directives shown in red, e.g., Request path on BSO for Rush review.", "Begin Megace & repeat biopsy in 3 months."]
+  "review_types": ["Path Review", "Imaging Review", "Tx Disc"],
+  "trial_eligible_note": "Brief note on trial eligibility if known, else empty string",
+  "discussion": "Tumor board discussion narrative. Do NOT repeat review_types here.",
+  "action_items": ["Short action directives shown in red, e.g., Request path on BSO for Rush review.", "Plan for 3C and cuff"]
 }
+
+review_types vocabulary (use only these terms as applicable):
+  "Path Review" — if pathology slides/report need board review
+  "Imaging Review" — if imaging needs board review
+  "Tx Disc" — treatment discussion (always include)
 """
 
 
@@ -103,9 +121,10 @@ class ContentExportPlugin:
         self.kernel = kernel
 
     @kernel_function(
-        description="Generate a landscape 4-column Word document for the GYN tumor board. "
-        "Produces the standard tumor board one-page summary: Diagnosis & History, "
-        "Previous Tx/Operative Findings, Imaging, and Discussion."
+        description="Generate a landscape 5-column Word document for the GYN tumor board. "
+        "Produces the standard tumor board one-page summary: Patient metadata (Col 0), "
+        "Diagnosis & History (Col 1), Previous Tx/Operative Findings (Col 2), "
+        "Imaging (Col 3), and Discussion (Col 4)."
     )
     async def export_to_word_doc(
         self,
@@ -179,7 +198,7 @@ class ContentExportPlugin:
             "board_discussion": board_discussion,
             "oncologic_history": oncologic_history,
         }
-        logger.info(f"Generating tumor board doc for patient {patient_id}")
+        logger.info("Generating tumor board doc")
 
         # 2. Summarize into 4-column clinical shorthand via LLM
         doc_content = await self._summarize_for_tumor_board_doc(all_data)
@@ -192,6 +211,7 @@ class ContentExportPlugin:
         doc = DocxTemplate(doc_template_path)
 
         doc_data = {
+            "col0_content": self._build_col0_richtext(doc, doc_content),
             "col1_content": self._build_col1_richtext(doc, doc_content),
             "col2_content": self._build_col2_richtext(doc, doc_content),
             "col3_content": self._build_col3_richtext(doc, doc_content),
@@ -216,12 +236,45 @@ class ContentExportPlugin:
         artifact = ChatArtifact(artifact_id=artifact_id, data=stream.getvalue())
         await self.data_access.chat_artifact_accessor.write(artifact)
 
+        safe_url = html.escape(doc_output_url, quote=True)
+        safe_name = html.escape(artifact_id.filename)
         return (
             f"The tumor board Word document has been created. "
-            f'Download: <a href="{doc_output_url}">{artifact_id.filename}</a>'
+            f'Download: <a href="{safe_url}">{safe_name}</a>'
         )
 
     # ── Column RichText builders ──
+
+    @staticmethod
+    def _build_col0_richtext(doc, c: TumorBoardDocContent) -> RichText:
+        """Column 0: Patient metadata (case #, MRN, attending, RTC, location, path date)."""
+        rt = RichText()
+
+        # Case number and last name
+        name_line = f"{c.case_number}. {c.patient_last_name}" if c.patient_last_name else str(c.case_number)
+        rt.add(name_line + "\n", font="Calibri", size=HP_9, bold=True, color=DARK_TEXT)
+
+        if c.mrn:
+            mrn_color = RED if "VERIFY" in c.mrn else DARK_TEXT
+            rt.add(c.mrn + "\n", font="Calibri", size=HP_9, color=mrn_color)
+        if c.attending_initials:
+            att_color = RED if "VERIFY" in c.attending_initials else DARK_TEXT
+            rt.add(c.attending_initials + "\n", font="Calibri", size=HP_9, color=att_color)
+        if c.is_inpatient:
+            rt.add("Inpt\n", font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        rt.add(f"\nRTC: {c.rtc}\n", font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        if c.main_location:
+            rt.add(f"\nMain Location:\n{c.main_location}\n", font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        rt.add(f"\nPath:\n{c.path_date}", font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        if c.ca125_trend_in_col0:
+            rt.add("\n\nCA-125\n", font="Calibri", size=HP_9, bold=True, color=DARK_TEXT)
+            rt.add(c.ca125_trend_in_col0, font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        return rt
 
     @staticmethod
     def _build_col1_richtext(doc, c: TumorBoardDocContent) -> RichText:
@@ -231,12 +284,12 @@ class ContentExportPlugin:
         # Main narrative
         rt.add(c.diagnosis_narrative, font="Calibri", size=HP_9, color=DARK_TEXT)
 
-        # Staging section (in teal, at bottom)
+        # Staging section in RED — matches real Rush tumor board REDTEXT style
         rt.add("\n\n", font="Calibri", size=HP_9)
-        rt.add(f"Primary Site: {c.primary_site}\n", font="Calibri", size=HP_9, color=TEAL, bold=True)
-        rt.add(f"Stage: {c.stage}\n", font="Calibri", size=HP_9, color=TEAL, bold=True)
-        rt.add(f"Germline genetics:  {c.germline_genetics}\n", font="Calibri", size=HP_9, color=TEAL, bold=True)
-        rt.add(f"Somatic genetics: {c.somatic_genetics}", font="Calibri", size=HP_9, color=TEAL, bold=True)
+        rt.add(f"Primary Site: {c.primary_site}\n", font="Calibri", size=HP_9, color=RED, bold=False)
+        rt.add(f"Stage: {c.stage}\n", font="Calibri", size=HP_9, color=RED, bold=False)
+        rt.add(f"Germline genetics:  {c.germline_genetics}\n", font="Calibri", size=HP_9, color=RED, bold=False)
+        rt.add(f"Somatic genetics: {c.somatic_genetics}", font="Calibri", size=HP_9, color=RED, bold=False)
 
         return rt
 
@@ -279,17 +332,30 @@ class ContentExportPlugin:
 
     @staticmethod
     def _build_col4_richtext(doc, c: TumorBoardDocContent) -> RichText:
-        """Column 4: Discussion."""
+        """Column 4: Discussion.
+        Matches real Rush tumor board format:
+          Review types → "Eligible for trial?" → plan/action items (in RED)
+        """
         rt = RichText()
 
-        # Main discussion text
-        rt.add(c.discussion, font="Calibri", size=HP_9, bold=True, color=DARK_TEXT)
+        # Review type header (e.g. "Path Review, Imaging Review, Tx Disc")
+        if c.review_types:
+            rt.add(", ".join(c.review_types) + "\n", font="Calibri", size=HP_9, bold=False, color=DARK_TEXT)
 
-        # Action items in red
+        # Trial eligibility prompt — always present
+        rt.add("\nEligible for trial?\n", font="Calibri", size=HP_9, color=DARK_TEXT)
+        if c.trial_eligible_note:
+            rt.add(c.trial_eligible_note + "\n", font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        # Narrative discussion (if any)
+        if c.discussion:
+            rt.add("\n" + c.discussion, font="Calibri", size=HP_9, color=DARK_TEXT)
+
+        # Action items / plan in red
         if c.action_items:
             rt.add("\n\n", font="Calibri", size=HP_9)
             for item in c.action_items:
-                rt.add(f"{item}\n", font="Calibri", size=HP_9, color=RED, bold=True)
+                rt.add(f"{item}\n", font="Calibri", size=HP_9, color=RED, bold=False)
 
         return rt
 
@@ -318,16 +384,31 @@ class ContentExportPlugin:
         try:
             parsed = json.loads(response.content)
             return TumorBoardDocContent(**parsed)
-        except Exception:
-            logger.warning("LLM response did not match TumorBoardDocContent schema, using fallback")
+        except Exception as exc:
+            logger.warning("LLM response did not match TumorBoardDocContent schema, using fallback: %s", exc)
             return self._fallback_doc_content(all_data)
 
     @staticmethod
     def _fallback_doc_content(data: dict) -> TumorBoardDocContent:
-        """Fallback if LLM summarization fails — use raw data truncated."""
+        """Fallback if LLM summarization fails — use raw data truncated.
+
+        Col 0 fields cannot be derived from raw agent data; they use defaults.
+        The warning action item signals to clinical staff that the doc needs review.
+        """
         return TumorBoardDocContent(
+            # Col 0 — no grounded data source; all require manual entry before printing
+            case_number=1,
+            patient_last_name="",
+            mrn="",
+            attending_initials="",
+            is_inpatient=False,
+            rtc="",
+            main_location="",
+            path_date="",
+            ca125_trend_in_col0="",
+            # Col 1
             diagnosis_narrative=(
-                f"{data.get('patient_age', '?')} yo {data.get('patient_gender', '')} "
+                f"[FALLBACK] {data.get('patient_age', '?')} yo {data.get('patient_gender', '')} "
                 f"with {data.get('cancer_type', 'unknown cancer')}. "
                 f"{str(data.get('medical_history', ''))[:200]}"
             ),
@@ -335,20 +416,23 @@ class ContentExportPlugin:
             stage=data.get("figo_stage", "Unknown"),
             germline_genetics=data.get("molecular_profile", "Not reported")[:100],
             somatic_genetics="See pathology findings",
+            # Col 2
             cancer_history=str(data.get("oncologic_history", ""))[:500],
             operative_findings=str(data.get("surgical_findings", ""))[:300],
             pathology_findings="\n".join(
                 str(f)[:100] for f in data.get("pathology_findings", [])
             )[:400],
             tumor_markers=str(data.get("tumor_markers", ""))[:200],
+            # Col 3
             imaging_findings="\n".join(
                 str(f)[:100] for f in data.get("ct_scan_findings", [])
             )[:400],
+            # Col 4
             discussion=(
                 f"Tx Plan: {str(data.get('treatment_plan', ''))[:200]}\n\n"
                 f"{str(data.get('board_discussion', ''))[:200]}"
             ),
-            action_items=[],
+            action_items=["⚠ Export used LLM fallback — review all fields before printing."],
         )
 
     # ── Legacy helpers (kept for backward compatibility) ──
