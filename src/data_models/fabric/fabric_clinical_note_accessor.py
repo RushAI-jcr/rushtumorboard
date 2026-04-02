@@ -66,7 +66,7 @@ class FabricClinicalNoteAccessor:
     @staticmethod
     def from_credential(fabric_user_data_function_endpoint: str, credential: AsyncTokenCredential) -> 'FabricClinicalNoteAccessor':
         """ Creates an instance of FabricClinicalNoteAccessor using Azure credential."""
-        token_provider = get_bearer_token_provider(credential, f"https://analysis.windows.net/powerbi/api")
+        token_provider = get_bearer_token_provider(credential, "https://analysis.windows.net/powerbi/api")
         return FabricClinicalNoteAccessor(fabric_user_data_function_endpoint, token_provider)
 
     async def get_headers(self) -> dict:
@@ -128,11 +128,10 @@ class FabricClinicalNoteAccessor:
             note_json = json.loads(note_content)
             note_json['id'] = note_id
         except json.JSONDecodeError as e:
-
+            logger.warning("Non-JSON content for note %s: %s — using plain text fallback", note_id, e)
             # Try to handle note content that is not JSON
             if note_content:
                 target_date = date.today() - timedelta(days=30)
-                target_date.isoformat()
                 note_json = {
                     "id": note_id,
                     "text": note_content,

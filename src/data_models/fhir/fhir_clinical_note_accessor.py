@@ -5,13 +5,13 @@ import asyncio
 import base64
 import json
 import logging
+import urllib.parse
 from collections.abc import Sequence
 from typing import Any, Callable, Coroutine
 
 import aiohttp
 from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import get_bearer_token_provider
-import urllib
 
 from data_models.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
 
@@ -231,29 +231,29 @@ class FhirClinicalNoteAccessor:
     async def get_lab_results(
         self, patient_id: str, component_name: str | None = None
     ) -> list[dict]:
-        """FHIR backend does not expose structured lab results via this accessor. Returns empty list."""
+        """Structured lab results are not available via this accessor. Returns empty list."""
         return []
 
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
-        """FHIR backend does not expose structured tumor markers via this accessor. Returns empty list."""
+        """Structured tumor markers are not available via this accessor. Returns empty list."""
         return []
 
     async def get_pathology_reports(self, patient_id: str) -> list[dict]:
-        """FHIR backend does not expose dedicated pathology reports. Returns empty list."""
+        """Dedicated pathology reports are not available via this accessor. Returns empty list."""
         return []
 
     async def get_radiology_reports(self, patient_id: str) -> list[dict]:
-        """FHIR backend does not expose dedicated radiology reports. Returns empty list."""
+        """Dedicated radiology reports are not available via this accessor. Returns empty list."""
         return []
 
     async def get_cancer_staging(self, patient_id: str) -> list[dict]:
-        """FHIR backend does not expose structured cancer staging. Returns empty list."""
+        """Structured cancer staging is not available via this accessor. Returns empty list."""
         return []
 
     async def get_medications(
         self, patient_id: str, order_class: str | None = None
     ) -> list[dict]:
-        """FHIR backend does not expose structured medications via this accessor. Returns empty list."""
+        """Structured medications are not available via this accessor. Returns empty list."""
         return []
 
     async def get_diagnoses(self, patient_id: str) -> list[dict]:
