@@ -129,7 +129,7 @@ class PatientDataPlugin:
             return response
         except Exception:
             logger.exception("Error loading patient data for patient %s", patient_id)
-            return "Invalid or unavailable patient ID. Please verify and try again."
+            return json.dumps({"error": "Invalid or unavailable patient ID. Please verify and try again."})
 
     @kernel_function()
     async def create_timeline(self, patient_id: str) -> str:

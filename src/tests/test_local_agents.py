@@ -556,6 +556,7 @@ class TestClinicalGuidelinesE2E:
             "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
             "api_version": "2025-04-01-preview",
         }
+        credential = None
         if api_key:
             service_kwargs["api_key"] = api_key
             service_kwargs["endpoint"] = os.environ["AZURE_OPENAI_ENDPOINT"]
@@ -612,36 +613,40 @@ Prior treatment: None (newly diagnosed, s/p surgery)
 Please provide NCCN-based treatment recommendations for this patient.
 """
 
-        # Run the agent
-        response_text = ""
-        async for msg in agent.invoke(patient_summary):
-            response_text += str(msg.content) if msg.content else ""
+        # Run the agent; ensure credential is closed even on assertion failure
+        try:
+            response_text = ""
+            async for msg in agent.invoke(patient_summary):
+                response_text += str(msg.content) if msg.content else ""
 
-        logger.info("ClinicalGuidelines response length: %d chars", len(response_text))
-        logger.info("Response preview: %s", response_text[:500])
+            logger.info("ClinicalGuidelines response length: %d chars", len(response_text))
+            logger.info("Response preview: %s", response_text[:500])
 
-        # Verify the agent produced a non-trivial response
-        assert len(response_text) > 200, f"Response too short ({len(response_text)} chars)"
+            # Verify the agent produced a non-trivial response
+            assert len(response_text) > 200, f"Response too short ({len(response_text)} chars)"
 
-        # Verify NCCN page codes are cited
-        response_upper = response_text.upper()
-        nccn_codes_cited = [
-            code for code in ["ENDO-", "UTSARC-", "VAG-", "VULVA-"]
-            if code in response_upper
-        ]
-        assert len(nccn_codes_cited) > 0, (
-            f"Expected NCCN page code citations (e.g., ENDO-4) in response. "
-            f"Response starts with: {response_text[:300]}"
-        )
+            # Verify NCCN page codes are cited
+            response_upper = response_text.upper()
+            nccn_codes_cited = [
+                code for code in ["ENDO-", "UTSARC-", "VAG-", "VULVA-"]
+                if code in response_upper
+            ]
+            assert len(nccn_codes_cited) > 0, (
+                f"Expected NCCN page code citations (e.g., ENDO-4) in response. "
+                f"Response starts with: {response_text[:300]}"
+            )
 
-        # Verify endometrial-specific content
-        response_lower = response_text.lower()
-        assert any(term in response_lower for term in ["endometrial", "uterine", "endo-"]), \
-            "Response should discuss endometrial cancer"
+            # Verify endometrial-specific content
+            response_lower = response_text.lower()
+            assert any(term in response_lower for term in ["endometrial", "uterine"]), \
+                "Response should discuss endometrial cancer"
 
-        # Verify it addresses molecular classification (dMMR)
-        assert any(term in response_lower for term in ["dmmr", "mmr", "msi", "mismatch repair", "lynch"]), \
-            "Response should address dMMR/MSI-H/Lynch status"
+            # Verify it addresses molecular classification (dMMR)
+            assert any(term in response_lower for term in ["dmmr", "mmr", "msi", "mismatch repair", "lynch"]), \
+                "Response should address dMMR/MSI-H/Lynch status"
 
-        logger.info("NCCN page codes cited: %s", nccn_codes_cited)
-        logger.info("E2E test PASSED — agent cited NCCN guidelines")
+            logger.info("NCCN page codes cited: %s", nccn_codes_cited)
+            logger.info("E2E test PASSED — agent cited NCCN guidelines")
+        finally:
+            if credential is not None:
+                await credential.close()
