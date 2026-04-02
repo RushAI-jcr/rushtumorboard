@@ -257,5 +257,5 @@ class FhirClinicalNoteAccessor:
         return []
 
     async def get_diagnoses(self, patient_id: str) -> list[dict]:
-        """FHIR backend does not expose structured diagnoses via this accessor. Returns empty list."""
+        """Structured diagnoses are not available via this accessor. Returns empty list."""
         return []
