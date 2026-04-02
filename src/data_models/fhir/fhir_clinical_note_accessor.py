@@ -13,6 +13,8 @@ from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import get_bearer_token_provider
 import urllib
 
+from data_models.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
+
 logger = logging.getLogger(__name__)
 
 
@@ -171,27 +173,22 @@ class FhirClinicalNoteAccessor:
             })
         return entries
 
-    async def read(self, patient_id: str, note_id: str) -> str:
-        """
-        Retrieves the content of a clinical note for a given patient ID and note ID.
-
-        :param patient_id: The ID of the patient.
-        :param note_id: The ID of the clinical note.
-        :return: The content of the clinical note.
-        """
+    async def _read_note(self, note_id: str, session: aiohttp.ClientSession) -> str:
+        """Internal: read a single note using the provided session (avoids per-request session overhead)."""
         url = f"{self.fhir_url}/DocumentReference/{note_id}"
         headers = await self.get_headers()
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                response.raise_for_status()
-                document_reference = await response.json()
+        async with session.get(url, headers=headers) as response:
+            response.raise_for_status()
+            document_reference = await response.json()
         note_content = document_reference["content"][0]["attachment"]["data"]
-
         note_json = json.loads(base64.b64decode(note_content).decode("utf-8"))
-
         note_json['id'] = note_id
-
         return json.dumps(note_json)
+
+    async def read(self, patient_id: str, note_id: str) -> str:
+        """Retrieves the content of a clinical note for a given patient ID and note ID."""
+        async with aiohttp.ClientSession() as session:
+            return await self._read_note(note_id, session)
 
     async def read_all(self, patient_id: str) -> list[str]:
         """Retrieves all clinical notes for a given patient ID (cached per-patient, LRU eviction)."""
@@ -202,11 +199,12 @@ class FhirClinicalNoteAccessor:
 
         notes = []
         batch_size = 10
-        for i in range(0, len(metadata_list), batch_size):
-            batch_input = metadata_list[i:i + batch_size]
-            batch = [self.read(patient_id, note["id"]) for note in batch_input]
-            batch_results = await asyncio.gather(*batch)
-            notes.extend(batch_results)
+        async with aiohttp.ClientSession() as session:
+            for i in range(0, len(metadata_list), batch_size):
+                batch_input = metadata_list[i:i + batch_size]
+                batch = [self._read_note(note["id"], session) for note in batch_input]
+                batch_results = await asyncio.gather(*batch)
+                notes.extend(batch_results)
 
         # LRU eviction
         if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
@@ -219,34 +217,16 @@ class FhirClinicalNoteAccessor:
     async def get_clinical_notes_by_type(
         self, patient_id: str, note_types: Sequence[str]
     ) -> list[dict]:
-        """Filter clinical notes by note type. Fallback: read_all + filter."""
-        all_notes_json = await self.read_all(patient_id)
-        if not note_types:
-            return [json.loads(n) if isinstance(n, str) else n for n in all_notes_json]
-        type_set = {t.lower() for t in note_types}
-        result = []
-        for note_json in all_notes_json:
-            note = json.loads(note_json) if isinstance(note_json, str) else note_json
-            note_type = note.get("note_type", note.get("NoteType", "")).lower()
-            if note_type in type_set:
-                result.append(note)
-        return result
+        """Filter clinical notes by note type."""
+        return filter_notes_by_type(await self.read_all(patient_id), note_types)
 
     async def get_clinical_notes_by_keywords(
         self, patient_id: str, note_types: Sequence[str], keywords: Sequence[str]
     ) -> list[dict]:
-        """Filter notes by type AND keyword. Fallback: read_all + filter."""
-        notes = await self.get_clinical_notes_by_type(patient_id, note_types)
-        if not keywords:
-            return notes
-        kw_lower = [k.lower() for k in keywords]
-        return [
-            n for n in notes
-            if any(
-                kw in n.get("text", n.get("NoteText", n.get("note_text", ""))).lower()
-                for kw in kw_lower
-            )
-        ]
+        """Filter notes by type AND keyword."""
+        return filter_notes_by_keywords(
+            await self.get_clinical_notes_by_type(patient_id, note_types), keywords
+        )
 
     async def get_lab_results(
         self, patient_id: str, component_name: str | None = None

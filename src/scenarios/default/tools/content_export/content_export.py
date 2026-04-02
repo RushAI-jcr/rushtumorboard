@@ -257,7 +257,7 @@ class ContentExportPlugin:
     # ── Column RichText builders ──
 
     @staticmethod
-    def _build_col0_richtext(doc, c: TumorBoardDocContent) -> RichText:
+    def _build_col0_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
         """Column 0: Patient metadata (case #, MRN, attending, RTC, location, path date)."""
         rt = RichText()
 
@@ -288,7 +288,7 @@ class ContentExportPlugin:
         return rt
 
     @staticmethod
-    def _build_col1_richtext(doc, c: TumorBoardDocContent) -> RichText:
+    def _build_col1_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
         """Column 1: Diagnosis & Pertinent History."""
         rt = RichText()
 
@@ -305,7 +305,7 @@ class ContentExportPlugin:
         return rt
 
     @staticmethod
-    def _build_col2_richtext(doc, c: TumorBoardDocContent) -> RichText:
+    def _build_col2_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
         """Column 2: Previous Tx or Operative Findings, Tumor Markers."""
         rt = RichText()
 
@@ -374,6 +374,14 @@ class ContentExportPlugin:
 
     async def _summarize_for_tumor_board_doc(self, all_data: dict) -> TumorBoardDocContent:
         """Summarize all agent data into 5-column tumor board format via LLM."""
+        # Apply per-field token budget to cap the highest-cost LLM call
+        all_data = dict(all_data)  # shallow copy — don't mutate caller's dict
+        all_data["oncologic_history"] = str(all_data.get("oncologic_history") or "")[:_MAX_ONCOLOGIC_HISTORY_CHARS]
+        all_data["medical_history"] = str(all_data.get("medical_history") or "")[:_MAX_MEDICAL_HISTORY_CHARS]
+        all_data["board_discussion"] = str(all_data.get("board_discussion") or "")[:_MAX_BOARD_DISCUSSION_CHARS]
+        ct = all_data.get("ct_scan_findings") or []
+        all_data["ct_scan_findings"] = [str(f)[:_MAX_CT_FINDINGS_CHARS] for f in ct]
+
         chat_history = ChatHistory()
         chat_history.add_system_message(TUMOR_BOARD_DOC_PROMPT)
         chat_history.add_user_message(
