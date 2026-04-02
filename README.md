@@ -8,42 +8,121 @@ A multi-agent system that coordinates specialized AI agents to support **Gynecol
 ## Features
 
 - **10 specialized agents** collaborating via Semantic Kernel group chat
-- **GYN oncology-focused** extraction: pathology, radiology, tumor markers, oncologic history
-- **Outside hospital (OSH) transfer support** — structured history extraction for the ~20-30% of patients referred from other institutions
+- **Pre-meeting procedure pass** — audits required labs (CBC ≤14d, CMP ≤14d, CA-125 ≤28d), imaging (CT CAP ≤56d, MRI Pelvis ≤42d), pathology, IHC/NGS, and consults before the tumor board; surfaces outstanding items with Rush Epic order codes
+- **GYN oncology-focused** extraction: pathology (histology, IHC, endometrial molecular classification), radiology (RECIST, PCI), tumor markers (CA-125 trending, GCIG criteria), oncologic history
+- **3-layer note fallback** — dedicated CSV → NoteType filter → keyword filter, ensuring pathology and radiology data is recovered even for outside-hospital (OSH) transfer patients
+- **NCCN guideline lookup** — Docling + PyMuPDF pipeline loads NCCN GYN PDFs; GPT-4o retrieves algorithm-relevant pages for endometrial, cervical, ovarian, vaginal, and vulvar cancers
+- **Evidence-based research** — real-time PubMed, Europe PMC, and Semantic Scholar search with RISEN synthesis prompt, PubMed-first deduplication, and post-synthesis citation validation (no fabricated PMIDs)
+- **Outside hospital (OSH) transfer support** — structured history extraction for the ~20–30% of patients referred from other institutions
 - **Landscape 4-column Word document** matching the current Rush tumor board format (Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
 - **3-slide PowerPoint** summary with CA-125 trend chart
-- **Clinical trials search** via NCI ClinicalTrials.gov API
-- **GraphRAG-powered** medical research retrieval
+- **Clinical trials search** via NCI ClinicalTrials.gov API + AACT with GOG/NRG awareness
 - Integration with Microsoft Teams and Copilot Studio via MCP
 
 ## Solution Architecture
+
 ![Solution Architecture](media/architecture.png)
 
 Agents are defined in `agents.yaml` and orchestrated through Semantic Kernel's group chat. Each agent has access to specialized tools (SK plugins). The Orchestrator facilitates the tumor board discussion flow, calling on each agent in sequence.
 
+### Tumor Board Workflow
+
+```mermaid
+flowchart TD
+    User(["👩‍⚕️ Clinician"])
+    Orch["🎯 Orchestrator\nfacilitates & routes"]
+
+    User -->|patient ID| Orch
+
+    subgraph step0["Step 0 — Pre-Meeting Procedure Pass"]
+        PS0["PatientStatus\npretumor_board_checklist"]
+    end
+
+    subgraph steps_a_d["Steps a–d — Data Extraction"]
+        PH["PatientHistory\npatient_data"]
+        OH["OncologicHistory\noncologic_history_extractor"]
+        PA["Pathology\npathology_extractor"]
+        RA["Radiology\nradiology_extractor"]
+    end
+
+    subgraph steps_e_h["Steps e–h — Synthesis & Recommendations"]
+        PS["PatientStatus\ntumor_markers"]
+        CG["ClinicalGuidelines\nnccn_guidelines"]
+        CT["ClinicalTrials\nclinical_trials_nci"]
+        MR["MedicalResearch\nmedical_research"]
+    end
+
+    subgraph step_i["Step i — Report Generation"]
+        RC["ReportCreation\ncontent_export · presentation_export"]
+    end
+
+    Orch --> step0
+    step0 -->|checklist confirmed| steps_a_d
+    steps_a_d --> steps_e_h
+    steps_e_h --> step_i
+    step_i -->|Word doc + PPTX| User
+```
+
+### Data Layer
+
+```mermaid
+flowchart LR
+    subgraph epic["Epic Clarity Export (CSV per patient)"]
+        CN["clinical_notes.csv"]
+        PR["pathology_reports.csv"]
+        RR["radiology_reports.csv"]
+        LR["lab_results.csv"]
+        CS["cancer_staging.csv"]
+        MX["medications.csv"]
+        DX["diagnoses.csv"]
+    end
+
+    subgraph accessor["CaboodleFileAccessor"]
+        RAL["read_all()"]
+        GNT["get_clinical_notes_by_type()"]
+        GNK["get_clinical_notes_by_keywords()"]
+        GLR["get_lab_results()"]
+        GRR["get_radiology_reports()"]
+        GPR["get_pathology_reports()"]
+    end
+
+    subgraph fallback["3-Layer Note Fallback\n(MedicalReportExtractorBase)"]
+        L1["Layer 1\nDedicated CSV"]
+        L2["Layer 2\nNoteType filter"]
+        L3["Layer 3\nKeyword filter"]
+        L1 -->|empty| L2
+        L2 -->|empty| L3
+    end
+
+    epic --> accessor
+    accessor --> fallback
+    fallback --> PathExt["PathologyExtractorPlugin"]
+    fallback --> RadExt["RadiologyExtractorPlugin"]
+```
+
 ## AI Agent Role Summaries
 
-| Agent | Role |
-|-------|------|
-| **Orchestrator** | Facilitates tumor board discussion, manages agent turn order (steps a–i) |
-| **PatientHistory** | Loads patient record from Epic Caboodle, builds chronological timeline |
-| **OncologicHistory** | Extracts structured prior oncologic history from clinical notes — diagnosis, treatments, recurrences, reason for referral. Critical for OSH transfers |
-| **Pathology** | Extracts histology, IHC stains, molecular markers, FIGO grade, molecular classification |
-| **Radiology** | Structures imaging findings from CT, MRI, PET/CT, ultrasound reports |
-| **PatientStatus** | Synthesizes current status: FIGO staging, molecular profile, treatment history, platinum sensitivity |
-| **ClinicalGuidelines** | Generates NCCN-based treatment recommendations for GYN cancers |
-| **ClinicalTrials** | Searches NCI ClinicalTrials.gov for eligible trials with GOG/NRG awareness |
-| **MedicalResearch** | Retrieves research-backed insights using Microsoft GraphRAG |
-| **ReportCreation** | Assembles landscape 4-column Word doc + 3-slide PPTX for tumor board |
+| Agent | Tools | Role |
+|-------|-------|------|
+| **Orchestrator** | — | Facilitates tumor board discussion; routes to agents in order; step 0 triggers pre-meeting checklist |
+| **PatientHistory** | `patient_data` | Loads patient record from Epic Clarity CSV, builds chronological timeline filtered to 55 relevant NoteTypes |
+| **OncologicHistory** | `oncologic_history_extractor`, `patient_data` | Extracts structured prior oncologic history — diagnosis, treatments, recurrences, reason for referral. Critical for OSH transfers |
+| **Pathology** | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel (MMR/p53/ER/HER2), molecular markers, FIGO grade, endometrial molecular classification (POLEmut/MMRd/NSMP/p53abn) |
+| **Radiology** | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM text analysis; RECIST response tracking |
+| **PatientStatus** | `tumor_markers`, `pretumor_board_checklist` | Step 0: pre-meeting procedure pass (labs/imaging/path/consults); then FIGO staging, molecular profile, platinum sensitivity |
+| **ClinicalGuidelines** | `nccn_guidelines` | NCCN-based treatment recommendations using loaded NCCN GYN PDFs (endometrial, cervical, ovarian, vaginal, vulvar) |
+| **ClinicalTrials** | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness and GYN-specific metadata |
+| **MedicalResearch** | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search; RISEN synthesis prompt; post-synthesis citation validation |
+| **ReportCreation** | `content_export`, `presentation_export` | Assembles landscape 4-column Word doc + 3-slide PPTX with CA-125 trend chart |
 
 ## Getting Started
 
 ### Prerequisites
 
 - An Azure subscription with:
-    - Azure OpenAI: 100k Tokens per Minute of Pay-as-you-go quota for GPT-4o or GPT-4.1
-    - Optionally access to a reasoner model such as GPT-o3-mini
-    - Azure App Services: Available VM quota - P1mv3 recommended
+    - Azure OpenAI: 100k Tokens per Minute of Pay-as-you-go quota for GPT-4.1
+    - Optionally a reasoning model such as GPT-o3 or o4-mini
+    - Azure App Services: Available VM quota — P1mv3 recommended
     - A resource group where you have _Owner_ permissions
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 - [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd?tabs=winget-windows%2Cbrew-mac%2Cscript-linux&pivots=os-linux)
@@ -57,7 +136,7 @@ Before deploying, verify your Azure subscription has sufficient quota.
 **Resource Requirements:**
 
 * **Azure OpenAI Quota**
-  - Ensure you have quota for either **GPT-4o** or **GPT-4.1** models (`GlobalStandard`) in your `AZURE_GPT_LOCATION` region (recommended: 100K-200K TPM)
+  - Ensure you have quota for **GPT-4.1** (`GlobalStandard`) in your `AZURE_GPT_LOCATION` region (recommended: 100K–200K TPM)
 
 * **App Service Capacity**
   - Verify App Service quota in your `AZURE_APPSERVICE_LOCATION` region
@@ -69,7 +148,7 @@ Before deploying, verify your Azure subscription has sufficient quota.
   - You need **Owner** rights on at least one resource group
 
 * **Teams Integration**
-  - Ensure your IT admin allows custom Teams apps to be uploaded—see [Teams app upload](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/deploy-and-publish/apps-upload)
+  - Ensure your IT admin allows custom Teams apps to be uploaded — see [Teams app upload](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/deploy-and-publish/apps-upload)
 
 
 ### Step 2: Create an `azd` Environment & Set Variables
@@ -92,21 +171,22 @@ azd env set AZURE_GPT_LOCATION <gpt-region>
 azd env set AZURE_APPSERVICE_LOCATION <region>
 ```
 
-| Variable | Purpose | Default Value |
-|----------|---------|---------------|
-| AZURE_LOCATION | Primary location for all resources | Defaults to resource group region |
-| AZURE_GPT_LOCATION | Region for GPT resources | Defaults to `AZURE_LOCATION` |
-| AZURE_APPSERVICE_LOCATION | Region for App Service deployment | Defaults to `AZURE_LOCATION` |
-| CLINICAL_NOTES_SOURCE | Source of clinical notes. Accepted: `blob`, `fhir`, `fabric` | Defaults to `blob` |
+| Variable | Purpose | Accepted Values | Default |
+|----------|---------|-----------------|---------|
+| `AZURE_LOCATION` | Primary location for all resources | Azure region | Resource group region |
+| `AZURE_GPT_LOCATION` | Region for GPT resources | Azure region | `AZURE_LOCATION` |
+| `AZURE_APPSERVICE_LOCATION` | Region for App Service deployment | Azure region | `AZURE_LOCATION` |
+| `CLINICAL_NOTES_SOURCE` | Source of clinical notes | `caboodle`, `blob`, `fhir`, `fabric` | `blob` |
 
-[OPTIONAL] Configure FHIR data access for Epic integration:
+For local development with Epic Clarity CSV exports:
+```sh
+azd env set CLINICAL_NOTES_SOURCE caboodle
+```
 
+For production Epic integration via Azure Health Data Services:
 ```sh
 azd env set CLINICAL_NOTES_SOURCE fhir
 ```
-
-> [!NOTE]
-> To set up the research agent with GraphRAG, see the [User Guide](./docs/user_guide.md#configuring-research-agent)
 
 ### Step 3: Deploy the Infrastructure
 
@@ -123,7 +203,7 @@ During deployment you will be prompted for subscription, region, and resource gr
 > For persistent issues, use `azd down --purge` to reset.
 
 > [!IMPORTANT]
-> Full deployment can take 20-30 minutes. See the [Troubleshooting guide](./docs/troubleshooting.md) for common issues.
+> Full deployment can take 20–30 minutes. See the [Troubleshooting guide](./docs/troubleshooting.md) for common issues.
 
 ### Step 4: Install Agents in Microsoft Teams
 
@@ -149,6 +229,13 @@ Interact with specific agents:
 @PatientHistory create patient timeline for patient id patient_gyn_001
 @OncologicHistory extract oncologic history for patient_gyn_001
 @Pathology extract pathology findings for patient_gyn_001
+@PatientStatus run pre-meeting checklist for patient_gyn_001 cancer_type ovarian
+```
+
+For local development without Azure:
+```sh
+cd src
+CLINICAL_NOTES_SOURCE=caboodle python3 -m pytest tests/test_local_agents.py -v
 ```
 
 See the [User Guide](./docs/user_guide.md) for detailed testing instructions.
@@ -172,6 +259,19 @@ azd down --purge
 
 ## Tumor Board Output Format
 
+### Pre-Meeting Procedure Pass
+
+Before the tumor board review, `PatientStatus` runs a procedure pass that audits:
+
+| Category | Items Checked | Thresholds |
+|----------|--------------|------------|
+| **Labs** | CBC, CMP, CA-125, (Beta-hCG, CEA, CA19-9 conditional) | CBC/CMP ≤14d · CA-125/markers ≤28d |
+| **Imaging** | CT Chest/Abdomen/Pelvis, MRI Pelvis, (PET/CT conditional) | CT CAP ≤56d · MRI ≤42d |
+| **Pathology** | Surgical path report, IHC (MMR/p53/ER/HER2), NGS panel, germline testing | Present (no expiry) |
+| **Consults** | GYN Onc, Med Onc, Rad Onc, Genetics, (Fertility, Palliative conditional) | Note present in chart |
+
+Each item returns ✓ current / ⚠ stale / ✗ missing, with Rush Epic order codes for any gaps.
+
 ### Word Document (Landscape 4-Column)
 The ReportCreation agent generates a one-page landscape Word document with:
 
@@ -184,7 +284,7 @@ Content uses clinical shorthand (s/p, dx, bx, LN, OSH, c/w) with M/D/YY date for
 ### PowerPoint (3 Slides)
 1. **Overview** — patient demographics, diagnosis, staging
 2. **Findings** — pathology, imaging, CA-125 trend chart
-3. **Treatment Plan** — recommendations, eligible clinical trials
+3. **Treatment Plan** — NCCN recommendations, eligible clinical trials
 
 ## Resources
 
@@ -192,7 +292,6 @@ Content uses clinical shorthand (s/p, dx, bx, LN, OSH, c/w) with M/D/YY date for
 
 - [User Guide](./docs/user_guide.md) and [Documentation Index](docs/README.md)
 - [Agent Development Guide](./docs/agent_development.md) for building and customizing agents
-- [Tool Integration Guide](./docs/agent_development.md#adding-tools-plugins-to-your-agents)
 - [GYN Tumor Board Scenario Guide](./docs/scenarios.md)
 - [Data Access & Epic Integration](./docs/data_access.md)
 - [Data Ingestion Guide](./docs/data_ingestion.md) for adding patient data
@@ -210,7 +309,7 @@ Content uses clinical shorthand (s/p, dx, bx, LN, OSH, c/w) with M/D/YY date for
 ## Guidance
 
 Deployment creates:
-- 1 [GPT-4o deployment](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models)
+- 1 [GPT-4.1 deployment](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models)
 - 1 [App Service](https://learn.microsoft.com/en-us/azure/app-service/overview)
 - 2 [Azure Storage accounts](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview)
 - Associated [managed identities](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview) and [Azure Bot](https://learn.microsoft.com/en-us/azure/bot-service/bot-service-overview?view=azure-bot-service-4.0) instances

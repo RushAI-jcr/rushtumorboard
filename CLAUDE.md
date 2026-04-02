@@ -22,18 +22,24 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   │   │   ├── agents.yaml      # 10 agent definitions (tools, instructions, prompts)
 │   │   │   └── healthcare_agents.yaml  # Healthcare agent overrides (currently disabled)
 │   │   └── tools/               # Semantic Kernel plugins
-│   │       ├── patient_data.py           # Load patient records, build timeline
-│   │       ├── oncologic_history_extractor.py  # Prior onc history (OSH transfers)
-│   │       ├── pathology_extractor.py    # Histology, IHC, molecular markers
-│   │       ├── radiology_extractor.py    # CT/MRI/PET/US findings (LLM-based)
-│   │       ├── tumor_markers.py          # CA-125/HE4/hCG trending + GCIG
-│   │       ├── clinical_trials.py        # ClinicalTrials.gov search + eligibility
-│   │       ├── clinical_trials_nci.py    # NCI API wrapper (calls mcp_servers/)
-│   │       ├── graph_rag.py              # GraphRAG medical research
-│   │       ├── content_export/content_export.py  # 4-column Word doc
-│   │       └── presentation_export.py    # 3-slide PPTX with marker chart
+│   │       ├── patient_data.py                  # Load records, timeline (TIMELINE_NOTE_TYPES filter)
+│   │       ├── medical_report_extractor.py       # Base class: 3-layer note fallback
+│   │       ├── oncologic_history_extractor.py    # Prior onc history (OSH transfers)
+│   │       ├── pathology_extractor.py            # Histology, IHC, molecular markers
+│   │       ├── radiology_extractor.py            # CT/MRI/PET/US findings (LLM-based)
+│   │       ├── tumor_markers.py                  # CA-125/HE4/hCG trending + GCIG
+│   │       ├── pretumor_board_checklist.py       # Pre-meeting procedure pass (Rush order codes)
+│   │       ├── nccn_guidelines.py                # NCCN PDF lookup (Docling + PyMuPDF)
+│   │       ├── medical_research.py               # PubMed/EuropePMC/S2 + RISEN synthesis
+│   │       ├── clinical_trials.py                # ClinicalTrials.gov search + eligibility
+│   │       ├── clinical_trials_nci.py            # NCI API wrapper (calls mcp_servers/)
+│   │       ├── graph_rag.py                      # GraphRAG (fallback, not primary)
+│   │       ├── validation.py                     # Shared input validation helpers
+│   │       ├── content_export/content_export.py  # Landscape 4-column Word doc
+│   │       └── presentation_export.py            # 3-slide PPTX with CA-125 chart
 │   ├── data_models/
-│   │   ├── epic/caboodle_file_accessor.py  # Epic Caboodle CSV/Parquet reader
+│   │   ├── epic/caboodle_file_accessor.py  # Epic Clarity CSV reader (7 CSVs per patient)
+│   │   ├── clinical_note_accessor_protocol.py  # Protocol interface for accessor duck-typing
 │   │   ├── data_access.py       # Factory: caboodle | fhir | fabric | blob
 │   │   └── ...                  # Pydantic models, accessors
 │   ├── mcp_servers/
@@ -59,16 +65,16 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 
 | Agent | Tools | Role |
 |-------|-------|------|
-| Orchestrator | — | Facilitator: manages turn order (steps a–i) |
-| PatientHistory | patient_data | Loads Epic data, builds chronological timeline |
-| OncologicHistory | oncologic_history_extractor | Prior onc history, OSH transfers |
-| Pathology | pathology_extractor | Histology, IHC, molecular classification |
-| Radiology | radiology_extractor | CT/MRI/PET/US findings |
-| PatientStatus | tumor_markers, patient_data | FIGO staging, molecular profile, treatment history |
-| ClinicalGuidelines | — | NCCN-based GYN treatment recommendations |
-| ClinicalTrials | clinical_trials, clinical_trials_nci | Trial search + eligibility matching |
-| MedicalResearch | graph_rag | Research literature via GraphRAG |
-| ReportCreation | content_export, presentation_export | Word doc + PPTX generation |
+| Orchestrator | — | Facilitator: manages turn order (step 0 + steps a–i) |
+| PatientHistory | patient_data | Loads Epic Clarity CSV, builds timeline filtered to 55 NoteTypes |
+| OncologicHistory | oncologic_history_extractor, patient_data | Prior onc history, OSH transfers |
+| Pathology | pathology_extractor, patient_data | Histology, IHC, molecular classification (POLEmut/MMRd/NSMP/p53abn) |
+| Radiology | radiology_extractor, patient_data | CT/MRI/PET/US findings, RECIST tracking |
+| PatientStatus | tumor_markers, pretumor_board_checklist | Step 0: pre-meeting procedure pass; FIGO staging, platinum sensitivity |
+| ClinicalGuidelines | nccn_guidelines | NCCN-based GYN recommendations from loaded PDF guidelines |
+| ClinicalTrials | clinical_trials, clinical_trials_nci | Trial search + eligibility matching (NCI + AACT) |
+| MedicalResearch | medical_research | PubMed/EuropePMC/S2 search with RISEN synthesis + citation validation |
+| ReportCreation | content_export, presentation_export | Landscape 4-column Word doc + 3-slide PPTX generation |
 
 ## Tech Stack
 
@@ -83,8 +89,8 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 ```sh
 cp src/.env.sample src/.env
 # Fill in Azure OpenAI credentials, then:
-cd src && pip install -r requirements.txt
-CLINICAL_NOTES_SOURCE=caboodle python -m tests.test_local_agents
+cd src && SCENARIO=default pip3 install -r requirements.txt
+CLINICAL_NOTES_SOURCE=caboodle python3 -m pytest tests/test_local_agents.py -v
 ```
 
 ## Conventions

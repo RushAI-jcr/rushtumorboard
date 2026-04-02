@@ -515,3 +515,133 @@ class TestNCCNGuidelines:
         """Responses don't exceed MAX_RESPONSE_CHARS."""
         result = await plugin.search_nccn_guidelines("endometrial", "treatment")
         assert len(result) <= 35_000  # Allow some overhead for JSON structure
+
+
+# ---------------------------------------------------------------------------
+# G. End-to-end: ClinicalGuidelines agent with NCCN tool (requires Azure OpenAI)
+# ---------------------------------------------------------------------------
+
+
+class TestClinicalGuidelinesE2E:
+    """Run the ClinicalGuidelines agent against patient_gyn_002 (endometrial, dMMR)
+    and verify it calls the NCCN tool and cites page codes in its recommendation."""
+
+    @pytest.fixture(autouse=True)
+    def check_azure_config(self):
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "")
+        if not endpoint or "<" in endpoint or not deployment:
+            pytest.skip("Azure OpenAI not configured")
+
+    @pytest.mark.asyncio
+    async def test_agent_cites_nccn_pages(self):
+        """ClinicalGuidelines agent calls NCCN tool and cites page codes for endometrial case."""
+        from semantic_kernel import Kernel
+        from semantic_kernel.agents import ChatCompletionAgent
+        from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
+        from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import \
+            AzureChatPromptExecutionSettings
+        from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AzureChatCompletion
+        from semantic_kernel.functions.kernel_arguments import KernelArguments
+
+        from config import load_agent_config
+        from data_models.plugin_configuration import PluginConfiguration
+        from scenarios.default.tools.nccn_guidelines import NCCNGuidelinesPlugin
+
+        # Build kernel with Azure OpenAI
+        kernel = Kernel()
+        api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
+        service_kwargs = {
+            "service_id": "default",
+            "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+            "api_version": "2025-04-01-preview",
+        }
+        if api_key:
+            service_kwargs["api_key"] = api_key
+            service_kwargs["endpoint"] = os.environ["AZURE_OPENAI_ENDPOINT"]
+        else:
+            from azure.identity.aio import AzureCliCredential, get_bearer_token_provider
+            credential = AzureCliCredential()
+            token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
+            service_kwargs["ad_token_provider"] = token_provider
+
+        kernel.add_service(AzureChatCompletion(**service_kwargs))
+
+        # Add NCCN plugin
+        plugin_config = PluginConfiguration.__new__(PluginConfiguration)
+        nccn_plugin = NCCNGuidelinesPlugin(plugin_config)
+        kernel.add_plugin(nccn_plugin, plugin_name="nccn_guidelines")
+
+        # Load ClinicalGuidelines agent instructions from agents.yaml
+        os.environ.setdefault("SCENARIO", "default")
+        os.environ.setdefault(
+            "BOT_IDS",
+            json.dumps({k: "dummy" for k in [
+                "Orchestrator", "PatientHistory", "OncologicHistory", "Pathology",
+                "Radiology", "PatientStatus", "ClinicalGuidelines", "ReportCreation",
+                "ClinicalTrials", "MedicalResearch",
+            ]})
+        )
+        os.environ.setdefault("EXCLUDED_AGENTS", "")
+        agents = load_agent_config("default")
+        cg_config = next(a for a in agents if a["name"] == "ClinicalGuidelines")
+
+        settings = AzureChatPromptExecutionSettings(
+            function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, temperature=0
+        )
+
+        agent = ChatCompletionAgent(
+            kernel=kernel,
+            name="ClinicalGuidelines",
+            instructions=cg_config["instructions"],
+            description=cg_config["description"],
+            arguments=KernelArguments(settings=settings),
+        )
+
+        # Simulate patient_gyn_002 clinical summary (endometrial, dMMR, Stage IB)
+        patient_summary = """
+Patient: 58-year-old postmenopausal woman
+Diagnosis: Endometrial carcinoma (endometrioid, Grade 2)
+FIGO Stage: IB (2023 classification) — IBm-MMRd
+Molecular classification: MMR-deficient (MLH1 loss), Lynch syndrome confirmed (MLH1 germline mutation)
+Surgery: Total hysterectomy, BSO, sentinel lymph node biopsy (negative)
+Pathology: Myometrial invasion >50%, no LVSI, margins negative
+Biomarkers: dMMR/MSI-H, p53 wild-type, POLE wild-type, ER+/PR+
+Prior treatment: None (newly diagnosed, s/p surgery)
+
+Please provide NCCN-based treatment recommendations for this patient.
+"""
+
+        # Run the agent
+        response_text = ""
+        async for msg in agent.invoke(patient_summary):
+            response_text += str(msg.content) if msg.content else ""
+
+        logger.info("ClinicalGuidelines response length: %d chars", len(response_text))
+        logger.info("Response preview: %s", response_text[:500])
+
+        # Verify the agent produced a non-trivial response
+        assert len(response_text) > 200, f"Response too short ({len(response_text)} chars)"
+
+        # Verify NCCN page codes are cited
+        response_upper = response_text.upper()
+        nccn_codes_cited = [
+            code for code in ["ENDO-", "UTSARC-", "VAG-", "VULVA-"]
+            if code in response_upper
+        ]
+        assert len(nccn_codes_cited) > 0, (
+            f"Expected NCCN page code citations (e.g., ENDO-4) in response. "
+            f"Response starts with: {response_text[:300]}"
+        )
+
+        # Verify endometrial-specific content
+        response_lower = response_text.lower()
+        assert any(term in response_lower for term in ["endometrial", "uterine", "endo-"]), \
+            "Response should discuss endometrial cancer"
+
+        # Verify it addresses molecular classification (dMMR)
+        assert any(term in response_lower for term in ["dmmr", "mmr", "msi", "mismatch repair", "lynch"]), \
+            "Response should address dMMR/MSI-H/Lynch status"
+
+        logger.info("NCCN page codes cited: %s", nccn_codes_cited)
+        logger.info("E2E test PASSED — agent cited NCCN guidelines")

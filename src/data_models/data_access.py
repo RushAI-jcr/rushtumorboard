@@ -13,6 +13,7 @@ from azure.storage.blob.aio import BlobServiceClient
 from data_models.chat_artifact_accessor import ChatArtifactAccessor
 from data_models.chat_context_accessor import ChatContextAccessor
 from data_models.clinical_note_accessor import ClinicalNoteAccessor
+from data_models.clinical_note_accessor_protocol import ClinicalNoteAccessorProtocol
 from data_models.epic.caboodle_file_accessor import CaboodleFileAccessor
 from data_models.fabric.fabric_clinical_note_accessor import FabricClinicalNoteAccessor
 from data_models.fhir.fhir_clinical_note_accessor import FhirClinicalNoteAccessor
@@ -86,7 +87,7 @@ class DataAccess:
     blob_sas_delegate: BlobSasDelegate
     chat_artifact_accessor: ChatArtifactAccessor
     chat_context_accessor: ChatContextAccessor
-    clinical_note_accessor: ClinicalNoteAccessor
+    clinical_note_accessor: ClinicalNoteAccessorProtocol
     image_accessor: ImageAccessor
 
 

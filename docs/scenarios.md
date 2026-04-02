@@ -18,28 +18,61 @@ The default scenario orchestrates a complete tumor board case review with these 
 
 | Agent | Tools | Role |
 |-------|-------|------|
-| Orchestrator | — | Facilitates discussion, manages turn order |
-| PatientHistory | `patient_data` | Loads patient record, builds timeline |
-| OncologicHistory | `oncologic_history_extractor`, `patient_data` | Extracts structured prior oncologic history from clinical notes |
-| Pathology | `pathology_extractor`, `patient_data` | Extracts histology, IHC, molecular markers |
-| Radiology | `radiology_extractor`, `patient_data` | Structures imaging findings (CT, MRI, PET/CT, US) |
-| PatientStatus | — | Synthesizes FIGO staging, molecular profile, platinum sensitivity |
-| ClinicalGuidelines | — | NCCN-based GYN cancer treatment recommendations |
-| ClinicalTrials | `clinical_trials_nci` | Searches NCI for eligible trials |
-| MedicalResearch | `graph_rag` | GraphRAG-powered research retrieval |
-| ReportCreation | `content_export`, `presentation_export` | Generates Word doc + PPTX |
+| Orchestrator | — | Facilitates discussion, manages turn order; runs pre-meeting checklist as step 0 |
+| PatientHistory | `patient_data` | Loads patient record from Epic Clarity CSV, builds chronological timeline |
+| OncologicHistory | `oncologic_history_extractor`, `patient_data` | Extracts structured prior oncologic history — diagnosis, treatments, recurrences, referral reason |
+| Pathology | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel, molecular markers, FIGO grade, endometrial molecular classification |
+| Radiology | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM (no deep learning model) |
+| PatientStatus | `tumor_markers`, `pretumor_board_checklist` | Step 0: pre-meeting procedure pass; then FIGO staging, molecular profile, platinum sensitivity |
+| ClinicalGuidelines | `nccn_guidelines` | NCCN-based GYN treatment recommendations using loaded NCCN PDFs (endometrial, cervical, vaginal, vulvar, ovarian) |
+| ClinicalTrials | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness |
+| MedicalResearch | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search with RISEN synthesis and citation validation |
+| ReportCreation | `content_export`, `presentation_export` | Generates landscape 4-column Word doc + 3-slide PPTX with CA-125 trend chart |
 
 ### Tumor Board Flow
-The Orchestrator follows steps a–i:
-1. **PatientHistory** loads the patient record
-2. **OncologicHistory** extracts prior cancer history (especially for OSH transfers)
-3. **Pathology** reviews pathology findings
-4. **Radiology** reviews imaging
-5. **PatientStatus** synthesizes current status
-6. **ClinicalGuidelines** provides NCCN recommendations
-7. **ClinicalTrials** searches for eligible trials
-8. **MedicalResearch** retrieves relevant research
-9. **ReportCreation** generates the landscape Word doc and PPTX
+
+The Orchestrator follows a pre-meeting step 0 followed by steps a–i:
+
+- **Step 0** (before step a): **PatientStatus** runs `get_pretumor_board_checklist` to audit required labs, imaging, pathology, and consults. Outstanding items (✗ MISSING or ⚠ STALE) are surfaced to the user for resolution before proceeding.
+- **Step a**: **PatientHistory** loads the patient record
+- **Step b**: **OncologicHistory** extracts prior cancer history (especially for OSH transfers)
+- **Step c**: **Pathology** reviews pathology and molecular findings
+- **Step d**: **Radiology** reviews imaging
+- **Step e**: **PatientStatus** synthesizes current status (after step 0 checklist is confirmed)
+- **Step f**: **ClinicalGuidelines** provides NCCN recommendations
+- **Step g**: **ClinicalTrials** searches for eligible trials
+- **Step h**: **MedicalResearch** retrieves relevant research
+- **Step i**: **ReportCreation** generates the landscape Word doc and PPTX
+
+### Pre-Meeting Procedure Pass
+
+Before any agent presents clinical findings, PatientStatus runs `get_pretumor_board_checklist` as step 0 to verify the case is ready for board review. The checklist audits the following items and returns a ✓ (present and current), ⚠ (present but stale), or ✗ (missing) status for each, along with Epic order codes for any items that need to be placed:
+
+**Labs**
+- CBC — required within 14 days (Epic order: LAB002101)
+- CMP — required within 14 days (Epic order: LAB002101)
+- CA-125 — required within 28 days (Epic order: LAB100623 or similar)
+
+**Imaging**
+- CT chest/abdomen/pelvis — required within 56 days (Epic order: RAD100623)
+- MRI Pelvis — required within 42 days
+- PET/CT — conditional (ordered based on clinical indication, not required for all cancer types)
+
+**Pathology and Molecular**
+- Pathology report (surgical or outside hospital)
+- IHC panel: MMR (MLH1/MSH2/MSH6/PMS2), p53, ER, HER2
+- NGS/molecular panel (e.g., FoundationOne CDx, Tempus xT)
+- Germline testing result or order confirmation
+
+**Consults**
+- Relevant subspecialty consult notes (e.g., medical oncology, radiation oncology, genetics)
+
+**Cancer-type-conditional items**
+- Beta-hCG — required for germ cell tumors and gestational trophoblastic disease (GTD)
+- CEA and CA19-9 — required for mucinous histologies
+- PET/CT — conditionally required based on cancer type and clinical stage
+
+If any item is ✗ MISSING or ⚠ STALE, the checklist output is surfaced to the user before the board proceeds. The user can resolve outstanding items or confirm they are not applicable before continuing to step a.
 
 ### Output Formats
 

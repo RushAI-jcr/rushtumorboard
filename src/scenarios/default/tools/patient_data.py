@@ -110,8 +110,8 @@ class PatientDataPlugin:
         description="Load patient images and reports from data store. The output will contain a list of files with name and type."
     )
     async def load_patient_data(self, patient_id: str) -> str:
-        if not _is_valid(patient_id):
-            return "Invalid patient ID"
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
 
         try:
             self.chat_ctx.patient_id = patient_id
@@ -142,8 +142,8 @@ class PatientDataPlugin:
         Returns:
             str: The clinical timeline of the patient.
         """
-        if not _is_valid(patient_id):
-            return "Invalid patient ID"
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
 
         conversation_id = self.chat_ctx.conversation_id
 
@@ -159,6 +159,13 @@ class PatientDataPlugin:
                 files = await accessor.read_all(patient_id)
         else:
             files = await accessor.read_all(patient_id)
+
+        if len(files) > _MAX_TIMELINE_NOTES:
+            logger.info(
+                "Capping timeline notes from %d to %d for patient %s",
+                len(files), _MAX_TIMELINE_NOTES, patient_id,
+            )
+            files = files[:_MAX_TIMELINE_NOTES]
 
         logger.info(
             "create_timeline: %d notes after type filter for patient %s (from %s)",
@@ -240,8 +247,8 @@ class PatientDataPlugin:
         Returns:  
             str: The generated response based on the large text and the given prompt.  
         """
-        if not _is_valid(patient_id):
-            return "Invalid patient ID"
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
 
         conversation_id = self.chat_ctx.conversation_id
 
@@ -253,6 +260,13 @@ class PatientDataPlugin:
                 files = await accessor.read_all(patient_id)
         else:
             files = await accessor.read_all(patient_id)
+
+        if len(files) > _MAX_TIMELINE_NOTES:
+            logger.info(
+                "Capping process_prompt notes from %d to %d for patient %s",
+                len(files), _MAX_TIMELINE_NOTES, patient_id,
+            )
+            files = files[:_MAX_TIMELINE_NOTES]
 
         logger.info(
             "process_prompt: %d notes after type filter for patient %s",
