@@ -91,22 +91,20 @@ class ClinicalNoteAccessor:
         finally:
             logger.info("Read all clinical notes. Duration: %.3fs", time() - start)
 
-    async def _get_parsed_notes(self, patient_id: str) -> list[dict]:
-        """Return all notes for patient as parsed dicts (uses read_all cache)."""
-        raw = await self.read_all(patient_id)
-        return [json.loads(n) if isinstance(n, str) else n for n in raw]
-
     async def get_clinical_notes_by_type(
         self, patient_id: str, note_types: Sequence[str]
     ) -> list[dict]:
         """Filter clinical notes by note type."""
-        return filter_notes_by_type(await self._get_parsed_notes(patient_id), note_types)
+        return filter_notes_by_type(await self.read_all(patient_id), note_types)
 
     async def get_clinical_notes_by_keywords(
         self, patient_id: str, note_types: Sequence[str], keywords: Sequence[str]
     ) -> list[dict]:
         """Filter notes by type AND keyword."""
-        return filter_notes_by_keywords(await self._get_parsed_notes(patient_id), note_types, keywords)
+        return filter_notes_by_keywords(
+            filter_notes_by_type(await self.read_all(patient_id), note_types),
+            keywords,
+        )
 
     async def get_lab_results(
         self, patient_id: str, component_name: str | None = None

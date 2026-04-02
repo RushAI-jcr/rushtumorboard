@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 
 def filter_notes_by_type(
-    notes_json: list[str | dict],
+    notes_json: Sequence[str | dict],
     note_types: Sequence[str],
 ) -> list[dict]:
     """Filter a list of raw note JSON strings or dicts by NoteType.

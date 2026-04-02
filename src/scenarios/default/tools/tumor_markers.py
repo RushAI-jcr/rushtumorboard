@@ -138,6 +138,15 @@ class TumorMarkerPlugin:
         if not validate_patient_id(patient_id):
             return json.dumps({"error": "Invalid patient ID."})
 
+        # Validate marker against known GYN markers (soft warning — allow unknown markers)
+        marker_key_norm = marker.lower().replace("-", "").replace(" ", "")
+        known_keys = {k.replace("-", "").replace(" ", "") for k in GYN_MARKERS}
+        if marker_key_norm not in known_keys:
+            logger.warning(
+                "Unrecognized tumor marker %r for patient %s; proceeding with best-effort lab lookup",
+                marker, patient_id,
+            )
+
         accessor = self.data_access.clinical_note_accessor
 
         # Layer 1: Get structured lab results — both calls are independent, gather concurrently

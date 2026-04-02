@@ -86,6 +86,12 @@ Slide 5 — Discussion agenda (Col 4):
     e.g. "Surgical candidacy given ECOG 2?" or "Platinum sensitivity status?"
   trial_entries: max 3 — only if trial data was provided: "NCT# — Brief title (Phase X)"
     Leave empty list if no trials were identified in the source data.
+  references: max 4 — PubMed citations that directly support the discussion items.
+    Extract ONLY from citations present in the medical_research or clinical_trials input.
+    Format: "PMID:XXXXXXXX — Author et al. Journal YYYY: one-line finding"
+    Also include NCT references here if they are relevant to the evidence (not just enrollment).
+    Leave empty list if no PubMed or NCT citations appear in the source data.
+    NEVER fabricate a PMID or author. Only cite what was explicitly returned by the research agent.
 
 Respond with valid JSON matching the SlideContent schema exactly.
 """
@@ -292,4 +298,5 @@ class PresentationExportPlugin:
                     all_data.get("board_discussion", "")[:80],
                 ],
                 trial_entries=[all_data.get("clinical_trials", "No trials identified")[:80]],
+                references=[],
             )

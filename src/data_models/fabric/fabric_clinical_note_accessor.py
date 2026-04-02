@@ -2,14 +2,14 @@
 # Licensed under the MIT license.
 
 import asyncio
-import logging
-from collections.abc import Sequence
-from typing import Any, Callable, Coroutine
-import json
 import base64
-from datetime import date, timedelta
-
+import json
+import logging
 import re
+from collections.abc import Sequence
+from datetime import date, timedelta
+from typing import Any, Callable, Coroutine
+
 import aiohttp
 from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import get_bearer_token_provider
@@ -38,6 +38,7 @@ class FabricClinicalNoteAccessor:
         self.bearer_token_provider = bearer_token_provider
         self._note_cache: dict[str, list[str]] = {}
         self._CACHE_MAX_PATIENTS: int = 5
+        self._session: aiohttp.ClientSession | None = None
 
     def __parse_fabric_endpoint(self, url: str) -> tuple[str, str] | None:
         """
@@ -80,26 +81,38 @@ class FabricClinicalNoteAccessor:
             "Content-Type": "application/json",
         }
 
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Lazy session: created on first use, reused across requests."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self) -> None:
+        """Close the shared aiohttp session."""
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+            self._session = None
+
     async def get_patients(self) -> list[str]:
         """Get the list of patients."""
         target_endpoint = f"{self.api_endpoint}/functions/get_patients_by_id/invoke"
         headers = await self.get_headers()
-        async with aiohttp.ClientSession() as session:
-            async with session.post(target_endpoint, json={}, headers=headers) as response:
-                response.raise_for_status()
-                content = await response.content.read()
-                data = json.loads(content.decode('utf-8'))
+        session = await self._get_session()
+        async with session.post(target_endpoint, json={}, headers=headers) as response:
+            response.raise_for_status()
+            content = await response.content.read()
+            data = json.loads(content.decode('utf-8'))
         return data['output']['ids']
 
     async def get_metadata_list(self, patient_id: str) -> list[dict[str, str]]:
         """Get the clinical note URLs for a given patient ID."""
         target_endpoint = f"{self.api_endpoint}/functions/get_clinical_notes_by_patient_id/invoke"
         headers = await self.get_headers()
-        async with aiohttp.ClientSession() as session:
-            async with session.post(target_endpoint, json={"patientId": patient_id}, headers=headers) as response:
-                response.raise_for_status()
-                content = await response.content.read()
-                data = json.loads(content.decode('utf-8'))
+        session = await self._get_session()
+        async with session.post(target_endpoint, json={"patientId": patient_id}, headers=headers) as response:
+            response.raise_for_status()
+            content = await response.content.read()
+            data = json.loads(content.decode('utf-8'))
         document_reference_ids = data['output']
 
         return [
@@ -110,7 +123,7 @@ class FabricClinicalNoteAccessor:
         ]
 
     async def _read_note(self, note_id: str, session: aiohttp.ClientSession) -> str:
-        """Internal: read a single note using the provided session (avoids per-request session overhead)."""
+        """Internal: read a single note using the provided session."""
         target_endpoint = f"{self.api_endpoint}/functions/get_clinical_note_by_patient_id/invoke"
         headers = await self.get_headers()
         async with session.post(target_endpoint, json={"noteId": note_id}, headers=headers) as response:
@@ -139,8 +152,8 @@ class FabricClinicalNoteAccessor:
 
     async def read(self, patient_id: str, note_id: str) -> str:
         """Read the clinical note for a given patient ID and note ID."""
-        async with aiohttp.ClientSession() as session:
-            return await self._read_note(note_id, session)
+        session = await self._get_session()
+        return await self._read_note(note_id, session)
 
     async def read_all(self, patient_id: str) -> list[str]:
         """Retrieves all clinical notes for a given patient ID (cached per-patient, LRU eviction)."""
@@ -151,12 +164,12 @@ class FabricClinicalNoteAccessor:
 
         notes = []
         batch_size = 10
-        async with aiohttp.ClientSession() as session:
-            for i in range(0, len(metadata_list), batch_size):
-                batch_input = metadata_list[i:i + batch_size]
-                batch = [self._read_note(note["id"], session) for note in batch_input]
-                batch_results = await asyncio.gather(*batch)
-                notes.extend(batch_results)
+        session = await self._get_session()
+        for i in range(0, len(metadata_list), batch_size):
+            batch_input = metadata_list[i:i + batch_size]
+            batch = [self._read_note(note["id"], session) for note in batch_input]
+            batch_results = await asyncio.gather(*batch)
+            notes.extend(batch_results)
 
         # LRU eviction
         if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
@@ -177,37 +190,38 @@ class FabricClinicalNoteAccessor:
     ) -> list[dict]:
         """Filter notes by type AND keyword."""
         return filter_notes_by_keywords(
-            await self.get_clinical_notes_by_type(patient_id, note_types), keywords
+            filter_notes_by_type(await self.read_all(patient_id), note_types),
+            keywords,
         )
 
     async def get_lab_results(
         self, patient_id: str, component_name: str | None = None
     ) -> list[dict]:
-        """Fabric backend does not expose structured lab results via this accessor. Returns empty list."""
+        """Structured lab results are not available via this accessor. Returns empty list."""
         return []
 
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
-        """Fabric backend does not expose structured tumor markers via this accessor. Returns empty list."""
+        """Structured tumor markers are not available via this accessor. Returns empty list."""
         return []
 
     async def get_pathology_reports(self, patient_id: str) -> list[dict]:
-        """Fabric backend does not expose dedicated pathology reports. Returns empty list."""
+        """Dedicated pathology reports are not available via this accessor. Returns empty list."""
         return []
 
     async def get_radiology_reports(self, patient_id: str) -> list[dict]:
-        """Fabric backend does not expose dedicated radiology reports. Returns empty list."""
+        """Dedicated radiology reports are not available via this accessor. Returns empty list."""
         return []
 
     async def get_cancer_staging(self, patient_id: str) -> list[dict]:
-        """Fabric backend does not expose structured cancer staging. Returns empty list."""
+        """Structured cancer staging is not available via this accessor. Returns empty list."""
         return []
 
     async def get_medications(
         self, patient_id: str, order_class: str | None = None
     ) -> list[dict]:
-        """Fabric backend does not expose structured medications via this accessor. Returns empty list."""
+        """Structured medications are not available via this accessor. Returns empty list."""
         return []
 
     async def get_diagnoses(self, patient_id: str) -> list[dict]:
-        """Fabric backend does not expose structured diagnoses via this accessor. Returns empty list."""
+        """Structured diagnoses are not available via this accessor. Returns empty list."""
         return []
