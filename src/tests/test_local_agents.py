@@ -170,6 +170,48 @@ class TestCaboodleGynMethods:
             assert "id" in parsed
             assert "text" in parsed
 
+    @pytest.mark.asyncio
+    async def test_get_clinical_notes_by_type(self, caboodle):
+        """Layer 2 fallback: filter clinical notes by NoteType."""
+        notes = await caboodle.get_clinical_notes_by_type(PATIENT_ID, ["H&P", "Progress Notes"])
+        assert len(notes) > 0
+        for n in notes:
+            note_type = n.get("NoteType", n.get("note_type", "")).lower()
+            assert note_type in {"h&p", "progress notes"}
+
+    @pytest.mark.asyncio
+    async def test_get_clinical_notes_by_type_empty(self, caboodle):
+        """Empty note_types list returns all notes."""
+        all_notes = await caboodle.get_clinical_notes_by_type(PATIENT_ID, [])
+        assert len(all_notes) > 0
+
+    @pytest.mark.asyncio
+    async def test_get_clinical_notes_by_keywords(self, caboodle):
+        """Layer 3 fallback: filter notes by type AND keyword."""
+        notes = await caboodle.get_clinical_notes_by_keywords(
+            PATIENT_ID, ["Progress Notes", "H&P"], ["cancer"]
+        )
+        for n in notes:
+            text = n.get("NoteText", n.get("note_text", n.get("text", ""))).lower()
+            assert "cancer" in text
+
+    @pytest.mark.asyncio
+    async def test_get_clinical_notes_by_keywords_no_match(self, caboodle):
+        """Keywords that don't appear should return empty list."""
+        notes = await caboodle.get_clinical_notes_by_keywords(
+            PATIENT_ID, ["Progress Notes"], ["xyznonexistent123"]
+        )
+        assert len(notes) == 0
+
+    @pytest.mark.asyncio
+    async def test_file_caching(self, caboodle):
+        """Verify _read_file caches results — second call should hit cache."""
+        # First call populates cache
+        notes1 = await caboodle._read_file(PATIENT_ID, "clinical_notes")
+        # Second call should return same object from cache
+        notes2 = await caboodle._read_file(PATIENT_ID, "clinical_notes")
+        assert notes1 is notes2  # Same object reference = cache hit
+
 
 # ---------------------------------------------------------------------------
 # C. Validate local accessors
@@ -251,23 +293,38 @@ class TestAzureOpenAI:
     @pytest.mark.asyncio
     async def test_azure_openai_connection(self):
         """Create a Semantic Kernel and send a test message."""
-        from azure.identity.aio import AzureCliCredential, get_bearer_token_provider
         from semantic_kernel import Kernel
         from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AzureChatCompletion
         from semantic_kernel.contents.chat_history import ChatHistory
 
-        credential = AzureCliCredential()
-        token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
+        api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
+        credential = None
 
         kernel = Kernel()
-        kernel.add_service(
-            AzureChatCompletion(
-                service_id="default",
-                deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
-                api_version="2025-04-01-preview",
-                ad_token_provider=token_provider,
+        if api_key:
+            # Use API key auth
+            kernel.add_service(
+                AzureChatCompletion(
+                    service_id="default",
+                    deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+                    endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+                    api_version="2024-12-01-preview",
+                    api_key=api_key,
+                )
             )
-        )
+        else:
+            # Fall back to Azure CLI credential (token-based auth)
+            from azure.identity.aio import AzureCliCredential, get_bearer_token_provider
+            credential = AzureCliCredential()
+            token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
+            kernel.add_service(
+                AzureChatCompletion(
+                    service_id="default",
+                    deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+                    api_version="2025-04-01-preview",
+                    ad_token_provider=token_provider,
+                )
+            )
 
         chat_service: AzureChatCompletion = kernel.get_service(service_id="default")
         history = ChatHistory()
@@ -278,7 +335,8 @@ class TestAzureOpenAI:
         assert response is not None
         assert len(response.content) > 0
         logger.info(f"Azure OpenAI response: {response.content}")
-        await credential.close()
+        if credential:
+            await credential.close()
 
 
 # ---------------------------------------------------------------------------
@@ -322,3 +380,138 @@ class TestConfig:
         assert len(agents) == 9
         # Reset
         os.environ["EXCLUDED_AGENTS"] = ""
+
+    def test_clinical_guidelines_has_nccn_tool(self):
+        """ClinicalGuidelines agent has nccn_guidelines tool binding."""
+        os.environ.setdefault("SCENARIO", "default")
+        os.environ.setdefault(
+            "BOT_IDS",
+            json.dumps({
+                "Orchestrator": "dummy", "PatientHistory": "dummy",
+                "OncologicHistory": "dummy", "Pathology": "dummy",
+                "Radiology": "dummy", "PatientStatus": "dummy",
+                "ClinicalGuidelines": "dummy", "ReportCreation": "dummy",
+                "ClinicalTrials": "dummy", "MedicalResearch": "dummy",
+            })
+        )
+        os.environ.setdefault("EXCLUDED_AGENTS", "")
+        from config import load_agent_config
+        agents = load_agent_config("default")
+        cg = next(a for a in agents if a["name"] == "ClinicalGuidelines")
+        tool_names = [t["name"] for t in cg.get("tools", [])]
+        assert "nccn_guidelines" in tool_names, f"Expected nccn_guidelines tool, got: {tool_names}"
+
+
+# ---------------------------------------------------------------------------
+# F. NCCN Guidelines Plugin
+# ---------------------------------------------------------------------------
+
+
+class TestNCCNGuidelines:
+    """Test the NCCN guidelines Semantic Kernel plugin loads and returns correct data."""
+
+    @pytest.fixture(scope="class")
+    def plugin(self):
+        """Create the NCCN guidelines plugin."""
+        from scenarios.default.tools.nccn_guidelines import NCCNGuidelinesPlugin
+
+        # Reset class-level cache to force fresh load
+        NCCNGuidelinesPlugin._loaded = False
+        NCCNGuidelinesPlugin._pages = {}
+        NCCNGuidelinesPlugin._disease_index = {}
+        NCCNGuidelinesPlugin._type_index = {}
+        NCCNGuidelinesPlugin._keyword_index = {}
+        NCCNGuidelinesPlugin._guidelines = []
+
+        # Create a minimal PluginConfiguration
+        from data_models.plugin_configuration import PluginConfiguration
+        config = PluginConfiguration.__new__(PluginConfiguration)
+        return NCCNGuidelinesPlugin(config)
+
+    def test_guidelines_loaded(self, plugin):
+        """At least 3 guidelines loaded with 100+ pages."""
+        assert len(plugin._guidelines) >= 3
+        assert len(plugin._pages) >= 100
+        logger.info("Loaded %d guidelines, %d unique page codes", len(plugin._guidelines), len(plugin._pages))
+
+    def test_disease_index_populated(self, plugin):
+        """Disease index has endometrial, vaginal, and vulvar entries."""
+        assert "endometrial_carcinoma" in plugin._disease_index
+        assert "vaginal_cancer" in plugin._disease_index
+        assert "vulvar_cancer" in plugin._disease_index
+
+    @pytest.mark.asyncio
+    async def test_lookup_endo1(self, plugin):
+        """ENDO-1 returns algorithm page with decision tree."""
+        result = await plugin.lookup_nccn_page("ENDO-1")
+        data = json.loads(result)
+        assert data["page_code"] == "ENDO-1"
+        assert data["content_type"] == "algorithm"
+        assert "decision_tree" in data
+        assert len(data["decision_tree"].get("nodes", [])) > 0
+
+    @pytest.mark.asyncio
+    async def test_lookup_vag1(self, plugin):
+        """VAG-1 returns vaginal cancer algorithm page."""
+        result = await plugin.lookup_nccn_page("VAG-1")
+        data = json.loads(result)
+        assert data["page_code"] == "VAG-1"
+        assert "vaginal" in data.get("disease", "").lower() or "vaginal" in data.get("guideline", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_lookup_vulva1(self, plugin):
+        """VULVA-1 returns vulvar cancer algorithm page."""
+        result = await plugin.lookup_nccn_page("VULVA-1")
+        data = json.loads(result)
+        assert data["page_code"] == "VULVA-1"
+
+    @pytest.mark.asyncio
+    async def test_lookup_not_found(self, plugin):
+        """Missing page code returns error with suggestions."""
+        result = await plugin.lookup_nccn_page("ENDO-99")
+        data = json.loads(result)
+        assert "error" in data
+        assert "available_codes_for_prefix" in data
+
+    @pytest.mark.asyncio
+    async def test_search_endometrial_adjuvant(self, plugin):
+        """Search for endometrial adjuvant treatment returns relevant pages."""
+        result = await plugin.search_nccn_guidelines("endometrial", "Stage IIIC adjuvant treatment")
+        data = json.loads(result)
+        assert data["results_count"] > 0
+        codes = [r.get("page_code", "") for r in data["results"]]
+        # Should include algorithm or principles pages
+        assert any(c.startswith("ENDO") for c in codes), f"Expected ENDO pages, got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_search_vulvar_recurrent(self, plugin):
+        """Search for vulvar recurrent cancer returns results."""
+        result = await plugin.search_nccn_guidelines("vulvar", "recurrent vulvar cancer treatment")
+        data = json.loads(result)
+        assert data["results_count"] > 0
+
+    @pytest.mark.asyncio
+    async def test_systemic_therapy_endometrial_dmmr(self, plugin):
+        """Systemic therapy query for dMMR endometrial returns immunotherapy options."""
+        result = await plugin.get_nccn_systemic_therapy("endometrial", "recurrent", "dMMR,MSI-H")
+        data = json.loads(result)
+        assert "therapy_pages" in data
+        assert len(data["therapy_pages"]) > 0
+        # Should mention immunotherapy agents
+        all_content = json.dumps(data).lower()
+        assert any(drug in all_content for drug in ["dostarlimab", "pembrolizumab"]), \
+            "Expected immunotherapy agents in dMMR systemic therapy results"
+
+    @pytest.mark.asyncio
+    async def test_systemic_therapy_not_found(self, plugin):
+        """Nonexistent cancer type returns error with available diseases."""
+        result = await plugin.get_nccn_systemic_therapy("pancreatic", "adjuvant")
+        data = json.loads(result)
+        assert "error" in data
+        assert "available_diseases" in data
+
+    @pytest.mark.asyncio
+    async def test_response_caps_at_30k(self, plugin):
+        """Responses don't exceed MAX_RESPONSE_CHARS."""
+        result = await plugin.search_nccn_guidelines("endometrial", "treatment")
+        assert len(result) <= 35_000  # Allow some overhead for JSON structure

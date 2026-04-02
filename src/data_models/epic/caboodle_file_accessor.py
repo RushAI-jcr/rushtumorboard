@@ -8,8 +8,8 @@ import csv
 import json
 import logging
 import os
-from io import StringIO
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -60,13 +60,14 @@ class CaboodleFileAccessor:
         PatientID, DiagnosisName, ICD10Code, DateOfEntry, Status
     """
 
-    def __init__(self, data_dir: str = None):
+    def __init__(self, data_dir: str | None = None):
         self.data_dir = data_dir or os.getenv(
             "CABOODLE_DATA_DIR",
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "infra", "patient_data")
         )
         self.data_dir = os.path.abspath(self.data_dir)
-        logger.info(f"CaboodleFileAccessor initialized with data_dir: {self.data_dir}")
+        self._cache: dict[tuple[str, str], list[dict]] = {}
+        logger.info("CaboodleFileAccessor initialized with data_dir: %s", self.data_dir)
 
     async def get_patients(self) -> list[str]:
         """Get the list of patient IDs from subdirectories."""
@@ -75,7 +76,7 @@ class CaboodleFileAccessor:
 
     def _get_patients_sync(self) -> list[str]:
         if not os.path.exists(self.data_dir):
-            logger.warning(f"Data directory does not exist: {self.data_dir}")
+            logger.warning("Data directory does not exist: %s", self.data_dir)
             return []
         patients = [
             d for d in os.listdir(self.data_dir)
@@ -116,6 +117,8 @@ class CaboodleFileAccessor:
                 "date": row.get("OrderDate", row.get("date", "")),
             })
 
+        # Sort unified list chronologically (oldest → newest) so agents see progression over time
+        metadata.sort(key=lambda m: m.get("date", ""))
         return metadata
 
     async def read(self, patient_id: str, note_id: str) -> str:
@@ -128,7 +131,7 @@ class CaboodleFileAccessor:
                 if str(row_id) == str(note_id):
                     return json.dumps(self._normalize_to_note(row, file_type))
 
-        logger.warning(f"Note {note_id} not found for patient {patient_id}")
+        logger.warning("Note %s not found for patient %s", note_id, patient_id)
         return json.dumps({"id": note_id, "text": "", "date": "", "note_type": "unknown"})
 
     async def read_all(self, patient_id: str) -> list[str]:
@@ -166,7 +169,19 @@ class CaboodleFileAccessor:
 
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
         """Get tumor marker results (CA-125, HE4, hCG, CEA, AFP, LDH)."""
-        marker_names = ["ca-125", "ca125", "he4", "hcg", "cea", "afp", "ldh", "scc", "inhibin"]
+        marker_names = [
+            # Hyphen variants (synthetic data + some FHIR sources)
+            "ca-125", "ca125",
+            # Epic Caboodle actual ComponentName values (space-separated)
+            "ca 125",
+            "he4", "he 4",
+            "hcg", "beta-hcg", "beta hcg", "quant b-hcg",
+            "cea",
+            "afp", "alpha fetoprotein",
+            "ldh",
+            "scc", "scc ag", "squamous cell carcinoma antigen",
+            "inhibin",
+        ]
         labs = await self._read_file(patient_id, "lab_results")
         return [
             lab for lab in labs
@@ -194,29 +209,86 @@ class CaboodleFileAccessor:
         """Get diagnosis list."""
         return await self._read_file(patient_id, "diagnoses")
 
+    async def get_clinical_notes_by_type(
+        self, patient_id: str, note_types: Sequence[str]
+    ) -> list[dict]:
+        """Get clinical notes filtered by NoteType.
+
+        Args:
+            patient_id: The patient ID.
+            note_types: List of NoteType values to include (e.g., ["H&P", "Progress Notes"]).
+
+        Returns:
+            List of note dicts matching the given NoteTypes.
+        """
+        notes = await self._read_file(patient_id, "clinical_notes")
+        if not note_types:
+            return notes
+        type_set = {t.lower() for t in note_types}
+        return [
+            n for n in notes
+            if n.get("NoteType", n.get("note_type", "")).lower() in type_set
+        ]
+
+    async def get_clinical_notes_by_keywords(
+        self, patient_id: str, note_types: Sequence[str], keywords: Sequence[str]
+    ) -> list[dict]:
+        """Get clinical notes filtered by NoteType AND containing any keyword in text.
+
+        Args:
+            patient_id: The patient ID.
+            note_types: List of NoteType values to search within.
+            keywords: List of keywords — note is included if any keyword appears in NoteText.
+
+        Returns:
+            List of note dicts matching both NoteType and keyword criteria.
+        """
+        notes = await self.get_clinical_notes_by_type(patient_id, note_types)
+        if not keywords:
+            return notes
+        kw_lower = [k.lower() for k in keywords]
+        return [
+            n for n in notes
+            if any(
+                kw in n.get("NoteText", n.get("note_text", n.get("text", ""))).lower()
+                for kw in kw_lower
+            )
+        ]
+
     # --- Internal helpers ---
 
     async def _read_file(self, patient_id: str, file_type: str) -> list[dict]:
-        """Read a CSV or Parquet file for a patient. Returns list of dicts."""
+        """Read a CSV or Parquet file for a patient. Returns list of dicts.
+
+        Results are cached per (patient_id, file_type) since clinical data
+        is immutable within a session. Eliminates redundant I/O when multiple
+        agents read the same file.
+        """
+        cache_key = (patient_id, file_type)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
         # Validate patient_id to prevent path traversal
         patient_dir = os.path.join(self.data_dir, patient_id)
-        resolved = os.path.realpath(patient_dir)
-        if not resolved.startswith(os.path.realpath(self.data_dir)):
-            raise ValueError(f"Invalid patient_id: path traversal detected")
+        if not Path(patient_dir).resolve().is_relative_to(Path(self.data_dir).resolve()):
+            raise ValueError(f"Invalid patient_id {patient_id!r}: path traversal detected")
 
         # Try parquet first, then CSV
         parquet_path = os.path.join(patient_dir, f"{file_type}.parquet")
         csv_path = os.path.join(patient_dir, f"{file_type}.csv")
 
         if os.path.exists(parquet_path) and HAS_PANDAS:
-            return await self._read_parquet(parquet_path, patient_id)
+            rows = await self._read_parquet(parquet_path, patient_id)
         elif os.path.exists(csv_path):
-            return await self._read_csv(csv_path, patient_id)
+            rows = await self._read_csv(csv_path, patient_id)
         elif file_type == "clinical_notes":
             # Fallback: read legacy JSON files from clinical_notes/ subdirectory
-            return await self._read_legacy_json(patient_id)
+            rows = await self._read_legacy_json(patient_id)
         else:
-            return []
+            rows = []
+
+        self._cache[cache_key] = rows
+        return rows
 
     async def _read_csv(self, filepath: str, patient_id: str) -> list[dict]:
         """Read a CSV file and return list of dicts."""
@@ -224,7 +296,7 @@ class CaboodleFileAccessor:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._read_csv_sync, filepath, patient_id)
         except Exception as e:
-            logger.error(f"Error reading CSV {filepath}: {e}")
+            logger.error("Error reading CSV %s: %s", filepath, e)
             return []
 
     def _read_csv_sync(self, filepath: str, patient_id: str) -> list[dict]:
@@ -245,7 +317,7 @@ class CaboodleFileAccessor:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._read_parquet_sync, filepath, patient_id)
         except Exception as e:
-            logger.error(f"Error reading Parquet {filepath}: {e}")
+            logger.error("Error reading Parquet %s: %s", filepath, e)
             return []
 
     def _read_parquet_sync(self, filepath: str, patient_id: str) -> list[dict]:
@@ -260,7 +332,7 @@ class CaboodleFileAccessor:
         if patient_col:
             df = df[df[patient_col].astype(str) == str(patient_id)]
         else:
-            logger.warning(f"No patient ID column found in {filepath}. Returning all rows.")
+            logger.warning("No patient ID column found in %s. Returning all rows.", filepath)
         return df.to_dict("records")
 
     async def _read_legacy_json(self, patient_id: str) -> list[dict]:
@@ -273,17 +345,21 @@ class CaboodleFileAccessor:
         if not os.path.exists(notes_dir):
             return []
 
+        notes_dir_resolved = Path(notes_dir).resolve()
         notes = []
         for filename in sorted(os.listdir(notes_dir)):
             if filename.endswith(".json"):
                 filepath = os.path.join(notes_dir, filename)
+                if not Path(filepath).resolve().is_relative_to(notes_dir_resolved):
+                    logger.warning("Skipping file outside notes directory: %s", filename)
+                    continue
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
                         note = json.load(f)
                         note.setdefault("id", filename.replace(".json", ""))
                         notes.append(note)
                 except Exception as e:
-                    logger.error(f"Error reading {filepath}: {e}")
+                    logger.error("Error reading %s: %s", filepath, e)
         return notes
 
     def _normalize_to_note(self, row: dict, file_type: str) -> dict:

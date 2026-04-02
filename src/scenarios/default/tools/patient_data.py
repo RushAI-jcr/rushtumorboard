@@ -4,7 +4,6 @@
 import json
 import logging
 import os
-import re
 import textwrap
 from uuid import uuid4
 
@@ -24,7 +23,69 @@ from data_models.plugin_configuration import PluginConfiguration
 from routes.views.patient_data_answer_routes import get_patient_data_answer_source_url
 from routes.views.patient_timeline_routes import get_patient_timeline_entry_source_url
 
+from .validation import validate_patient_id
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# NoteType filter for PatientHistory agent (timeline + process_prompt)
+#
+# Confirmed NoteType values from real Rush Epic Clarity exports.
+# Includes all note types clinically relevant to a GYN oncology tumor board.
+#
+# EXCLUDED (too noisy / non-clinical):
+#   Telephone Encounter, Discharge Instructions, Patient Instructions,
+#   Patient Education, ED Triage Notes, Anesthesia Pre/Postprocedure,
+#   Post Anesthesia Visit, Care Plan, Care Plan Note, Nursing Note,
+#   Discharge Home Health, Social Resource Referral
+#
+# Each other agent that reads notes defines its own narrower type set:
+#   - OncologicHistory: _RELEVANT_NOTE_TYPES (oncologic narrative focus)
+#   - Pathology layer 2: Operative/Procedure notes only
+#   - Pathology layer 3: Progress Notes/Consults + pathology keywords
+#   - Radiology layer 3: Progress Notes/Consults + imaging keywords
+#   - TumorMarkers fallback: Progress Notes/Consults + marker keywords
+# ---------------------------------------------------------------------------
+TIMELINE_NOTE_TYPES = (
+    # Primary clinical narrative
+    "Progress Notes",
+    "Progress Note",
+    "H&P",
+    "H&P (View-Only)",
+    "History and Physical",
+    "Interval H&P Note",
+    "Consults",
+    "Consult Note",
+    "Oncology Consultation",
+    "Discharge Summary",
+    # Procedural / operative
+    "Operative Report",
+    "Operative Note",
+    "Brief Op Note",
+    "Procedures",
+    "Procedure Note",
+    "Procedure Notes",
+    # Assessment / structured notes
+    "Assessment & Plan Note",
+    "AdmissionCare Note",
+    # Outside hospital / external records
+    "Unmapped External Note",
+    # ED clinical notes (not triage)
+    "ED Provider Notes",
+    "ED Notes",
+    "ED Provider Handoff Notes",
+    "ED Procedure Note",
+    # Oncology-specific
+    "Chemotherapy Treatment Note",
+    "Multidisciplinary Tumor Board",
+    "Genetic Counseling",
+    "Result Encounter Note",
+    # Addenda containing clinical updates
+    "Addendum Note",
+    # Pathology / radiology reports (from dedicated CSVs, normalized by accessor)
+    "pathology report",
+    "radiology report",
+)
 
 
 def create_plugin(plugin_config: PluginConfiguration):
@@ -35,9 +96,7 @@ def create_plugin(plugin_config: PluginConfiguration):
     )
 
 
-def _is_valid(input: str) -> bool:
-    pattern = "\\w+[\\s\\w\\-\\.]*"
-    return bool(re.match(pattern, input))
+_MAX_TIMELINE_NOTES = 75  # ~300 KB of text; well within 128K-token context window
 
 
 class PatientDataPlugin:
@@ -66,27 +125,45 @@ class PatientDataPlugin:
                 "clinical notes": clinical_note_metadatas,
                 "images": image_metadatas
             })
-            logger.info(f"Loaded patient data for {patient_id}: {response}")
+            logger.info("Loaded patient data for patient %s: %d items", patient_id, len(clinical_note_metadatas) + len(image_metadatas))
             return response
-        except Exception as e:
-            # try to retrieve valid patients:
-            patients = await self.data_access.clinical_note_accessor.get_patients()
-            logger.exception(f"Error loading patient data for {patient_id}: {e}")
-            return f"Invalid patient ID: {patient_id}. Choose from following patient IDs: {', '.join(patients)}"
+        except Exception:
+            logger.exception("Error loading patient data for patient %s", patient_id)
+            return "Invalid or unavailable patient ID. Please verify and try again."
 
     @kernel_function()
     async def create_timeline(self, patient_id: str) -> str:
         """
         Creates a clinical timeline for a patient.
 
-        Args:  
+        Args:
             patient_id (str): The patient ID to be used.
 
-        Returns:  
+        Returns:
             str: The clinical timeline of the patient.
         """
+        if not _is_valid(patient_id):
+            return "Invalid patient ID"
+
         conversation_id = self.chat_ctx.conversation_id
-        files = await self.data_access.clinical_note_accessor.read_all(patient_id)
+
+        # Filter to clinically relevant note types — avoids sending Telephone Encounters,
+        # Discharge Instructions, Anesthesia notes, etc. to the LLM.
+        # Falls back to read_all() if the accessor does not support type filtering
+        # (e.g., legacy JSON accessor).
+        accessor = self.data_access.clinical_note_accessor
+        if hasattr(accessor, "get_clinical_notes_by_type"):
+            filtered = await accessor.get_clinical_notes_by_type(patient_id, TIMELINE_NOTE_TYPES)
+            files = [json.dumps(r) for r in filtered]
+            if not files:
+                files = await accessor.read_all(patient_id)
+        else:
+            files = await accessor.read_all(patient_id)
+
+        logger.info(
+            "create_timeline: %d notes after type filter for patient %s (from %s)",
+            len(files), patient_id, type(accessor).__name__,
+        )
 
         chat_completion_service: AzureChatCompletion = self.kernel.get_service(service_id="default")
         chat_history = ChatHistory()
@@ -121,9 +198,9 @@ class PatientDataPlugin:
         # Parse the response to PatientTimeline object
         try:
             timeline = PatientTimeline.model_validate_json(chat_resp.content)
-        except Exception as e:
-            logger.error(f"Failed to parse timeline response for {patient_id}: {e}")
-            return f"Error parsing timeline response: {e}"
+        except Exception:
+            logger.error("Failed to parse timeline response for patient %s", patient_id, exc_info=True)
+            return "Error processing timeline. Please try again."
         timeline.patient_id = patient_id
 
         # Save patient timeline
@@ -146,7 +223,7 @@ class PatientDataPlugin:
                 source_text = " ".join(src.sentences) if src.sentences else "No text provided"
                 shortened_source_text = textwrap.shorten(source_text, width=160, placeholder="\u2026")
                 response += f"{indent}- Source: [{shortened_source_text}]({note_url})\n"
-        logger.info(f"Created timeline for {patient_id}: {response}")
+        logger.info("Created timeline for patient %s", patient_id)
 
         return response
 
@@ -167,7 +244,20 @@ class PatientDataPlugin:
             return "Invalid patient ID"
 
         conversation_id = self.chat_ctx.conversation_id
-        files = await self.data_access.clinical_note_accessor.read_all(patient_id)
+
+        accessor = self.data_access.clinical_note_accessor
+        if hasattr(accessor, "get_clinical_notes_by_type"):
+            filtered = await accessor.get_clinical_notes_by_type(patient_id, TIMELINE_NOTE_TYPES)
+            files = [json.dumps(r) for r in filtered]
+            if not files:
+                files = await accessor.read_all(patient_id)
+        else:
+            files = await accessor.read_all(patient_id)
+
+        logger.info(
+            "process_prompt: %d notes after type filter for patient %s",
+            len(files), patient_id,
+        )
 
         chat_history = ChatHistory()
         chat_history.add_system_message(
@@ -185,9 +275,9 @@ class PatientDataPlugin:
         # Parse the response to PatientDataAnswer object
         try:
             answer = PatientDataAnswer.model_validate_json(chat_resp.content)
-        except Exception as e:
-            logger.error(f"Failed to parse patient data answer for {patient_id}: {e}")
-            return f"Error parsing answer response: {e}"
+        except Exception:
+            logger.error("Failed to parse answer response for patient %s", patient_id, exc_info=True)
+            return "Error processing response. Please try again."
         answer_id = str(uuid4())
 
         # Save PatientDataAnswer
@@ -214,7 +304,7 @@ class PatientDataPlugin:
             source_text = " ".join(src.sentences) if src.sentences else "No text provided"
             shortened_source_text = textwrap.shorten(source_text, width=160, placeholder="\u2026")
             response += f"{indent}- Source: [{shortened_source_text}]({note_url})\n"
-        logger.info(f"Created answer for {patient_id}: {response}")
+        logger.info("Created answer for patient %s", patient_id)
 
         return response
 

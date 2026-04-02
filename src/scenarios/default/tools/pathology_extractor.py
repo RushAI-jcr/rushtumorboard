@@ -4,11 +4,14 @@
 # Identifies histologic type, grade, IHC panel, molecular classification,
 # and other GYN-specific pathology data.
 
+import json
+
 from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
 from .medical_report_extractor import MedicalReportExtractorBase
+from .validation import validate_patient_id
 
 PATHOLOGY_SYSTEM_PROMPT = """
     You are a gynecologic oncology pathology specialist. Extract structured findings
@@ -39,6 +42,7 @@ PATHOLOGY_SYSTEM_PROMPT = """
             }
         ],
         "ihc_panel": {
+            "report_date": "date IHC was reported (may differ from surgical date if addendum)",
             "p53": "wild-type/aberrant (overexpression or null)",
             "ER": "positive/negative with % if available",
             "PR": "positive/negative with % if available",
@@ -55,6 +59,7 @@ PATHOLOGY_SYSTEM_PROMPT = """
             "Ki67": "% if available"
         },
         "molecular_results": {
+            "test_date": "date molecular testing was reported (germline/somatic panels are often weeks after surgery)",
             "BRCA1": "pathogenic variant/VUS/negative/not tested",
             "BRCA2": "pathogenic variant/VUS/negative/not tested",
             "HRD_score": "score and status if available",
@@ -74,6 +79,10 @@ PATHOLOGY_SYSTEM_PROMPT = """
 
     If a field is not mentioned in the report, use "not reported".
     Only include information explicitly stated in the reports.
+    CHRONOLOGICAL ORDER IS MANDATORY: The "specimens" array must be sorted oldest report_date first,
+    most recent last (e.g., diagnostic biopsy → primary surgery → recurrence biopsy).
+    Always populate report_date for each specimen, and ihc_panel.report_date and molecular_results.test_date
+    where determinable — these dates are critical for the tumor board and must not be omitted.
     For the endometrial molecular classification, apply ProMisE/TCGA criteria:
     - POLEmut: POLE exonuclease domain mutation present
     - MMRd: Loss of MLH1, PMS2, MSH2, or MSH6 by IHC or MSI-H
@@ -90,9 +99,37 @@ def create_plugin(plugin_config: PluginConfiguration):
 class PathologyExtractorPlugin(MedicalReportExtractorBase):
     report_type = "pathology"
     accessor_method = "get_pathology_reports"
-    fallback_note_type = "pathology"
     system_prompt = PATHOLOGY_SYSTEM_PROMPT
     error_key = "findings"
+
+    # Layer 2: Operative/procedure notes often contain pathology details.
+    # Confirmed in real Rush Epic Clarity exports.
+    layer2_note_types = (
+        "Operative Report", "Operative Note",
+        "Procedures", "Brief Op Note", "Procedure Note", "Procedure Notes",
+        "Surgical Pathology Final", "Pathology Consultation",  # note-form path reports
+        "Unmapped External Note",  # outside hospital pathology
+    )
+    # Layer 3: General notes where physicians summarize pathology findings.
+    # Confirmed NoteTypes in real Rush exports.
+    layer3_note_types = (
+        "Progress Notes", "Progress Note",
+        "Consults", "Consult Note", "Oncology Consultation",
+        "Discharge Summary",
+        "H&P", "History and Physical",
+        "Assessment & Plan Note",
+        "ED Provider Notes",
+        "Addendum Note",
+        "Multidisciplinary Tumor Board",
+    )
+    layer3_keywords = (
+        "pathology", "histolog", "biopsy", "immunohistochem",
+        "carcinoma", "adenocarcinoma", "serous", "endometrioid", "clear cell",
+        "grade 1", "grade 2", "grade 3", "high-grade", "low-grade",
+        "brca", "mmr", "msi", "pole", "p53", "her2", "ihc",
+        "specimen", "frozen section", "surgical pathology",
+        "lymphovascular", "lvsi", "margin", "sentinel lymph",
+    )
 
     @kernel_function(
         description="Extract structured pathology findings from a patient's pathology reports. "
@@ -108,4 +145,6 @@ class PathologyExtractorPlugin(MedicalReportExtractorBase):
         Returns:
             Structured JSON with pathology findings.
         """
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
         return await self._extract(patient_id)

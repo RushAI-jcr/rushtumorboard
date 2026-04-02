@@ -1,8 +1,12 @@
 # Shared base class for LLM-based medical report extraction (pathology, radiology).
 #
-# Eliminates code duplication between pathology_extractor.py and radiology_extractor.py.
-# Subclasses only need to provide: report_type, accessor_method, fallback_note_type,
-# system_prompt, and error_key.
+# Implements a 3-layer fallback strategy:
+#   Layer 1: Dedicated report CSV (pathology_reports.csv / radiology_reports.csv)
+#   Layer 2: Domain-specific clinical note types (Operative Report, Procedures, etc.)
+#   Layer 3: General notes (Progress Notes, H&P, Consults) filtered by keywords
+#
+# Subclasses provide: report_type, accessor_method, system_prompt, error_key,
+# and the layer2/layer3 note types and keywords.
 
 import json
 import logging
@@ -20,14 +24,29 @@ logger = logging.getLogger(__name__)
 
 
 class MedicalReportExtractorBase:
-    """Base class for LLM-based medical report extraction plugins."""
+    """Base class for LLM-based medical report extraction plugins.
+
+    Uses a 3-layer fallback to find the best available data:
+      Layer 1: Dedicated report CSV (e.g., pathology_reports.csv)
+      Layer 2: Domain-specific NoteTypes from clinical_notes.csv
+      Layer 3: General clinical notes filtered by domain keywords
+    """
 
     # Subclasses must override these
     report_type: str = ""              # e.g. "pathology", "radiology"
     accessor_method: str = ""          # e.g. "get_pathology_reports"
-    fallback_note_type: str = ""       # e.g. "pathology", "radiology"
     system_prompt: str = ""            # Full LLM system prompt
     error_key: str = "findings"        # Key name in empty error response
+
+    # Layered fallback configuration — subclasses override (tuples to prevent mutation)
+    layer2_note_types: tuple[str, ...] = ()
+    layer3_note_types: tuple[str, ...] = ()
+    layer3_keywords: tuple[str, ...] = ()
+
+    # Volume caps to prevent LLM context window overflow
+    MAX_REPORTS = 25
+    MAX_CHARS_PER_REPORT = 4000
+    MAX_TOTAL_CHARS = 80_000  # ~20K tokens, leaves room for system prompt
 
     def __init__(self, config: PluginConfiguration):
         self.kernel = config.kernel
@@ -35,44 +54,103 @@ class MedicalReportExtractorBase:
         self.data_access = config.data_access
 
     async def _extract(self, patient_id: str) -> str:
-        """Shared extraction logic: fetch reports → LLM → parse JSON."""
-        # Get reports from data accessor
+        """Layered extraction: dedicated reports → domain notes → keyword-filtered notes → LLM."""
         accessor = self.data_access.clinical_note_accessor
+
+        # --- Layer 1: Dedicated report CSV ---
+        reports = []
+        source_layer = 1
         if hasattr(accessor, self.accessor_method):
             reports = await getattr(accessor, self.accessor_method)(patient_id)
-        else:
-            all_notes = await accessor.read_all(patient_id)
-            reports = []
-            for note_json in all_notes:
-                note = json.loads(note_json) if isinstance(note_json, str) else note_json
-                if self.fallback_note_type in note.get("note_type", "").lower():
-                    reports.append(note)
+
+        # --- Layer 2: Domain-specific NoteTypes ---
+        if not reports and self.layer2_note_types and hasattr(accessor, "get_clinical_notes_by_type"):
+            reports = await accessor.get_clinical_notes_by_type(patient_id, self.layer2_note_types)
+            if reports:
+                source_layer = 2
+                logger.info(
+                    "Layer 2 fallback: found %d %s-relevant notes (types: %s) for patient %s",
+                    len(reports), self.report_type, self.layer2_note_types, patient_id,
+                )
+
+        # --- Layer 3: General notes with keyword filtering ---
+        if not reports and self.layer3_note_types and self.layer3_keywords:
+            if hasattr(accessor, "get_clinical_notes_by_keywords"):
+                reports = await accessor.get_clinical_notes_by_keywords(
+                    patient_id, self.layer3_note_types, self.layer3_keywords
+                )
+            if reports:
+                source_layer = 3
+                logger.info(
+                    "Layer 3 fallback: found %d keyword-matched notes for %s, patient %s",
+                    len(reports), self.report_type, patient_id,
+                )
 
         if not reports:
             return json.dumps({
                 "patient_id": patient_id,
-                "error": f"No {self.report_type} reports found for this patient.",
+                "error": f"No {self.report_type} reports found for this patient across all data layers.",
                 self.error_key: []
             })
 
-        # Build combined report text
+        # Sort chronologically (oldest → newest) so the LLM sees progression over time.
+        # Use OrderDate for dedicated reports, EntryDate for clinical notes.
+        def _report_date_key(r: dict) -> str:
+            return r.get("OrderDate", r.get("EntryDate", r.get("date", r.get("order_date", ""))))
+
+        reports = sorted(reports, key=_report_date_key)
+
+        # Cap report count to prevent context window overflow
+        if len(reports) > self.MAX_REPORTS:
+            logger.info(
+                "Capping %s reports from %d to %d for patient %s (layer %d)",
+                self.report_type, len(reports), self.MAX_REPORTS, patient_id, source_layer,
+            )
+            reports = reports[:self.MAX_REPORTS]
+
+        # Build combined report text with source context and volume caps
         report_texts = []
+        total_chars = 0
         for r in reports:
-            text = r.get("ReportText", r.get("report_text", r.get("text", "")))
-            proc = r.get("ProcedureName", r.get("procedure_name", ""))
-            date = r.get("OrderDate", r.get("date", ""))
-            label = "Report" if self.report_type == "pathology" else "Study"
-            report_texts.append(f"--- {label}: {proc} ({date}) ---\n{text}")
+            text = r.get("ReportText", r.get("report_text", r.get("NoteText", r.get("note_text", r.get("text", "")))))
+            if len(text) > self.MAX_CHARS_PER_REPORT:
+                text = text[:self.MAX_CHARS_PER_REPORT] + "\n[...truncated...]"
+            proc = r.get("ProcedureName", r.get("procedure_name", r.get("NoteType", r.get("note_type", ""))))
+            date = r.get("OrderDate", r.get("EntryDate", r.get("date", "")))
+            label = "Report" if source_layer == 1 else "Clinical Note"
+            entry = f"--- {label}: {proc} ({date}) ---\n{text}"
+            if total_chars + len(entry) > self.MAX_TOTAL_CHARS:
+                logger.info(
+                    "Hit total char cap (%d) for %s extraction, patient %s — using %d of %d reports",
+                    self.MAX_TOTAL_CHARS, self.report_type, patient_id, len(report_texts), len(reports),
+                )
+                break
+            report_texts.append(entry)
+            total_chars += len(entry)
 
         combined_text = "\n\n".join(report_texts)
+
+        # Build user message with layer context
+        if source_layer == 1:
+            user_preamble = f"Extract structured {self.report_type} findings from these dedicated {self.report_type} reports:"
+        elif source_layer == 2:
+            user_preamble = (
+                f"No dedicated {self.report_type} reports are available for this patient. "
+                f"Extract any {self.report_type} findings from these procedure/operative notes "
+                f"that may contain {self.report_type} information:"
+            )
+        else:
+            user_preamble = (
+                f"No dedicated {self.report_type} reports are available for this patient. "
+                f"Extract any {self.report_type} information from these clinical notes where "
+                f"the physician may have summarized or referenced {self.report_type} findings:"
+            )
 
         # LLM extraction
         chat_completion_service: AzureChatCompletion = self.kernel.get_service(service_id="default")
         chat_history = ChatHistory()
         chat_history.add_system_message(textwrap.dedent(self.system_prompt).strip())
-        chat_history.add_user_message(
-            f"Extract structured {self.report_type} findings from these reports:\n\n{combined_text}"
-        )
+        chat_history.add_user_message(f"{user_preamble}\n\n{combined_text}")
 
         settings = AzureChatPromptExecutionSettings(seed=42)
         chat_resp = await chat_completion_service.get_chat_message_content(
@@ -81,7 +159,7 @@ class MedicalReportExtractorBase:
 
         response_text = chat_resp.content if chat_resp.content else ""
         if not response_text:
-            logger.warning(f"Empty LLM response for {self.report_type} extraction, patient {patient_id}")
+            logger.warning("Empty LLM response for %s extraction, patient %s", self.report_type, patient_id)
             return json.dumps({
                 "patient_id": patient_id,
                 "error": f"LLM returned empty response for {self.report_type} extraction.",
@@ -108,5 +186,8 @@ class MedicalReportExtractorBase:
                 "raw_extraction": response_text,
             }, indent=2)
 
-        logger.info(f"Extracted {self.report_type} findings for patient {patient_id}")
+        logger.info(
+            "Extracted %s findings for patient %s (layer %d, %d sources)",
+            self.report_type, patient_id, source_layer, len(reports),
+        )
         return result
