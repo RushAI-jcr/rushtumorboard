@@ -38,8 +38,11 @@ def patient_timeline_entry_source_routes(data_access: DataAccess):
             artifact = await data_access.chat_artifact_accessor.read(artifact_id)
             artifact_json = artifact.data.decode("utf-8")
             timeline = PatientTimeline.model_validate_json(artifact_json)
-            timeline_entry = timeline.entries[int(entry_index)]
-            source = timeline_entry.sources[int(source_index)]
+            try:
+                timeline_entry = timeline.entries[int(entry_index)]
+                source = timeline_entry.sources[int(source_index)]
+            except (IndexError, ValueError):
+                return Response(status_code=404, content="Patient timeline entry not found.")
 
             # Get the clinical note
             note_id = source.note_id
@@ -49,7 +52,7 @@ def patient_timeline_entry_source_routes(data_access: DataAccess):
             body = render_grounded_clinical_note(patient_id, note_dict, source)
             return HTMLResponse(content=body)
         except ResourceNotFoundError:
-            return Response(status_code=404, content=f"Patient timeline entry not found. patient_id: {patient_id}, entry_index: {entry_index}")
+            return Response(status_code=404, content="Patient timeline entry not found.")
 
     return router
 

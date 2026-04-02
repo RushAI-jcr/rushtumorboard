@@ -14,6 +14,8 @@ import aiohttp
 from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import get_bearer_token_provider
 
+from data_models.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
+
 logger = logging.getLogger(__name__)
 
 class FabricClinicalNoteAccessor:

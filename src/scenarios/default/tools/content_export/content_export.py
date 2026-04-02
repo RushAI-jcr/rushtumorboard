@@ -335,14 +335,14 @@ class ContentExportPlugin:
         return rt
 
     @staticmethod
-    def _build_col3_richtext(doc, c: TumorBoardDocContent) -> RichText:
+    def _build_col3_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
         """Column 3: Imaging."""
         rt = RichText()
         rt.add(c.imaging_findings, font="Calibri", size=HP_9, color=DARK_TEXT)
         return rt
 
     @staticmethod
-    def _build_col4_richtext(doc, c: TumorBoardDocContent) -> RichText:
+    def _build_col4_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
         """Column 4: Discussion.
         Matches real Rush tumor board format:
           Review types → "Eligible for trial?" → plan/action items (in RED)

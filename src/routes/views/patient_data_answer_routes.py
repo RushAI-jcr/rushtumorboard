@@ -26,7 +26,6 @@ def patient_data_answer_source_routes(data_access: DataAccess):
     async def get_source(conversation_id: str, patient_id: str, answer_id: str, source_index: str):
         ''' Get a specific source from a patient timeline entry and render it as an HTML page. '''
         try:
-            # Get the patient timeline
             artifact_id = ChatArtifactIdentifier(
                 conversation_id=conversation_id,
                 patient_id=patient_id,
@@ -34,8 +33,13 @@ def patient_data_answer_source_routes(data_access: DataAccess):
             )
             artifact = await data_access.chat_artifact_accessor.read(artifact_id)
             answers = json.loads(artifact.data.decode("utf-8"))
+            if answer_id not in answers:
+                return Response(status_code=404, content="Patient data answer not found.")
             answer = PatientDataAnswer.model_validate_json(answers[answer_id])
-            source = answer.sources[int(source_index)]
+            try:
+                source = answer.sources[int(source_index)]
+            except (IndexError, ValueError):
+                return Response(status_code=404, content="Source not found.")
 
             # Get the clinical note
             note_id = source.note_id
@@ -45,7 +49,7 @@ def patient_data_answer_source_routes(data_access: DataAccess):
             body = render_grounded_clinical_note(patient_id, note_dict, source)
             return HTMLResponse(content=body)
         except ResourceNotFoundError:
-            return Response(status_code=404, content=f"Patient data answer not found. patient_id: {patient_id}, answer_id: {answer_id}")
+            return Response(status_code=404, content="Patient data answer not found.")
 
     return router
 
