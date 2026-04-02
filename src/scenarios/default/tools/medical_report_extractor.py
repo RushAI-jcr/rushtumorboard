@@ -15,6 +15,11 @@ import textwrap
 
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
+
+def _report_date_key(r: dict) -> str:
+    """Sort key for clinical reports: OrderDate → EntryDate → date → order_date."""
+    return r.get("OrderDate", r.get("EntryDate", r.get("date", r.get("order_date", ""))))
+
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
     AzureChatPromptExecutionSettings,
 )
@@ -97,19 +102,20 @@ class MedicalReportExtractorBase:
 
         # Sort chronologically (oldest → newest) so the LLM sees progression over time.
         # Use OrderDate for dedicated reports, EntryDate for clinical notes.
-        def _report_date_key(r: dict) -> str:
-            return r.get("OrderDate", r.get("EntryDate", r.get("date", r.get("order_date", ""))))
-
         reports = sorted(reports, key=_report_date_key)
 
-        # Cap report count to prevent context window overflow
+        # Cap report count to prevent context window overflow.
+        # Keep the NEWEST reports (most clinically relevant for tumor board).
         total_available = len(reports)
         if total_available > self.MAX_REPORTS:
+            oldest_dropped = _report_date_key(reports[0])
+            newest_kept = _report_date_key(reports[-self.MAX_REPORTS])
             logger.info(
-                "Capping %s reports from %d to %d for patient %s (layer %d)",
-                self.report_type, len(reports), self.MAX_REPORTS, patient_id, source_layer,
+                "Capping %s reports from %d to %d for patient %s (layer %d) — keeping most recent (from %s onward); dropped %d older reports before %s",
+                self.report_type, total_available, self.MAX_REPORTS, patient_id, source_layer,
+                newest_kept, total_available - self.MAX_REPORTS, oldest_dropped,
             )
-            reports = reports[:self.MAX_REPORTS]
+            reports = reports[-self.MAX_REPORTS:]
 
         # Build combined report text with source context and volume caps
         report_texts = []
@@ -160,7 +166,7 @@ class MedicalReportExtractorBase:
             chat_history=chat_history, settings=settings
         )
 
-        response_text = chat_resp.content if chat_resp.content else ""
+        response_text = (chat_resp.content or "") if chat_resp is not None else ""
         if not response_text:
             logger.warning("Empty LLM response for %s extraction, patient %s", self.report_type, patient_id)
             return json.dumps({

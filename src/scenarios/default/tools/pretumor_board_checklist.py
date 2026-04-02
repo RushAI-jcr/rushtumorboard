@@ -11,6 +11,7 @@
 #   Path:     Surgical pathology report + IHC (MMR, p53, ER/PR, HER2, POLE/NGS)
 #   Consults: GYN Onc surgery, Med Onc, Rad Onc (as applicable)
 
+import json
 import logging
 from datetime import date, datetime
 
@@ -197,7 +198,7 @@ class PreTumorBoardChecklistPlugin:
             Formatted checklist string with status for each required item.
         """
         if not validate_patient_id(patient_id):
-            return "Invalid patient ID."
+            return json.dumps({"error": "Invalid patient ID."})
 
         as_of = _parse_date(as_of_date) or date.today()
         ctype = cancer_type.lower()

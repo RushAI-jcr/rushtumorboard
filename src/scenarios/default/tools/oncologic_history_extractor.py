@@ -17,7 +17,7 @@ from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
-from .medical_report_extractor import MedicalReportExtractorBase
+from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ ONCOLOGIC_HISTORY_SYSTEM_PROMPT = """
     Rules:
     - If a field is not mentioned in any note, use "not reported" or an empty list.
     - Only include information explicitly stated in the notes.
-    - Sort the treatment_timeline chronologically by date.
+    - Sort treatment_timeline and recurrence_history chronologically by date (oldest → newest).
     - DATES ARE MANDATORY: Every event in treatment_timeline and recurrence_history must have a date_range or date. Every molecular_profile result must include the date it was tested in parentheses, e.g., "BRCA1 pathogenic variant (tested 10/5/25)". Every tumor marker in current_tumor_markers must include its date, e.g., "CA-125 12 U/mL (3/15/26)".
     - For outside patients, clearly distinguish what was done at the outside institution vs. at this institution.
     - Calculate platinum-free interval if the patient had platinum-based chemotherapy and later recurred.
@@ -118,10 +118,21 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
     # Confirmed in real Rush Caboodle exports: "progress notes", "consults", "ed provider notes"
     # Kept for other Epic configs: "h&p", "discharge summary", "operative report"
     # Added from synthetic data: "procedure note", "procedure notes"
+    # Critical for OSH transfer patients (~20-30% of cases):
+    #   "unmapped external note" — outside hospital records transferred into Epic
+    #   "oncology consultation" — formal GYN oncology consult containing prior history
+    #   "addendum note" — molecular/IHC results appended after surgical notes
+    #   "genetic counseling" — BRCA/Lynch germline results
+    #   "chemotherapy treatment note" — regimen details for treatment_timeline
     _RELEVANT_NOTE_TYPES = {
         "h&p", "consults", "progress notes", "discharge summary",
         "operative report", "procedures", "brief op note",
         "ed provider notes", "procedure note", "procedure notes",
+        "unmapped external note",
+        "oncology consultation",
+        "addendum note",
+        "genetic counseling",
+        "chemotherapy treatment note",
     }
     MAX_NOTES = 30
     MAX_CHARS_PER_NOTE = 4000
@@ -204,18 +215,13 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
 
         # Parse JSON from response
         try:
-            if "```json" in response_text:
-                json_str = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                json_str = response_text.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = response_text
-
+            match = _JSON_FENCE_RE.search(response_text)
+            json_str = match.group(1).strip() if match else response_text.strip()
             findings = json.loads(json_str)
             findings["patient_id"] = patient_id
             findings["notes_analyzed"] = len(notes)
             result = json.dumps(findings, indent=2)
-        except (json.JSONDecodeError, IndexError):
+        except json.JSONDecodeError:
             result = json.dumps({
                 "patient_id": patient_id,
                 "notes_analyzed": len(notes),
