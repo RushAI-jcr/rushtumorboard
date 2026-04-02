@@ -156,7 +156,7 @@ class ContentExportPlugin:
         board_discussion: str = "",
         oncologic_history: str = "",
     ) -> str:
-        """Generate a landscape 4-column Word document for GYN Tumor Board review.
+        """Generate a landscape 5-column Word document for GYN Tumor Board review.
 
         Matches the standard tumor board format: one case per page with columns for
         Diagnosis & Pertinent History, Previous Tx/Operative Findings/Tumor Markers,
@@ -211,7 +211,7 @@ class ContentExportPlugin:
         }
         logger.info("Generating tumor board doc")
 
-        # 2. Summarize into 4-column clinical shorthand via LLM
+        # 2. Summarize into 5-column clinical shorthand via LLM
         doc_content = await self._summarize_for_tumor_board_doc(all_data)
 
         # 3. Load template and render with RichText
@@ -373,7 +373,7 @@ class ContentExportPlugin:
     # ── LLM Summarization ──
 
     async def _summarize_for_tumor_board_doc(self, all_data: dict) -> TumorBoardDocContent:
-        """Summarize all agent data into 4-column tumor board format via LLM."""
+        """Summarize all agent data into 5-column tumor board format via LLM."""
         chat_history = ChatHistory()
         chat_history.add_system_message(TUMOR_BOARD_DOC_PROMPT)
         chat_history.add_user_message(

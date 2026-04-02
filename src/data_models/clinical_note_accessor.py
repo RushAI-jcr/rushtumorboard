@@ -9,6 +9,8 @@ from time import time
 
 from azure.storage.blob.aio import BlobServiceClient
 
+from data_models.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,34 +94,16 @@ class ClinicalNoteAccessor:
     async def get_clinical_notes_by_type(
         self, patient_id: str, note_types: Sequence[str]
     ) -> list[dict]:
-        """Filter clinical notes by note type. Fallback: read_all + filter."""
-        all_notes_json = await self.read_all(patient_id)
-        if not note_types:
-            return [json.loads(n) if isinstance(n, str) else n for n in all_notes_json]
-        type_set = {t.lower() for t in note_types}
-        result = []
-        for note_json in all_notes_json:
-            note = json.loads(note_json) if isinstance(note_json, str) else note_json
-            note_type = note.get("note_type", note.get("NoteType", "")).lower()
-            if note_type in type_set:
-                result.append(note)
-        return result
+        """Filter clinical notes by note type."""
+        return filter_notes_by_type(await self.read_all(patient_id), note_types)
 
     async def get_clinical_notes_by_keywords(
         self, patient_id: str, note_types: Sequence[str], keywords: Sequence[str]
     ) -> list[dict]:
-        """Filter notes by type AND keyword. Fallback: read_all + filter."""
-        notes = await self.get_clinical_notes_by_type(patient_id, note_types)
-        if not keywords:
-            return notes
-        kw_lower = [k.lower() for k in keywords]
-        return [
-            n for n in notes
-            if any(
-                kw in n.get("text", n.get("NoteText", n.get("note_text", ""))).lower()
-                for kw in kw_lower
-            )
-        ]
+        """Filter notes by type AND keyword."""
+        return filter_notes_by_keywords(
+            await self.get_clinical_notes_by_type(patient_id, note_types), keywords
+        )
 
     async def get_lab_results(
         self, patient_id: str, component_name: str | None = None
