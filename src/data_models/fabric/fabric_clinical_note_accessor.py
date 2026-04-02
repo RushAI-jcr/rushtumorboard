@@ -3,6 +3,7 @@
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from typing import Any, Callable, Coroutine, List, Optional, Tuple
 import json
 import base64
@@ -146,3 +147,67 @@ class FabricClinicalNoteAccessor:
             batch_results = await asyncio.gather(*batch)
             notes.extend(batch_results)
         return notes
+
+    async def get_clinical_notes_by_type(
+        self, patient_id: str, note_types: Sequence[str]
+    ) -> list[dict]:
+        """Filter clinical notes by note type. Fallback: read_all + filter."""
+        all_notes_json = await self.read_all(patient_id)
+        if not note_types:
+            return [json.loads(n) if isinstance(n, str) else n for n in all_notes_json]
+        type_set = {t.lower() for t in note_types}
+        result = []
+        for note_json in all_notes_json:
+            note = json.loads(note_json) if isinstance(note_json, str) else note_json
+            note_type = note.get("note_type", note.get("NoteType", "")).lower()
+            if note_type in type_set:
+                result.append(note)
+        return result
+
+    async def get_clinical_notes_by_keywords(
+        self, patient_id: str, note_types: Sequence[str], keywords: Sequence[str]
+    ) -> list[dict]:
+        """Filter notes by type AND keyword. Fallback: read_all + filter."""
+        notes = await self.get_clinical_notes_by_type(patient_id, note_types)
+        if not keywords:
+            return notes
+        kw_lower = [k.lower() for k in keywords]
+        return [
+            n for n in notes
+            if any(
+                kw in n.get("text", n.get("NoteText", n.get("note_text", ""))).lower()
+                for kw in kw_lower
+            )
+        ]
+
+    async def get_lab_results(
+        self, patient_id: str, component_name: str | None = None
+    ) -> list[dict]:
+        """Fabric backend does not expose structured lab results via this accessor. Returns empty list."""
+        return []
+
+    async def get_tumor_markers(self, patient_id: str) -> list[dict]:
+        """Fabric backend does not expose structured tumor markers via this accessor. Returns empty list."""
+        return []
+
+    async def get_pathology_reports(self, patient_id: str) -> list[dict]:
+        """Fabric backend does not expose dedicated pathology reports. Returns empty list."""
+        return []
+
+    async def get_radiology_reports(self, patient_id: str) -> list[dict]:
+        """Fabric backend does not expose dedicated radiology reports. Returns empty list."""
+        return []
+
+    async def get_cancer_staging(self, patient_id: str) -> list[dict]:
+        """Fabric backend does not expose structured cancer staging. Returns empty list."""
+        return []
+
+    async def get_medications(
+        self, patient_id: str, order_class: str | None = None
+    ) -> list[dict]:
+        """Fabric backend does not expose structured medications via this accessor. Returns empty list."""
+        return []
+
+    async def get_diagnoses(self, patient_id: str) -> list[dict]:
+        """Fabric backend does not expose structured diagnoses via this accessor. Returns empty list."""
+        return []

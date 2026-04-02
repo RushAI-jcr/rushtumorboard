@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Pre-commit hook: Block commits containing real patient GUIDs (PHI protection)
+#
+# HIPAA compliance: Real Rush University patient GUIDs must never enter the git repo.
+# This hook scans staged file additions and aborts the commit if any real GUID is found.
+#
+# Install (one-time per clone):
+#   cp scripts/git-hooks/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Or use the setup script:
+#   bash scripts/install-hooks.sh
+
+set -euo pipefail
+
+# Real Rush University patient GUIDs — MUST NOT appear in any committed file.
+# These are HIPAA-protected identifiers from the Epic Caboodle export.
+REAL_PATIENT_GUIDS=(
+    "1FEF094B-CAEA-4961-A0AD-65FD3E68AFD5"
+    "4D5B4EE8-B392-410F-B221-6AC38C94FCE8"
+    "8048FA31-B2AB-4928-A341-3D00679F368A"
+    "8DDB2BDB-FA5B-44A7-A7F3-C5BC4B2AAFC6"
+    "9FF31666-29A4-43EC-8342-DD527334902F"
+    "A05CDE0B-1ED9-4572-966E-ABA0B708F9E1"
+    "A80D5E4A-5A9B-4FD8-A360-769486B46171"
+    "AAFEE08B-EB9B-4ACA-96C7-F9604A8AB356"
+    "ADE4F666-7DFE-4740-8CE4-E2EA192863DE"
+    "B30E53EF-27E3-49F1-8581-9A7EDBE07694"
+    "BFBE1F31-7A96-4B39-A1B8-65AF40121812"
+    "E1E1468F-3F2A-47DF-A19E-BB97C069B3B0"
+    "EB7CED43-3C1F-4B49-838A-23D34D45173D"
+    "EC5C4E39-CD6F-4140-A14B-8DAFF5342C00"
+    "FF10B011-F01E-4BBA-B3A3-04EE1FA008F2"
+)
+
+# Build a single case-insensitive OR pattern for efficiency
+GUID_PATTERN=$(printf '%s\n' "${REAL_PATIENT_GUIDS[@]}" | paste -sd '|' -)
+
+# Only examine added lines in staged content (skip context and deletion lines).
+# Exclude the hook file itself — it legitimately contains the GUID blocklist.
+STAGED_ADDITIONS=$(git diff --cached --unified=0 -- ':!scripts/git-hooks/' | grep '^+' | grep -v '^+++' || true)
+
+if [ -z "$STAGED_ADDITIONS" ]; then
+    exit 0
+fi
+
+if echo "$STAGED_ADDITIONS" | grep -qiE "$GUID_PATTERN"; then
+    echo ""
+    echo "COMMIT BLOCKED — PHI detected in staged files"
+    echo "================================================================"
+    echo ""
+
+    # Report which files and which GUIDs
+    STAGED_FILES=$(git diff --cached --name-only)
+    for GUID in "${REAL_PATIENT_GUIDS[@]}"; do
+        for FILE in $STAGED_FILES; do
+            # Check the staged version of the file (index, not working tree)
+            if git show ":$FILE" 2>/dev/null | grep -qiF "$GUID"; then
+                echo "  GUID $GUID found in: $FILE"
+            fi
+        done
+    done
+
+    echo ""
+    echo "Real patient GUIDs are HIPAA-protected identifiers and must not be"
+    echo "committed to the git repository."
+    echo ""
+    echo "To fix:"
+    echo "  1. Remove the GUID from the staged file(s) listed above"
+    echo "  2. Verify infra/patient_data/ is in .gitignore"
+    echo "  3. Re-stage and commit"
+    echo ""
+    exit 1
+fi
+
+exit 0
