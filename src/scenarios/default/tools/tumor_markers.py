@@ -14,7 +14,7 @@ from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
-from .note_type_constants import CONSULT_NOTE_TYPES, DISCHARGE_TYPES, ED_NOTE_TYPES, HP_TYPES, PROGRESS_NOTE_TYPES
+from .note_type_constants import GENERAL_CLINICAL_TYPES
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -66,9 +66,7 @@ class TumorMarkerPlugin:
     #   "ED Provider Notes" — confirmed for germ cell/complex patients
     #   "Discharge Summary" — inpatient stays often summarize marker trends
     #   "H&P"               — kept for non-Rush sources (FHIR/Fabric)
-    _MARKER_NOTE_TYPES: list[str] = list(
-        PROGRESS_NOTE_TYPES + CONSULT_NOTE_TYPES + ED_NOTE_TYPES + DISCHARGE_TYPES + HP_TYPES
-    )
+    _MARKER_NOTE_TYPES: list[str] = list(GENERAL_CLINICAL_TYPES)
     _MARKER_KEYWORDS = [
         "ca-125", "ca125", "ca 125", "he4", "he-4",
         "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",
@@ -232,9 +230,11 @@ class TumorMarkerPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        all_markers = await accessor.get_tumor_markers(patient_id)
-        if not all_markers:
-            all_markers = await accessor.get_lab_results(patient_id)
+        tumor_markers_result, all_labs = await asyncio.gather(
+            accessor.get_tumor_markers(patient_id),
+            accessor.get_lab_results(patient_id),
+        )
+        all_markers = tumor_markers_result if tumor_markers_result else all_labs
 
         if not all_markers:
             # Fallback to clinical notes
