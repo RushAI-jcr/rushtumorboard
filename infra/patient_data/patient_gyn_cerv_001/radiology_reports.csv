@@ -1,0 +1,106 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+RAD001,patient_gyn_cerv_001,MRI Pelvis with and without contrast,2025-11-18,"MRI PELVIS WITH AND WITHOUT IV CONTRAST
+
+CLINICAL INDICATION: Newly diagnosed cervical squamous cell carcinoma. Staging.
+
+TECHNIQUE: Multiplanar multisequence MRI of the pelvis performed at 3T with T1, T2, DWI (b=0, 800, 1000), and post-gadolinium T1 fat-sat sequences in axial, sagittal, and coronal planes.
+
+FINDINGS:
+
+CERVIX: A 4.2 x 3.8 x 3.5 cm mass centered in the cervix, predominantly involving the anterior and posterior lip with extension to the right lateral cervix. The mass is T2 intermediate signal, demonstrates restricted diffusion (ADC 0.78 x 10^-3 mm2/s), and shows heterogeneous enhancement. The mass extends through the cervical stroma into the right parametrium (right cardinal ligament thickening and enhancement extending 18 mm beyond the cervical stroma). The parametrial extension does not reach the right pelvic sidewall (>10 mm clearance). The left parametrium appears uninvolved. The tumor extends into the upper one-third of the vagina anteriorly (approximately 8 mm involvement on sagittal images). The lower two-thirds of the vagina is normal.
+
+UTERUS: Normal size and signal. Endometrial stripe thin and unremarkable. No myometrial masses.
+
+BLADDER: Normal distension. The bladder wall is smooth and intact. No evidence of tumor invasion into the bladder wall or mucosa. No bullous edema.
+
+RECTUM: Normal rectal wall. The rectovaginal septum is preserved. No tumor extension into the rectal wall.
+
+URETERS: No hydroureter or hydronephrosis bilaterally.
+
+LYMPH NODES:
+- Right internal iliac: 1.6 x 1.2 cm short axis, round morphology with restricted diffusion. Suspicious for metastasis.
+- Right obturator: 1.3 x 0.9 cm short axis, round morphology. Suspicious.
+- Left external iliac: 0.9 x 0.7 cm short axis, borderline in size with mildly restricted diffusion. Indeterminate, favor metastatic.
+- No enlarged para-aortic lymph nodes (largest 0.6 cm, normal morphology).
+- No inguinal lymphadenopathy.
+
+BONES: No suspicious osseous lesions. Normal bone marrow signal.
+
+IMPRESSION:
+1. 4.2 cm cervical squamous cell carcinoma with right parametrial invasion (not reaching pelvic sidewall) and anterior upper vaginal involvement. FIGO 2018 Stage IIB.
+2. Suspicious right internal iliac (1.6 cm) and right obturator (1.3 cm) lymphadenopathy. Indeterminate left external iliac node (0.9 cm).
+3. No bladder or rectal invasion. No hydronephrosis.
+4. No para-aortic lymphadenopathy. No osseous metastases.
+5. PET/CT recommended for systemic staging and lymph node characterization."
+RAD002,patient_gyn_cerv_001,PET/CT FDG whole body,2025-11-20,"PET/CT FDG WHOLE BODY
+
+CLINICAL INDICATION: Cervical cancer FIGO IIB (MRI-confirmed). Staging. Evaluate for nodal and distant disease.
+
+TECHNIQUE: Whole body PET/CT performed 60 minutes after IV administration of 12.2 mCi F-18 FDG. Blood glucose at time of injection: 94 mg/dL. Low-dose CT acquired for attenuation correction and anatomic localization.
+
+FINDINGS:
+
+HEAD AND NECK: No hypermetabolic lesions. Normal brain uptake.
+
+CHEST: Lungs are clear. No pulmonary nodules or masses. No pleural effusion. No mediastinal or hilar lymphadenopathy. Heart size normal.
+
+ABDOMEN:
+Liver: No focal hepatic lesions. Normal hepatic uptake.
+Spleen: Normal.
+Adrenals: Normal bilaterally.
+Kidneys: Normal bilaterally. No hydronephrosis.
+Pancreas: Normal.
+No retroperitoneal lymphadenopathy. Para-aortic nodes are not enlarged and not FDG-avid.
+Normal bowel uptake pattern. No suspicious mesenteric or omental disease.
+
+PELVIS:
+Cervical mass: Intensely FDG-avid mass measuring 4.3 x 3.9 cm (CT dimensions) with SUVmax 18.4. Correlates with known cervical carcinoma.
+Right parametrial extension is FDG-avid, confirming parametrial invasion.
+Uterus: Normal FDG uptake. No suspicious lesions.
+Bladder: Normal. No FDG-avid mural abnormality.
+Ovaries: Normal bilateral ovarian uptake.
+
+LYMPH NODES:
+Right internal iliac: 1.6 cm, FDG-avid, SUVmax 8.4. Metastatic.
+Right obturator: 1.3 cm, FDG-avid, SUVmax 6.2. Metastatic.
+Left external iliac: 0.9 cm, FDG-avid, SUVmax 4.8. Suspicious for metastasis.
+No FDG-avid para-aortic, inguinal, supraclavicular, or mediastinal nodes.
+
+MUSCULOSKELETAL: No FDG-avid osseous lesions. No suspicious bone metastases.
+
+IMPRESSION:
+1. Intensely FDG-avid cervical mass (SUVmax 18.4) consistent with known cervical carcinoma.
+2. FDG-avid right internal iliac (SUVmax 8.4), right obturator (SUVmax 6.2), and left external iliac (SUVmax 4.8) lymph nodes consistent with nodal metastases. Disease confined to the pelvis.
+3. No para-aortic lymphadenopathy.
+4. No distant metastatic disease.
+5. Findings consistent with FIGO 2018 Stage IIB cervical cancer with pelvic nodal involvement (IIIC1p if nodal disease is pathologically confirmed; however, per FIGO 2018, imaging-detected nodes are designated with an 'r' suffix: Stage IIIC1r)."
+RAD003,patient_gyn_cerv_001,MRI Pelvis with and without contrast - brachytherapy planning,2026-01-10,"MRI PELVIS WITH AND WITHOUT IV CONTRAST - BRACHYTHERAPY PLANNING
+
+CLINICAL INDICATION: Cervical SCC FIGO IIB s/p 5 weeks concurrent cisplatin-RT (45 Gy EBRT + 55 Gy SIB to nodes). Pre-brachytherapy assessment.
+
+COMPARISON: MRI pelvis 2025-11-18
+
+TECHNIQUE: 3T MRI with T2-weighted, DWI, and post-contrast sequences.
+
+FINDINGS:
+
+CERVIX: The previously identified cervical mass has significantly decreased in size, now measuring 2.1 x 1.8 x 1.6 cm (previously 4.2 x 3.8 x 3.5 cm, representing >50% reduction in maximum dimension). Residual T2 intermediate signal in the cervix with less restricted diffusion (ADC 1.12 x 10^-3 mm2/s, previously 0.78). Reduced enhancement compared to baseline. The right parametrial thickening has improved; residual mild enhancement in the right cardinal ligament without definite discrete tumor extension. The cervical stromal ring is partially reconstituted on the right. Left parametrium remains uninvolved. No vaginal extension identified (previously 8 mm anterior vaginal involvement - resolved).
+
+UTERUS: Unchanged, unremarkable.
+
+BLADDER: Normal. No radiation-induced changes evident by MRI.
+
+RECTUM: Mild rectal wall thickening consistent with radiation proctitis. No tumor involvement.
+
+LYMPH NODES:
+- Right internal iliac: Decreased to 0.8 cm (previously 1.6 cm). No restricted diffusion.
+- Right obturator: Decreased to 0.6 cm (previously 1.3 cm). Normal morphology.
+- Left external iliac: Decreased to 0.5 cm (previously 0.9 cm). Normal.
+- No new lymphadenopathy.
+
+IMPRESSION:
+1. Excellent partial response to concurrent chemoradiation. Cervical mass decreased from 4.2 cm to 2.1 cm (>50% reduction).
+2. Resolution of anterior vaginal involvement.
+3. Improvement in right parametrial disease; residual mild enhancement without definite discrete tumor.
+4. Near-complete resolution of previously suspicious pelvic lymphadenopathy.
+5. Residual disease is amenable to brachytherapy boost. HRCTV estimated at approximately 18 cc."

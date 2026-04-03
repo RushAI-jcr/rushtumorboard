@@ -461,7 +461,7 @@ class NCCNGuidelinesPlugin:
 
         results = []
         total_chars = 0
-        for code, score in ranked[:7]:
+        for code, _ in ranked[:7]:
             page = self._pages[code]
             page_response = self._format_page_response(page, include_full_markdown=True)
             if total_chars + len(page_response) > MAX_RESPONSE_CHARS:

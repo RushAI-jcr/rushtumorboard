@@ -1,0 +1,11 @@
+PatientID,DiagnosisName,ICD10Code,DateOfEntry,Status
+patient_gyn_cerv_001,Malignant neoplasm of cervix uteri unspecified,C53.9,2025-11-15,Active
+patient_gyn_cerv_001,Squamous cell carcinoma of cervix,C53.9,2025-11-15,Active
+patient_gyn_cerv_001,Secondary malignant neoplasm of pelvic lymph nodes,C77.5,2025-11-22,Active
+patient_gyn_cerv_001,Human papillomavirus infection,B97.7,2025-11-15,Active
+patient_gyn_cerv_001,Encounter for antineoplastic radiation therapy,Z51.0,2025-12-08,Active
+patient_gyn_cerv_001,Encounter for antineoplastic chemotherapy,Z51.11,2025-12-08,Active
+patient_gyn_cerv_001,Obesity unspecified,E66.9,2025-11-04,Active
+patient_gyn_cerv_001,Mild intermittent asthma uncomplicated,J45.20,2020-03-10,Active
+patient_gyn_cerv_001,Radiation cystitis,N30.40,2026-01-05,Active
+patient_gyn_cerv_001,Radiation proctitis,K62.7,2025-12-22,Active

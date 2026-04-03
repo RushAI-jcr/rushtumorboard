@@ -1,0 +1,3 @@
+PatientID,StageDate,StagingSystem,TNM_T,TNM_N,TNM_M,StageGroup,FIGOStage
+patient_gyn_cerv_001,2025-11-22,FIGO 2018 / AJCC 8th Edition,T2b,N1,M0,IIIC1r,IIB
+patient_gyn_cerv_001,2026-01-10,FIGO 2018 (post-chemoRT assessment),T2b,N1,M0,IIIC1r,IIB

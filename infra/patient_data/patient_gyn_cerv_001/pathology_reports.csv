@@ -1,0 +1,51 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+PATH001,patient_gyn_cerv_001,Cervical punch biopsy,2025-11-04,"PATHOLOGY REPORT - CERVICAL BIOPSY
+
+SPECIMEN: Cervix, punch biopsy (anterior lip, 2 fragments; posterior lip, 1 fragment)
+
+DIAGNOSIS: Invasive squamous cell carcinoma, keratinizing type, moderately differentiated (Grade 2).
+
+MICROSCOPIC: Fragments of cervical tissue with surface ulceration and underlying invasive squamous cell carcinoma. The tumor is composed of irregular nests and tongues of squamous epithelium with central keratinization, keratinpearls, and intercellular bridges. Moderate nuclear atypia with increased mitotic activity (8 mitoses per 10 HPF). Desmoplastic stromal reaction. Lymphovascular space invasion (LVSI) identified. Depth of invasion exceeds the biopsy depth (at least 8 mm from surface). Adjacent high-grade squamous intraepithelial lesion (HSIL/CIN 3) identified at biopsy margin.
+
+IMMUNOHISTOCHEMISTRY:
+- p16: Block positive (diffuse, strong) - consistent with HPV-driven carcinoma
+- p53: Wild-type staining pattern (scattered, variable intensity)
+- Ki-67: Elevated (60-70% in invasive component)
+- CK5/6: Positive (confirms squamous differentiation)
+- p40: Positive (confirms squamous differentiation)
+- CK7: Focal positive
+- CK20: Negative
+- PD-L1 (22C3): Combined Positive Score (CPS) = 20
+
+HPV TESTING:
+- HPV-16: Positive (by cobas HPV test)
+- HPV-18: Negative
+- Other high-risk HPV: Negative
+
+COMMENT: Invasive squamous cell carcinoma of the cervix, HPV-16 associated. The block-positive p16 staining pattern is consistent with high-risk HPV-driven oncogenesis. LVSI is present, which is a prognostic factor. PD-L1 CPS 20 may have implications for potential immunotherapy eligibility in advanced/recurrent setting (per KEYNOTE-826). Clinical staging and cross-sectional imaging recommended for further management."
+PATH002,patient_gyn_cerv_001,Cone biopsy (LEEP),2025-11-10,"PATHOLOGY REPORT - CONE BIOPSY (LEEP EXCISION)
+
+SPECIMEN: Cervix, LEEP cone biopsy
+
+GROSS: Cone-shaped specimen measuring 2.5 x 2.2 x 1.8 cm. The ectocervical surface shows a raised, friable, tan-white lesion measuring 1.8 x 1.5 cm. Serially sectioned and entirely submitted in 8 cassettes (A-H).
+
+DIAGNOSIS: Invasive squamous cell carcinoma, keratinizing type, moderately differentiated.
+
+TUMOR MEASUREMENTS:
+- Horizontal extent: 1.8 cm
+- Depth of invasion: 12 mm from surface epithelium
+- Tumor thickness: 14 mm
+
+MARGINS:
+- Ectocervical margin: Negative (5 mm clearance, HSIL present at 3 mm from margin)
+- Endocervical margin: Positive for invasive carcinoma
+- Deep stromal margin: Positive for invasive carcinoma
+
+ADDITIONAL FINDINGS:
+- LVSI: Present (extensive, >5 foci)
+- Perineural invasion: Not identified
+- Associated HSIL (CIN 3): Present, extending to within 3 mm of ectocervical margin
+- Endocervical gland involvement by HSIL: Present
+- Stromal response: Desmoplastic, with chronic inflammatory infiltrate
+
+COMMENT: Positive endocervical and deep margins confirm this is not an excisional procedure for cure. Tumor depth of 12 mm and extensive LVSI indicate locally advanced disease requiring definitive treatment with chemoradiation per NCCN guidelines. Clinical staging (FIGO 2018) should be performed with MRI and PET/CT."

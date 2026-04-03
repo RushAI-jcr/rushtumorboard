@@ -1,0 +1,10 @@
+PatientID,MedicationName,StartDate,EndDate,Route,Dose,Frequency,OrderClass
+patient_gyn_cerv_001,Cisplatin,2025-12-08,2026-01-05,IV,40 mg/m2,Weekly x 5,Chemotherapy
+patient_gyn_cerv_001,Ondansetron,2025-12-08,2026-01-05,IV/Oral,16 mg,Pre-chemo,Supportive Care
+patient_gyn_cerv_001,Dexamethasone,2025-12-08,2026-01-05,IV,12 mg,Pre-chemo,Supportive Care
+patient_gyn_cerv_001,Fosaprepitant,2025-12-08,2026-01-05,IV,150 mg,Pre-chemo,Supportive Care
+patient_gyn_cerv_001,Loperamide,2025-12-15,,Oral,2 mg,As needed (max 16 mg/day),Supportive Care
+patient_gyn_cerv_001,Silver Sulfadiazine Cream,2025-12-22,2026-01-28,Topical,1%,Twice daily,Supportive Care
+patient_gyn_cerv_001,Albuterol,2020-03-10,,Inhaled,90 mcg/puff (2 puffs),As needed,Medication
+patient_gyn_cerv_001,Magnesium Oxide,2025-12-29,,Oral,400 mg,Daily,Supportive Care
+patient_gyn_cerv_001,Ferrous Sulfate,2026-01-05,,Oral,325 mg,Daily,Supportive Care

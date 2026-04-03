@@ -27,6 +27,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pymupdf
 
@@ -58,10 +59,6 @@ _DISCUSSION_CODE_RE = re.compile(r"MS-(\d+)\s*$", re.MULTILINE)
 _ABBR_CODE_RE = re.compile(r"ABBR-(\d+)\s*$", re.MULTILINE)
 # Evidence Blocks definition: EB-DEF
 _EB_DEF_CODE_RE = re.compile(r"EB-DEF\s*$", re.MULTILINE)
-
-# Page codes for algorithm pages (numeric suffix) vs principles (letter suffix)
-_ALGO_PAGE_CODES = re.compile(rf"^({_ALL_GROUP})-\d+")
-_PRINCIPLES_PAGE_CODES = re.compile(rf"^({_DISEASE_GROUP})-[A-Z]")
 
 # Disease site mapping
 _DISEASE_MAP = {
@@ -105,11 +102,11 @@ def extract_page_code(page: pymupdf.Page) -> tuple[str | None, str]:
     # Get text from bottom 15% of the page where codes live
     rect = page.rect
     bottom_rect = pymupdf.Rect(rect.x0, rect.y1 * 0.85, rect.x1, rect.y1)
-    bottom_text = page.get_text("text", clip=bottom_rect)
+    bottom_text = page.get_text("text", clip=bottom_rect)  # type: ignore[attr-defined]
 
     # Also check right side for page codes (some NCCN pages put them bottom-right)
     right_rect = pymupdf.Rect(rect.x1 * 0.7, rect.y1 * 0.8, rect.x1, rect.y1)
-    right_text = page.get_text("text", clip=right_rect)
+    right_text = page.get_text("text", clip=right_rect)  # type: ignore[attr-defined]
 
     combined = bottom_text + "\n" + right_text
 
@@ -154,7 +151,7 @@ def extract_page_code(page: pymupdf.Page) -> tuple[str | None, str]:
 
 def classify_page_by_content(page: pymupdf.Page) -> str:
     """Fallback classification using drawing density and text block patterns."""
-    blocks = page.get_text("dict")["blocks"]
+    blocks = page.get_text("dict")["blocks"]  # type: ignore[attr-defined]
     drawings = page.get_drawings()
 
     text_blocks = [b for b in blocks if b["type"] == 0]
@@ -182,7 +179,7 @@ def extract_algorithm_geometry(page: pymupdf.Page, page_num: int) -> dict:
     Returns structured geometry for LLM-based flowchart reconstruction.
     """
     text_blocks = []
-    raw_dict = page.get_text("dict", flags=pymupdf.TEXT_PRESERVE_WHITESPACE)
+    raw_dict = page.get_text("dict", flags=pymupdf.TEXT_PRESERVE_WHITESPACE)  # type: ignore[attr-defined]
 
     for block in raw_dict["blocks"]:
         if block["type"] != 0:
@@ -214,7 +211,7 @@ def extract_algorithm_geometry(page: pymupdf.Page, page_num: int) -> dict:
 
     # Render page as PNG for vision model
     mat = pymupdf.Matrix(2, 2)  # 2x = 144 DPI
-    pix = page.get_pixmap(matrix=mat)
+    pix = page.get_pixmap(matrix=mat)  # type: ignore[attr-defined]
     image_bytes = pix.tobytes("png")
 
     return {
@@ -231,7 +228,7 @@ def extract_page_title(page: pymupdf.Page) -> str:
     rect = page.rect
     # Title is usually in the top 20%, below the NCCN header bar
     top_rect = pymupdf.Rect(rect.x0, rect.y0 + 60, rect.x1, rect.y0 + 150)
-    text = page.get_text("text", clip=top_rect).strip()
+    text = page.get_text("text", clip=top_rect).strip()  # type: ignore[attr-defined]
     # Clean up multiple lines
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     # Skip NCCN header lines
@@ -250,7 +247,7 @@ def extract_footnotes_from_page(page: pymupdf.Page) -> dict[str, str]:
     rect = page.rect
     # Footnotes typically in bottom 25% of page
     bottom_rect = pymupdf.Rect(rect.x0, rect.y1 * 0.72, rect.x1, rect.y1 * 0.95)
-    text = page.get_text("text", clip=bottom_rect).strip()
+    text = page.get_text("text", clip=bottom_rect).strip()  # type: ignore[attr-defined]
 
     footnotes = {}
     # Match patterns like: a Text of footnote  or  a See Principles...
@@ -460,7 +457,7 @@ def extract_with_docling(pdf_path: Path) -> dict:
     # Get tables with provenance
     tables = []
     for table in doc.tables:
-        table_data = {
+        table_data: dict[str, Any] = {
             "markdown": table.export_to_markdown(),
         }
         if table.prov:
@@ -492,7 +489,7 @@ def detect_guideline_info(pdf_path: Path) -> dict:
     # Read first 3 pages to find metadata
     cover_text = ""
     for i in range(min(3, len(doc))):
-        cover_text += doc[i].get_text("text") + "\n"
+        cover_text += doc[i].get_text("text") + "\n"  # type: ignore[attr-defined]
     doc.close()
 
     # Extract version
@@ -606,7 +603,7 @@ def process_pdf(
         geometry = extract_algorithm_geometry(page, pg["page_num"])
 
         # Get full page text for cross-reference extraction
-        full_text = page.get_text("text")
+        full_text = page.get_text("text")  # type: ignore[attr-defined]
         cross_refs = extract_cross_references(full_text)
         # Remove self-reference
         cross_refs = [r for r in cross_refs if r != page_code]
@@ -662,7 +659,7 @@ def process_pdf(
         logger.info("Processing %s page %d: %s", pg["content_type"], pg["page_num"], page_code)
 
         title = extract_page_title(page)
-        full_text = page.get_text("text")
+        full_text = page.get_text("text")  # type: ignore[attr-defined]
         footnotes = extract_footnotes_from_page(page)
         cross_refs = extract_cross_references(full_text)
         cross_refs = [r for r in cross_refs if r != page_code]
@@ -798,7 +795,7 @@ def main():
             api_key = os.environ.get("AZURE_OPENAI_API_KEY")
 
             if endpoint:
-                client_kwargs = {
+                client_kwargs: dict[str, Any] = {
                     "azure_endpoint": endpoint,
                     "api_version": "2024-12-01-preview",
                 }
