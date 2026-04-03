@@ -112,7 +112,7 @@ def create_group_chat(
 ) -> Tuple[AgentGroupChat, ChatContext]:
     participant_configs = participants or app_ctx.all_agent_configs
     participant_names = [cfg.get("name", "unnamed") for cfg in participant_configs]
-    logger.info(f"Creating group chat with participants: {participant_names}")
+    logger.info("Creating group chat with participants: %s", participant_names)
 
     # Remove magentic agent from the list of agents. In the future, we could add agent type to deal with agents that should not be included in the Semantic Kernel group chat.
     all_agents_config = [
@@ -122,10 +122,11 @@ def create_group_chat(
     def _create_kernel_with_chat_completion(deployment_override: str | None = None) -> Kernel:
         kernel = Kernel()
         deployment = deployment_override or os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"]
+        api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
         service_kwargs = {
             "service_id": "default",
             "deployment_name": deployment,
-            "api_version": "2025-04-01-preview",
+            "api_version": api_version,
         }
         api_key = os.environ.get("AZURE_OPENAI_API_KEY")
         if api_key:
@@ -183,11 +184,10 @@ def create_group_chat(
             temperature = agent_config.get("temperature", DEFAULT_MODEL_TEMP)
             if temperature is None:
                 temperature = DEFAULT_MODEL_TEMP
-            logger.info(f"Setting model temperature for agent {agent_config['name']} to {temperature}")
+            logger.debug("Agent %s: temperature=%s", agent_config["name"], temperature)
         else:
             temperature = None
-            logger.info(
-                f"Model does not support temperature. Setting temperature to None for agent {agent_config['name']}")
+            logger.debug("Agent %s: temperature=None (reasoning model)", agent_config["name"])
         settings = AzureChatPromptExecutionSettings(
             function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, temperature=temperature)
         arguments = KernelArguments(settings=settings)
@@ -298,12 +298,12 @@ def create_group_chat(
     agents = [_create_agent(agent) for agent in all_agents_config]
 
     def evaluate_termination(result):
-        logger.info(f"Termination function result: {result}")
+        logger.debug("Termination function result: %s", result)
         rule = ChatRule.model_validate_json(str(result.value[0]))
         return rule.verdict == "yes"
 
     def evaluate_selection(result):
-        logger.info(f"Selection function result: {result}")
+        logger.debug("Selection function result: %s", result)
         rule = ChatRule.model_validate_json(str(result.value[0]))
         return rule.verdict if rule.verdict in [agent["name"] for agent in all_agents_config] else facilitator
 
@@ -331,7 +331,7 @@ def create_group_chat(
             maximum_iterations=30,
             # Termination only looks at the last message
             history_reducer=ChatHistoryTruncationReducer(
-                target_count=1, auto_reduce=True
+                target_count=3, auto_reduce=True
             ),
         ),
     )

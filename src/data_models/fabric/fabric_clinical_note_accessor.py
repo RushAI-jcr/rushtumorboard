@@ -183,6 +183,9 @@ class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
                 del self._note_cache[oldest]
             self._note_cache[patient_id] = notes
 
+            # Clean up the per-patient lock — cache is populated, lock is no longer needed
+            self._read_locks.pop(patient_id, None)
+
         return notes
 
     async def get_clinical_notes_by_type(

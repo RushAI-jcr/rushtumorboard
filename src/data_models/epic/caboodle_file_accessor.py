@@ -291,13 +291,19 @@ class CaboodleFileAccessor:
         if not Path(patient_dir).resolve().is_relative_to(self._resolved_data_dir):
             raise ValueError(f"Invalid patient_id {patient_id!r}: path traversal detected")
 
-        # Try parquet first, then CSV
+        # Try parquet first, then CSV — use executor to avoid blocking the event loop
         parquet_path = os.path.join(patient_dir, f"{file_type}.parquet")
         csv_path = os.path.join(patient_dir, f"{file_type}.csv")
 
-        if os.path.exists(parquet_path) and HAS_PANDAS:
+        loop = asyncio.get_running_loop()
+        parquet_exists, csv_exists = await asyncio.gather(
+            loop.run_in_executor(None, os.path.exists, parquet_path),
+            loop.run_in_executor(None, os.path.exists, csv_path),
+        )
+
+        if parquet_exists and HAS_PANDAS:
             rows = await self._read_parquet(parquet_path, patient_id)
-        elif os.path.exists(csv_path):
+        elif csv_exists:
             rows = await self._read_csv(csv_path, patient_id)
         elif file_type == "clinical_notes":
             # Fallback: read legacy JSON files from clinical_notes/ subdirectory

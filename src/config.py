@@ -71,20 +71,61 @@ def setup_logging(log_level=logging.DEBUG) -> None:
     logger.setLevel(log_level)
 
 
-def load_agent_config(scenario: str) -> dict:
+_REQUIRED_AGENT_FIELDS = {"name", "description"}
+_VALID_TOOL_TYPES = {"function", "openapi"}
+
+
+def _validate_agent_config(agents: list[dict], scenario: str) -> None:
+    """Validate agents.yaml structure at startup to catch config errors early."""
+    for i, agent in enumerate(agents):
+        # Required top-level fields
+        for field in _REQUIRED_AGENT_FIELDS:
+            if field not in agent:
+                raise ValueError(
+                    f"agents.yaml[{i}]: missing required field '{field}'"
+                )
+        name = agent["name"]
+        # Validate tool entries
+        for tool in agent.get("tools", []):
+            if "name" not in tool:
+                raise ValueError(
+                    f"agents.yaml agent '{name}': tool entry missing 'name'"
+                )
+            tool_type = tool.get("type", "function")
+            if tool_type not in _VALID_TOOL_TYPES:
+                raise ValueError(
+                    f"agents.yaml agent '{name}': unknown tool type '{tool_type}'"
+                )
+            # Verify function tool modules are importable
+            if tool_type == "function":
+                tool_name = tool["name"]
+                try:
+                    import importlib
+                    importlib.import_module(f"scenarios.{scenario}.tools.{tool_name}")
+                except ModuleNotFoundError:
+                    raise ValueError(
+                        f"agents.yaml agent '{name}': tool module "
+                        f"'scenarios.{scenario}.tools.{tool_name}' not found"
+                    )
+
+
+def load_agent_config(scenario: str) -> list[dict]:
     src_dir = os.path.dirname(os.path.abspath(__file__))
     scenario_directory = os.path.join(src_dir, f"scenarios/{scenario}/config")
 
     agent_config_path = os.path.join(scenario_directory, "agents.yaml")
     excluded_agents_env = os.getenv("EXCLUDED_AGENTS", "")
     excluded_agents = excluded_agents_env.split(",") if excluded_agents_env else []
-    logger.info(f"Excluding agents: {excluded_agents}")
+    logger.info("Excluding agents: %s", excluded_agents)
 
     with open(agent_config_path, "r", encoding="utf-8") as f:
         agent_config = yaml.safe_load(f)
         agent_config = [agent for agent in agent_config if agent["name"] not in excluded_agents]
+        _validate_agent_config(agent_config, scenario)
         logger.info(
-            f"Loaded agent configuration for scenario '{scenario}': {[agent['name'] for agent in agent_config]}")
+            "Loaded agent config for scenario '%s': %s",
+            scenario, [agent["name"] for agent in agent_config],
+        )
 
     try:
         bot_ids = json.loads(os.getenv("BOT_IDS", "{}"))
@@ -106,7 +147,7 @@ def load_agent_config(scenario: str) -> dict:
                     with open(filepath) as f:
                         agent["instructions"] += f.read()
                 except FileNotFoundError:
-                    logger.warning(f"Additional instructions file not found: {filepath}")
+                    logger.warning("Additional instructions file not found: %s", filepath)
 
     return agent_config
 

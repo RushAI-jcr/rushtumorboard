@@ -159,7 +159,7 @@ class MedicalResearchPlugin:
         Returns:
             dict with keys: text, sources, search_metadata.
         """
-        logger.info(f"MedicalResearch query: {prompt}")
+        logger.info("MedicalResearch query received (len=%d)", len(prompt))
 
         # 1. Search all three sources concurrently
         async with aiohttp.ClientSession() as session:
@@ -172,13 +172,13 @@ class MedicalResearchPlugin:
 
         # Handle failures gracefully — log and continue with whatever succeeded
         if isinstance(pubmed_results, BaseException):
-            logger.info(f"pubmed search failed: {pubmed_results}")
+            logger.warning("PubMed search failed: %s", pubmed_results)
             pubmed_results = []
         if isinstance(europepmc_results, BaseException):
-            logger.info(f"europepmc search failed: {europepmc_results}")
+            logger.warning("EuropePMC search failed: %s", europepmc_results)
             europepmc_results = []
         if isinstance(semantic_results, BaseException):
-            logger.info(f"semantic_scholar search failed: {semantic_results}")
+            logger.warning("Semantic Scholar search failed: %s", semantic_results)
             semantic_results = []
         source_counts = {
             "pubmed": len(pubmed_results),
@@ -186,16 +186,19 @@ class MedicalResearchPlugin:
             "semantic_scholar": len(semantic_results),
         }
 
-        logger.info(f"Search results — PubMed: {source_counts.get('pubmed', 0)}, "
-                     f"EuropePMC: {source_counts.get('europepmc', 0)}, "
-                     f"SemanticScholar: {source_counts.get('semantic_scholar', 0)}")
+        logger.info(
+            "Search results — PubMed: %d, EuropePMC: %d, SemanticScholar: %d",
+            source_counts.get("pubmed", 0),
+            source_counts.get("europepmc", 0),
+            source_counts.get("semantic_scholar", 0),
+        )
 
         # 2. PubMed-first dedup + merge
         merged = self._deduplicate_pubmed_first(pubmed_results, europepmc_results, semantic_results)
 
         # 3. Filter out papers with no abstract
         merged = [p for p in merged if p.get("abstract", "").strip()]
-        logger.info(f"Papers with abstracts after dedup: {len(merged)}")
+        logger.info("Papers with abstracts after dedup: %d", len(merged))
 
         # 4. Handle no results
         if not merged:

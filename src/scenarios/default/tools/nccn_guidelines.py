@@ -86,7 +86,17 @@ class NCCNGuidelinesPlugin:
 
     @classmethod
     def _find_data_dir(cls) -> Path | None:
-        """Locate data/nccn_guidelines/ relative to the source tree."""
+        """Locate data/nccn_guidelines/ relative to the source tree.
+
+        Checks NCCN_DATA_DIR env var first, then falls back to relative paths.
+        """
+        env_dir = os.environ.get("NCCN_DATA_DIR")
+        if env_dir:
+            resolved = Path(env_dir).resolve()
+            if resolved.is_dir():
+                return resolved
+            logger.warning("NCCN_DATA_DIR=%s does not exist or is not a directory", env_dir)
+
         # From src/scenarios/default/tools/ → ../../../../data/nccn_guidelines/
         tools_dir = Path(os.path.dirname(os.path.abspath(__file__)))
         candidates = [

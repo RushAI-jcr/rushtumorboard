@@ -8,35 +8,17 @@ import asyncio
 import json
 import logging
 import math
-from datetime import datetime
 
 from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
+from utils.date_utils import parse_datetime as _parse_date
+
 from .note_type_constants import GENERAL_CLINICAL_TYPES
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
-
-# Common date formats seen in Epic/Caboodle exports (time-aware first)
-_DATE_FORMATS = ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%m/%d/%Y", "%d-%b-%Y"]
-
-
-def _parse_date(date_str: str) -> datetime:
-    """Parse a date string. Returns datetime.min on failure."""
-    cleaned = date_str.strip()
-    try:
-        return datetime.fromisoformat(cleaned).replace(tzinfo=None)
-    except ValueError:
-        pass
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(cleaned, fmt)
-        except ValueError:
-            continue
-    logger.warning("Could not parse date: %r", date_str)
-    return datetime.min
 
 
 def create_plugin(plugin_config: PluginConfiguration):

@@ -488,6 +488,10 @@ function parseMarkers(raw) {
 function main() {
   let raw = "";
   process.stdin.setEncoding("utf8");
+  process.stdin.on("error", err => {
+    process.stderr.write(`tumor_board_slides.js: stdin error: ${err.message}\n`);
+    process.exit(1);
+  });
   process.stdin.on("data", c => { raw += c; });
   process.stdin.on("end", () => {
     let input;

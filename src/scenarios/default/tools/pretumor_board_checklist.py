@@ -13,18 +13,20 @@
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
+
+from utils.date_utils import parse_date as _parse_date
 
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Rush Epic order codes (reference only — not used to query Epic directly)
+# Rush Epic order codes (reference only — also used as lookup for checklist)
 # ---------------------------------------------------------------------------
 RUSH_ORDER_CODES = {
     # Labs
@@ -52,6 +54,8 @@ RUSH_ORDER_CODES = {
     "Genetics":           "REF000151",
     "Fertility":          "REF000038",
     "Palliative":         "REF000152",
+    # Checklist display-name aliases (match _check_labs labels)
+    "CA 19-9":            "LAB0082224",
     # Staging procedures
     "Cystoscopy":         "20000P",
     "Cystoscopy_Biopsy":  "52204PS",
@@ -103,23 +107,6 @@ _PALLIATIVE_PATTERNS=["palliative", "hospice", "comfort care"]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-_DATE_FORMATS = ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%d-%b-%Y"]
-
-
-def _parse_date(s: str) -> date | None:
-    if not s:
-        return None
-    cleaned = s.strip().replace("Z", "")
-    if "+" in cleaned and cleaned.index("+") > 10:
-        cleaned = cleaned[:cleaned.index("+")]
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(cleaned, fmt).date()
-        except ValueError:
-            continue
-    return None
-
 
 def _most_recent_date(rows: list[dict], date_field: str) -> date | None:
     dates = [_parse_date(r.get(date_field, "")) for r in rows]
@@ -266,11 +253,7 @@ class PreTumorBoardChecklistPlugin:
                 most_recent = _most_recent_date(matched, "OrderDate")
                 present = True
                 days = _days_ago(most_recent, as_of) if most_recent else None
-            order_code = {
-                "CBC": "LAB002101", "CMP": "LAB0000022", "CA-125": "LAB0000338",
-                "Beta-hCG": "LAB0033506", "CEA": "LAB003025", "CA 19-9": "LAB0082224",
-                "HE4": None,
-            }.get(label)
+            order_code = RUSH_ORDER_CODES.get(label)
             return {
                 "section": "Labs",
                 "item": label,

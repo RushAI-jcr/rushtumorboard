@@ -89,6 +89,11 @@ class AccessControlMiddleware(Middleware):
 
         if additional_allowed_ids == "*":
             # If the additional allowed IDs is "*", allow all IDs
+            logger.warning(
+                "%s is set to wildcard '*' — all IDs are allowed. "
+                "Restrict this in production by setting specific IDs.",
+                additional_allowed_ids_name,
+            )
             return ALLOW_ALL_IDS
 
         # Allow the default ID and split additional IDs by comma

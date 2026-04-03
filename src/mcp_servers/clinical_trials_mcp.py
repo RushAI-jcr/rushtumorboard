@@ -76,16 +76,20 @@ def _get_nci_headers() -> dict:
     return headers
 
 
-# Shared aiohttp session (lazy init)
+# Shared aiohttp session (lazy init, protected by lock)
 _http_session: aiohttp.ClientSession | None = None
+_session_lock: asyncio.Lock = asyncio.Lock()
 
 
 async def _get_session() -> aiohttp.ClientSession:
-    """Get or create a shared aiohttp session with timeout."""
+    """Get or create a shared aiohttp session with timeout (thread-safe)."""
     global _http_session
-    if _http_session is None or _http_session.closed:
-        timeout = aiohttp.ClientTimeout(total=30)
-        _http_session = aiohttp.ClientSession(timeout=timeout)
+    if _http_session is not None and not _http_session.closed:
+        return _http_session
+    async with _session_lock:
+        if _http_session is None or _http_session.closed:
+            timeout = aiohttp.ClientTimeout(total=30)
+            _http_session = aiohttp.ClientSession(timeout=timeout)
     return _http_session
 
 
@@ -123,7 +127,7 @@ async def nci_search(
         async with session.get(f"{NCI_API_BASE}/trials", params=params, headers=_get_nci_headers()) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
-                logger.error(f"NCI API error {resp.status}: {error_text}")
+                logger.error("NCI API error %d: %s", resp.status, error_text)
                 return json.dumps({
                     "error": f"NCI API returned status {resp.status}",
                     "total": 0,
@@ -172,7 +176,7 @@ async def nci_search(
         "trials": trials,
     }
 
-    logger.info(f"NCI search for '{disease}' returned {len(trials)} trials")
+    logger.info("NCI search for '%s' returned %d trials", disease, len(trials))
     return json.dumps(result, indent=2)
 
 
@@ -202,7 +206,7 @@ async def gog_nrg_search(
         async with session.get(CTG_API_BASE, params=params) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
-                logger.error(f"ClinicalTrials.gov API error {resp.status}: {error_text}")
+                logger.error("ClinicalTrials.gov API error %d: %s", resp.status, error_text)
                 return json.dumps({
                     "error": f"ClinicalTrials.gov API returned status {resp.status}",
                     "total": 0,
@@ -253,7 +257,7 @@ async def gog_nrg_search(
         "trials": trials,
     }
 
-    logger.info(f"GOG/NRG search for '{condition}' returned {len(trials)} trials")
+    logger.info("GOG/NRG search for '%s' returned %d trials", condition, len(trials))
     return json.dumps(result, indent=2)
 
 
@@ -341,7 +345,7 @@ async def trial_details_combined(nct_id: str) -> str:
         combined["lead_org"] = trial.get("lead_org", "")
         combined["principal_investigator"] = trial.get("principal_investigator", "")
 
-    logger.info(f"Combined details fetched for {nct_id}")
+    logger.info("Combined details fetched for %s", nct_id)
     return json.dumps(combined, indent=2, default=str)
 
 
@@ -437,7 +441,7 @@ async def aact_search(
             "trials": trials,
         }
 
-        logger.info(f"AACT search for '{condition}' with keywords '{eligibility_keywords}' returned {len(trials)} trials")
+        logger.info("AACT search for '%s' (keywords='%s') returned %d trials", condition, eligibility_keywords, len(trials))
         return json.dumps(result, indent=2)
 
     except Exception as e:

@@ -16,6 +16,7 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
+from utils.model_utils import model_supports_temperature
 
 from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE
 from .note_type_constants import (
@@ -196,7 +197,10 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
             f"Extract the structured oncologic history from these clinical notes for patient {patient_id}:\n\n{combined_text}"
         )
 
-        settings = AzureChatPromptExecutionSettings(seed=42)
+        if model_supports_temperature():
+            settings = AzureChatPromptExecutionSettings(temperature=0.0, seed=42)
+        else:
+            settings = AzureChatPromptExecutionSettings(seed=42)
         chat_resp = await chat_completion_service.get_chat_message_content(
             chat_history=chat_history, settings=settings
         )

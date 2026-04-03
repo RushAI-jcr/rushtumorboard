@@ -119,7 +119,7 @@ def chats_routes(app_context: AppContext):
                 await websocket.close(code=1008)
                 return
             await websocket.accept()
-            logger.info(f"WebSocket connection established for chat: {chat_id}")
+            logger.info("WebSocket connection established for chat: %s", chat_id)
 
             # Wait for the first message from the client
             client_message = await websocket.receive_json()
@@ -156,7 +156,7 @@ def chats_routes(app_context: AppContext):
                 chat.agents[0]  # Fallback to first agent
             )
 
-            logger.info(f"Using agent: {target_agent.name} to respond to WebSocket message")
+            logger.info("Using agent: %s to respond to WebSocket message", target_agent.name)
 
             # Check if the agent is the facilitator
             if target_agent.name == facilitator:
@@ -193,7 +193,7 @@ def chats_routes(app_context: AppContext):
             await websocket.send_json({"type": "done"})
 
         except WebSocketDisconnect:
-            logger.info(f"WebSocket client disconnected from chat: {chat_id}")
+            logger.info("WebSocket client disconnected from chat: %s", chat_id)
         except Exception as e:
             ref = uuid.uuid4().hex[:8]
             logger.exception("Error in WebSocket chat [ref=%s]", ref)

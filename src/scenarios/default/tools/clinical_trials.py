@@ -91,7 +91,7 @@ class ClinicalTrialsPlugin:
         reasoning_kwargs = {
             "service_id": "reasoning-model",
             "deployment_name": _reasoning_deployment,
-            "api_version": "2025-04-01-preview",
+            "api_version": os.environ.get("AZURE_OPENAI_API_VERSION", "2025-04-01-preview"),
             "endpoint": _reasoning_endpoint,
         }
         api_key = os.environ.get("AZURE_OPENAI_API_KEY")
@@ -127,7 +127,7 @@ class ClinicalTrialsPlugin:
 
         chat_completion_response = await self.chat_completion_service.get_chat_message_content(
             chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
-        logger.info(f"Generated search query: {chat_completion_response}")
+        logger.debug("Generated search query: %s", chat_completion_response)
         return str(chat_completion_response)
 
     @kernel_function(
@@ -176,7 +176,7 @@ class ClinicalTrialsPlugin:
                 result = await resp.json()
 
         study_count = len(result["studies"])
-        logger.info(f"Clinical trials found: {study_count}")
+        logger.info("Clinical trials found: %d", study_count)
 
         _sem = asyncio.Semaphore(5)
         _trial_timeout = 45.0
@@ -243,8 +243,13 @@ class ClinicalTrialsPlugin:
             str: A summary of the clinical trial information.
         """
 
+        import re as _re
+        nct_id = trial.strip().upper()
+        if not _re.fullmatch(r"NCT\d{8,11}", nct_id):
+            return json.dumps({"error": f"Invalid NCT ID format: {trial!r}. Expected NCTxxxxxxxx."})
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(self.clinical_trial_url + trial) as resp:
+            async with session.get(self.clinical_trial_url + nct_id) as resp:
                 resp.raise_for_status()
                 result = await resp.json()
 
