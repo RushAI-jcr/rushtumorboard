@@ -63,69 +63,78 @@ def create_auth_callback(chat_ctx: ChatContext) -> Callable[..., Awaitable[Any]]
 
 
 class CustomHistoryChannel(ChatHistoryChannel):
-    """ChatHistoryChannel with automatic history truncation.
+    """ChatHistoryChannel that filters tool messages and truncates history.
 
-    Prevents context window overflow in multi-agent chats with rich clinical data
-    by truncating the agent thread's history after each receive cycle. Uses safe
-    truncation that preserves function call/result pairs.
+    In multi-agent group chats, tool call/result messages from other agents can
+    leak into the thread via broadcasts.  OpenAI requires every role='tool'
+    message to immediately follow a role='assistant' message with tool_calls.
+    Broadcast ordering doesn't guarantee this, causing 400 errors.
+
+    Fix: strip all FunctionCallContent / FunctionResultContent messages when
+    populating the thread.  Each agent only needs the plain-text summaries
+    from other agents, not their internal tool interactions.
+
+    Also caps the thread length to prevent 128K context overflow.
     """
 
-    # Max messages an agent thread retains. Tool results from patient_data,
-    # pathology_extractor, etc. can be 10-20K tokens each, so even 14 messages
-    # can approach 128K tokens.  Keep only the most recent agent turns.
     _MAX_THREAD_MESSAGES: int = 14
 
     @override
     async def receive(self, history: list[ChatMessageContent],) -> None:
-        await super().receive(history)
+        from semantic_kernel.contents.function_call_content import FunctionCallContent
+        from semantic_kernel.contents.function_result_content import FunctionResultContent
+        from semantic_kernel.contents.utils.author_role import AuthorRole
 
-        for message in history[:-1]:
+        # Track count before super() appends, so we only process the delta
+        # (new messages added by this broadcast). This prevents O(N²)
+        # duplication when receive() is called repeatedly with accumulated history.
+        prior_count = len(self.messages)
+        await super().receive(history)
+        new_messages = self.messages[prior_count:]
+
+        for message in new_messages:
+            # Skip tool-related messages — they originate from other agents'
+            # auto-function-invocation loops and can arrive without their
+            # paired tool_calls/tool_result counterpart, causing OpenAI 400s.
+            if message.role == AuthorRole.TOOL:
+                continue
+            if any(isinstance(item, (FunctionCallContent, FunctionResultContent))
+                   for item in (message.items or [])):
+                continue
             await self.thread.on_new_message(message)
 
-        # Truncate the agent thread's chat history to prevent context overflow.
-        # This is the key fix: each agent channel accumulates ALL messages from
-        # the group chat, but the LLM only needs recent context to respond.
+        # Cap thread length.  With no tool messages, any cut point is safe.
         if hasattr(self.thread, '_chat_history'):
-            from semantic_kernel.contents.history_reducer.chat_history_reducer_utils import (
-                locate_safe_reduction_index, extract_range,
-            )
             msgs = self.thread._chat_history.messages
-            if len(msgs) > self._MAX_THREAD_MESSAGES + 4:
-                idx = locate_safe_reduction_index(
-                    msgs, self._MAX_THREAD_MESSAGES, threshold_count=4
+            if len(msgs) > self._MAX_THREAD_MESSAGES:
+                old_len = len(msgs)
+                self.thread._chat_history.messages = msgs[-self._MAX_THREAD_MESSAGES:]
+                logger.debug(
+                    "Truncated agent thread history from %d to %d messages",
+                    old_len, self._MAX_THREAD_MESSAGES,
                 )
-                if idx is not None:
-                    self.thread._chat_history.messages = extract_range(msgs, start=idx)
-                    logger.debug(
-                        "Truncated agent thread history from %d to %d messages",
-                        len(msgs), len(self.thread._chat_history.messages),
-                    )
 
+    @override
+    async def invoke(self, agent, **kwargs):
+        """Invoke with diagnostic logging of thread state."""
+        from semantic_kernel.contents.function_call_content import FunctionCallContent
+        from semantic_kernel.contents.function_result_content import FunctionResultContent
 
-async def create_channel(
-    self, chat_history: ChatHistory | None = None, thread_id: str | None = None
-) -> CustomHistoryChannel:
-    """Create a ChatHistoryChannel.
-
-    Args:
-        chat_history: The chat history for the channel. If None, a new ChatHistory instance will be created.
-        thread_id: The ID of the thread. If None, a new thread will be created.
-
-    Returns:
-        An instance of AgentChannel.
-    """
-    from semantic_kernel.agents.chat_completion.chat_completion_agent import ChatHistoryAgentThread
-
-    CustomHistoryChannel.model_rebuild()
-
-    thread = ChatHistoryAgentThread(chat_history=chat_history, thread_id=thread_id)
-
-    if thread.id is None:
-        await thread.create()
-
-    messages = [message async for message in thread.get_messages()]
-
-    return CustomHistoryChannel(messages=messages, thread=thread)
+        if hasattr(self.thread, '_chat_history'):
+            msgs = self.thread._chat_history.messages
+            logger.info(
+                "DIAG invoke agent=%s thread_msgs=%d channel_msgs=%d",
+                agent.name, len(msgs), len(self.messages),
+            )
+            for i, m in enumerate(msgs[:5]):
+                tool_items = [type(it).__name__ for it in (m.items or [])
+                              if isinstance(it, (FunctionCallContent, FunctionResultContent))]
+                logger.info(
+                    "DIAG   thread[%d] role=%s name=%s tool_items=%s content=%.80s",
+                    i, m.role, m.name, tool_items, (m.content or "")[:80],
+                )
+        async for item in super().invoke(agent, **kwargs):
+            yield item
 
 
 class CustomChatCompletionAgent(ChatCompletionAgent):
@@ -135,7 +144,49 @@ class CustomChatCompletionAgent(ChatCompletionAgent):
     async def create_channel(
         self, chat_history: ChatHistory | None = None, thread_id: str | None = None
     ) -> CustomHistoryChannel:
-        return await create_channel(self, chat_history, thread_id)
+        """Create a CustomHistoryChannel that strips tool messages and caps length.
+
+        Args:
+            chat_history: The chat history for the channel.
+            thread_id: The ID of the thread.
+
+        Returns:
+            An instance of CustomHistoryChannel.
+        """
+        from semantic_kernel.agents.chat_completion.chat_completion_agent import ChatHistoryAgentThread
+        from semantic_kernel.contents.function_call_content import FunctionCallContent
+        from semantic_kernel.contents.function_result_content import FunctionResultContent
+        from semantic_kernel.contents.utils.author_role import AuthorRole
+
+        CustomHistoryChannel.model_rebuild()
+
+        # Strip tool messages and cap length to prevent context overflow and
+        # orphaned-tool-message 400 errors.
+        effective_history = None
+        if chat_history and chat_history.messages:
+            clean = [
+                m for m in chat_history.messages
+                if m.role != AuthorRole.TOOL
+                and not any(isinstance(item, (FunctionCallContent, FunctionResultContent))
+                            for item in (m.items or []))
+            ]
+            max_initial = CustomHistoryChannel._MAX_THREAD_MESSAGES
+            if len(clean) > max_initial:
+                clean = clean[-max_initial:]
+            effective_history = ChatHistory(messages=clean)
+            logger.debug(
+                "Channel created with %d messages (from %d original)",
+                len(clean), len(chat_history.messages),
+            )
+
+        thread = ChatHistoryAgentThread(chat_history=effective_history, thread_id=thread_id)
+
+        if thread.id is None:
+            await thread.create()
+
+        messages = [message async for message in thread.get_messages()]
+
+        return CustomHistoryChannel(messages=messages, thread=thread)
 
 
 def create_group_chat(
@@ -228,8 +279,8 @@ def create_group_chat(
         arguments = KernelArguments(settings=settings)
         instructions = agent_config.get("instructions")
         if agent_config.get("facilitator") and instructions:
-            instructions = instructions.replace(
-                "{{aiAgents}}", "\n\t\t".join([f"- {agent['name']}: {agent["description"]}" for agent in all_agents_config]))
+            agent_list = "\n\t\t".join([f"- {agent['name']}: {agent['description']}" for agent in all_agents_config])
+            instructions = instructions.replace("{{aiAgents}}", agent_list)
 
         return (CustomChatCompletionAgent(kernel=agent_kernel,
                                           name=agent_config["name"],
@@ -247,10 +298,14 @@ def create_group_chat(
         settings = AzureChatPromptExecutionSettings(
             function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, response_format=ChatRule)
 
-    facilitator_agent = next((agent for agent in all_agents_config if agent.get("facilitator")), all_agents_config[0])
+    facilitator_agent = next((agent for agent in all_agents_config if agent.get("facilitator")), None)
+    if facilitator_agent is None:
+        logger.warning("No facilitator agent found; defaulting to %s", all_agents_config[0]["name"])
+        facilitator_agent = all_agents_config[0]
     facilitator = facilitator_agent["name"]
 
     # Create selection function with proper input variable configuration
+    agent_name_list = "\n".join([f"\t- {agent['name']}" for agent in all_agents_config])
     selection_prompt_config = PromptTemplateConfig(
         name="selection",
         description="Agent selection prompt",
@@ -259,7 +314,7 @@ def create_group_chat(
         Determine which participant takes the next turn in a conversation based on the most recent participant. Follow these guidelines:
 
         1. **Participants**: Choose only from these participants:
-            {"\n".join([("\t- " + agent["name"]) for agent in all_agents_config])}
+            {agent_name_list}
 
         2. **General Rules**:
             - **{facilitator} Always Starts**: {facilitator} always goes first to formulate a plan. If the only message is from the user, {facilitator} goes next.
@@ -289,6 +344,7 @@ def create_group_chat(
         prompt_execution_settings=settings
     )
 
+    agent_name_csv = ",".join([agent['name'] for agent in all_agents_config])
     termination_prompt_config = PromptTemplateConfig(
         name="termination",
         description="Agent termination prompt",
@@ -300,7 +356,7 @@ def create_group_chat(
 
         You are part of a group chat with several AI agents and a user.
         The agents are names are:
-            {",".join([f"{agent['name']}" for agent in all_agents_config])}
+            {agent_name_csv}
 
         If the most recent message is a question addressed to the user, return "yes".
         If the question is addressed to "we" or "us", return "yes". For example, if the question is "Should we proceed?", return "yes".
@@ -333,34 +389,31 @@ def create_group_chat(
     from semantic_kernel.agents.agent import Agent
     agents: list[Agent] = [_create_agent(agent) for agent in all_agents_config]
 
+    agent_names = [agent["name"] for agent in all_agents_config]
+
     def evaluate_termination(result):
         logger.debug("Termination function result: %s", result)
-        rule = ChatRule.model_validate_json(str(result.value[0]))
-        return rule.verdict == "yes"
+        try:
+            rule = ChatRule.model_validate_json(str(result.value[0]))
+            return rule.verdict == "yes"
+        except Exception as exc:
+            logger.warning("Termination parse failed (%s), defaulting to terminate", exc)
+            return True
 
     def evaluate_selection(result):
         logger.debug("Selection function result: %s", result)
-        rule = ChatRule.model_validate_json(str(result.value[0]))
-        return rule.verdict if rule.verdict in [agent["name"] for agent in all_agents_config] else facilitator
+        try:
+            rule = ChatRule.model_validate_json(str(result.value[0]))
+            return rule.verdict if rule.verdict in agent_names else facilitator
+        except Exception as exc:
+            logger.warning("Selection parse failed (%s), defaulting to %s", exc, facilitator)
+            return facilitator
 
     selection_deployment = os.environ.get("AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME")
 
-    # Use a truncation reducer for the shared agent chat history to prevent context
-    # window overflow in multi-agent chats with rich clinical data. target_count=14
-    # keeps ~3 agent turns (each turn ≈ user msg + tool calls + agent response).
-    # Must be aggressive because tool results (clinical notes, pathology) are very
-    # large. The reducer safely preserves function call/result pairs when truncating.
-    agent_history = ChatHistoryTruncationReducer(
-        target_count=14, threshold_count=4, auto_reduce=True
-    )
-    # Copy any existing messages from the chat context
-    for msg in chat_ctx.chat_history.messages:
-        agent_history.add_message(msg)
-    chat_ctx.chat_history = agent_history
-
     chat = AgentGroupChat(
         agents=agents,
-        chat_history=agent_history,
+        chat_history=chat_ctx.chat_history,
         selection_strategy=KernelFunctionSelectionStrategy(
             function=selection_function,
             kernel=_create_kernel_with_chat_completion(selection_deployment),
