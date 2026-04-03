@@ -21,6 +21,7 @@ from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import
 from semantic_kernel.contents.chat_history import ChatHistory
 
 from data_models.plugin_configuration import PluginConfiguration
+from utils.clinical_note_filter_utils import deduplicate_notes
 from utils.model_utils import model_supports_temperature
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,10 @@ class MedicalReportExtractorBase:
                 "error": f"No {self.report_type} reports found for this patient across all data layers.",
                 self.error_key: []
             })
+
+        # Deduplicate near-identical notes (GYN onc notes carry forward the same
+        # pathology/history block across visits — 15+ notes may contain identical text).
+        reports = deduplicate_notes(reports, label=self.report_type)
 
         # Sort chronologically (oldest → newest) so the LLM sees progression over time.
         # Use OrderDate for dedicated reports, EntryDate for clinical notes.

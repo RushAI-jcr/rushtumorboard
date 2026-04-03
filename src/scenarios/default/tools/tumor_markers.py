@@ -53,6 +53,7 @@ class TumorMarkerPlugin:
         "ca-125", "ca125", "ca 125", "he4", "he-4",
         "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",
         "ca 27", "ca2729", "ca 15", "ca153", "tumor marker",
+        "scc", "scc-ag", "squamous cell carcinoma antigen",
     ]
 
     def __init__(self, config: PluginConfiguration):

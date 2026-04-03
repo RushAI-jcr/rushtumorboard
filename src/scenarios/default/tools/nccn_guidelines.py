@@ -66,11 +66,18 @@ class NCCNGuidelinesPlugin:
             if manifest_path.exists():
                 with open(manifest_path) as f:
                     manifest = json.load(f)
-                json_files = [data_dir / g["json_file"] for g in manifest.get("guidelines", [])]
+                # Skip Evidence Blocks files — they duplicate base guideline pages and
+                # cause merged page codes to balloon (e.g., OV-D → 116K chars).
+                # Base files already contain all algorithm/principles content.
+                json_files = [
+                    data_dir / g["json_file"]
+                    for g in manifest.get("guidelines", [])
+                    if "_blocks_" not in g.get("json_file", "")
+                ]
             else:
-                # Fallback: load all JSON files in directory
+                # Fallback: load all JSON files in directory (skip blocks)
                 json_files = sorted(data_dir.glob("*.json"))
-                json_files = [f for f in json_files if f.name != "manifest.json"]
+                json_files = [f for f in json_files if f.name != "manifest.json" and "_blocks_" not in f.name]
 
             for json_path in json_files:
                 if not json_path.exists():
@@ -93,9 +100,13 @@ class NCCNGuidelinesPlugin:
         env_dir = os.environ.get("NCCN_DATA_DIR")
         if env_dir:
             resolved = Path(env_dir).resolve()
-            if resolved.is_dir():
+            # Validate the path contains expected guideline structure
+            if resolved.is_dir() and (resolved / "manifest.json").exists():
                 return resolved
-            logger.warning("NCCN_DATA_DIR=%s does not exist or is not a directory", env_dir)
+            if resolved.is_dir():
+                logger.warning("NCCN_DATA_DIR=%s exists but has no manifest.json — skipping", env_dir)
+            else:
+                logger.warning("NCCN_DATA_DIR=%s does not exist or is not a directory", env_dir)
 
         # From src/scenarios/default/tools/ → ../../../../data/nccn_guidelines/
         tools_dir = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -192,7 +203,7 @@ class NCCNGuidelinesPlugin:
         disease_terms = [
             "endometrial", "uterine", "vaginal", "vulvar", "cervical",
             "ovarian", "fallopian tube", "peritoneal", "epithelial ovarian",
-            "cervical", "cervix", "gestational trophoblastic", "hydatidiform mole",
+            "cervix", "gestational trophoblastic", "hydatidiform mole",
             "choriocarcinoma", "neuroendocrine",
             "sarcoma", "melanoma", "carcinoma", "adenocarcinoma",
             "squamous", "serous", "clear cell", "carcinosarcoma",
@@ -223,7 +234,7 @@ class NCCNGuidelinesPlugin:
             "olaparib", "niraparib", "rucaparib", "mirvetuximab",
             "gemcitabine", "doxorubicin", "topotecan", "etoposide",
             "hipec", "cytoreduction", "debulking", "interval",
-            "chemoradiation", "brachytherapy", "cone biopsy", "trachelectomy",
+            "chemoradiation", "cone biopsy", "trachelectomy",
             "methotrexate", "actinomycin", "ema-co", "hcg",
             "tisotumab", "cemiplimab",
             "sentinel lymph node", "adjuvant", "neoadjuvant",
@@ -504,18 +515,27 @@ class NCCNGuidelinesPlugin:
 
             results.append(content)
 
-        # Cap total response
-        response = json.dumps({
+        # Build response incrementally, switching to summaries when budget exceeded
+        capped_results = []
+        total_chars = 0
+        for content in results:
+            page_json = json.dumps(content, ensure_ascii=False)
+            if total_chars + len(page_json) > MAX_RESPONSE_CHARS:
+                capped_results.append({
+                    "page_code": content.get("page_code", ""),
+                    "title": content.get("title", ""),
+                    "note": "Content omitted due to size — use lookup_nccn_page for full content",
+                })
+            else:
+                capped_results.append(content)
+                total_chars += len(page_json)
+
+        return json.dumps({
             "cancer_type": cancer_type,
             "setting": setting,
             "biomarkers": biomarkers,
-            "therapy_pages": results,
+            "therapy_pages": capped_results,
         }, indent=2, ensure_ascii=False)
-
-        if len(response) > MAX_RESPONSE_CHARS:
-            response = response[:MAX_RESPONSE_CHARS] + '\n... [truncated]'
-
-        return response
 
     @staticmethod
     def _map_cancer_type(cancer_type: str) -> str:
@@ -531,6 +551,7 @@ class NCCNGuidelinesPlugin:
             "leiomyosarcoma": "uterine_sarcoma",
             "vaginal": "vaginal_cancer",
             "vaginal cancer": "vaginal_cancer",
+            "vagina": "vaginal_cancer",
             "vulvar": "vulvar_cancer",
             "vulvar cancer": "vulvar_cancer",
             "melanoma": "vulvovaginal_melanoma",

@@ -272,11 +272,15 @@ class PreTumorBoardChecklistPlugin:
         ca125_required = ctype in ("ovarian", "fallopian", "peritoneal", "other")
         results.append(_check("CA-125", _CA125_PATTERNS, 28, conditional=not ca125_required))
 
-        # Beta-hCG: germ cell tumors and GTD only
+        # Beta-hCG: germ cell tumors and GTD/GTN — required
         results.append(_check(
             "Beta-hCG", _HCG_PATTERNS, 28,
-            conditional=ctype not in ("germ_cell", "gtd"),
+            conditional=ctype not in ("germ_cell", "gtd", "gtn"),
         ))
+
+        # SCC antigen: cervical squamous cell carcinoma
+        if ctype == "cervical":
+            results.append(_check("SCC-Ag", ["scc", "scc-ag", "squamous cell carcinoma antigen"], 28, conditional=False))
 
         # CEA: mucinous carcinoma
         results.append(_check("CEA", _CEA_PATTERNS, 28, conditional=ctype != "mucinous"))

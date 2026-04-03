@@ -40,14 +40,16 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "nccn_guidelines"
 # ---------------------------------------------------------------------------
 # Page code patterns (bottom-right of every NCCN page)
 # ---------------------------------------------------------------------------
-# Algorithm pages: ENDO-1, VAG-3, VULVA-10, UTSARC-2, VM-1, UN-1, OV-1, LCOC-1, EB-3, CERV-1, GTN-1, HM-1
-_ALGO_CODE_RE = re.compile(
-    r"(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|EB|CERV|GTN|HM)-(\d+[A-Z]?)\s*$", re.MULTILINE
-)
-# Principles pages: ENDO-A, VAG-D 1 of 4, VULVA-E 2 of 2, OV-A 1 of 3, CERV-A, GTN-A
-_PRINCIPLES_CODE_RE = re.compile(
-    r"(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|CERV|GTN|HM)-([A-Z])\s*(\d+\s*of\s*\d+)?\s*$", re.MULTILINE
-)
+# Canonical list of NCCN page code prefixes — add new guidelines here only.
+_DISEASE_PREFIXES = ("ENDO", "VAG", "VULVA", "UTSARC", "VM", "UN", "OV", "LCOC", "CERV", "GTN", "HM")
+_ALL_PREFIXES = _DISEASE_PREFIXES + ("EB",)  # EB = Evidence Blocks (numeric codes only)
+_DISEASE_GROUP = "|".join(_DISEASE_PREFIXES)
+_ALL_GROUP = "|".join(_ALL_PREFIXES)
+
+# Algorithm pages: OV-1, CERV-3, EB-3, etc. (numeric suffix)
+_ALGO_CODE_RE = re.compile(rf"({_ALL_GROUP})-(\d+[A-Z]?)\s*$", re.MULTILINE)
+# Principles pages: OV-A, CERV-D 2 of 4, etc. (letter suffix; EB excluded — uses EB-DEF only)
+_PRINCIPLES_CODE_RE = re.compile(rf"({_DISEASE_GROUP})-([A-Z])\s*(\d+\s*of\s*\d+)?\s*$", re.MULTILINE)
 # Staging: ST-1, ST-2, ST-3
 _STAGING_CODE_RE = re.compile(r"ST-(\d+)\s*$", re.MULTILINE)
 # Discussion: MS-1, etc.
@@ -55,11 +57,11 @@ _DISCUSSION_CODE_RE = re.compile(r"MS-(\d+)\s*$", re.MULTILINE)
 # Abbreviations: ABBR-1
 _ABBR_CODE_RE = re.compile(r"ABBR-(\d+)\s*$", re.MULTILINE)
 # Evidence Blocks definition: EB-DEF
-_EB_DEF_CODE_RE = re.compile(r"(EB-DEF)\s*$", re.MULTILINE)
+_EB_DEF_CODE_RE = re.compile(r"EB-DEF\s*$", re.MULTILINE)
 
 # Page codes for algorithm pages (numeric suffix) vs principles (letter suffix)
-_ALGO_PAGE_CODES = re.compile(r"^(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|CERV|GTN|HM)-\d+")
-_PRINCIPLES_PAGE_CODES = re.compile(r"^(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|CERV|GTN|HM)-[A-Z]")
+_ALGO_PAGE_CODES = re.compile(rf"^({_ALL_GROUP})-\d+")
+_PRINCIPLES_PAGE_CODES = re.compile(rf"^({_DISEASE_GROUP})-[A-Z]")
 
 # Disease site mapping
 _DISEASE_MAP = {
@@ -266,7 +268,7 @@ def extract_footnotes_from_page(page: pymupdf.Page) -> dict[str, str]:
 def extract_cross_references(text: str) -> list[str]:
     """Find NCCN page cross-references in text (e.g., 'See ENDO-4', '(VAG-A)')."""
     refs = set()
-    pattern = re.compile(r"(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|EB|CERV|GTN|HM)-(\d+[A-Z]?|[A-Z]|DEF)")
+    pattern = re.compile(rf"({_ALL_GROUP})-(\d+[A-Z]?|[A-Z]|DEF)")
     for m in pattern.finditer(text):
         refs.add(f"{m.group(1)}-{m.group(2)}")
     return sorted(refs)

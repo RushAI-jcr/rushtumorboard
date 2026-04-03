@@ -131,6 +131,8 @@ class PathologyExtractorPlugin(MedicalReportExtractorBase):
         "tmb", "tumor mutational", "ki67", "ki-67", "ccne1", "cyclin e",
         # OSH pathology
         "outside hospital", "osh path", "reviewed slides", "outside pathology",
+        # Common clinical shorthand for embedded path results
+        "final path", "hrd", "interval debulking",
     )
 
     @kernel_function(

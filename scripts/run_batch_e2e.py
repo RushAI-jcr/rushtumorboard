@@ -304,8 +304,8 @@ async def run_single_patient(
         logger.error("TIMEOUT for patient %s after %ds", patient_id[:8], timeout)
     except Exception as e:
         status = "FAIL"
-        error = str(e)[:500]
-        logger.error("FAIL for patient %s: %s", patient_id[:8], str(e)[:1000])
+        error = type(e).__name__ + ": " + str(e)[:200]
+        logger.error("FAIL for patient %s: %s: %s", patient_id[:8], type(e).__name__, str(e)[:200])
 
     duration = time.time() - start
 

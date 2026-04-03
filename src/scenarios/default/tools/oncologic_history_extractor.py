@@ -18,6 +18,7 @@ from semantic_kernel.functions import kernel_function
 from data_models.plugin_configuration import PluginConfiguration
 from utils.model_utils import model_supports_temperature
 
+from utils.clinical_note_filter_utils import deduplicate_notes
 from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE
 from .note_type_constants import (
     ADDENDUM_TYPES, CONSULT_NOTE_TYPES, DISCHARGE_TYPES,
@@ -162,6 +163,7 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
     async def _extract(self, patient_id: str) -> str:
         """Override base to read clinical notes instead of specific report type."""
         notes = await self._get_clinical_notes(patient_id)
+        notes = deduplicate_notes(notes, label="oncologic_history")
 
         if not notes:
             return json.dumps({

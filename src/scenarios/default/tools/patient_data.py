@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 #   - Radiology layer 3: Progress Notes/Consults + imaging keywords
 #   - TumorMarkers fallback: Progress Notes/Consults + marker keywords
 # ---------------------------------------------------------------------------
+from utils.clinical_note_filter_utils import deduplicate_notes  # noqa: E402
 from .note_type_constants import ALL_CLINICAL_TYPES, PATHOLOGY_REPORT_TYPES  # noqa: E402
 
 TIMELINE_NOTE_TYPES: tuple[str, ...] = (
@@ -62,6 +63,25 @@ def create_plugin(plugin_config: PluginConfiguration):
 
 
 _MAX_TIMELINE_NOTES = 40  # ~160 KB of text; keeps combined chat history + notes within context window
+_MAX_CHARS_PER_NOTE = 4000
+_MAX_TOTAL_CHARS = 120_000
+
+
+def _cap_note_text(files: list[dict], max_per_note: int = _MAX_CHARS_PER_NOTE, max_total: int = _MAX_TOTAL_CHARS) -> tuple[list[dict], int]:
+    """Truncate individual notes and cap total characters to prevent context overflow."""
+    total_chars = 0
+    capped: list[dict] = []
+    for f in files:
+        text_key = "NoteText" if "NoteText" in f else "note_text" if "note_text" in f else "text"
+        text = f.get(text_key, "")
+        if len(text) > max_per_note:
+            f = {**f, text_key: text[:max_per_note] + " [TRUNCATED]"}
+            text = f[text_key]
+        total_chars += len(text)
+        if total_chars > max_total:
+            break
+        capped.append(f)
+    return capped, total_chars
 
 
 class PatientDataPlugin:
@@ -129,6 +149,8 @@ class PatientDataPlugin:
         if not files:
             files = await accessor.read_all(patient_id)
 
+        files = deduplicate_notes(files, label="timeline")
+
         if len(files) > _MAX_TIMELINE_NOTES:
             logger.info(
                 "Capping timeline notes from %d to %d for patient %s",
@@ -136,22 +158,7 @@ class PatientDataPlugin:
             )
             files = files[:_MAX_TIMELINE_NOTES]
 
-        # Truncate individual notes to prevent context overflow
-        MAX_CHARS_PER_NOTE = 4000
-        MAX_TOTAL_CHARS = 120_000
-        total_chars = 0
-        capped_files = []
-        for f in files:
-            text_key = "NoteText" if "NoteText" in f else "note_text" if "note_text" in f else "text"
-            text = f.get(text_key, "")
-            if len(text) > MAX_CHARS_PER_NOTE:
-                f = {**f, text_key: text[:MAX_CHARS_PER_NOTE] + " [TRUNCATED]"}
-                text = f[text_key]
-            total_chars += len(text)
-            if total_chars > MAX_TOTAL_CHARS:
-                break
-            capped_files.append(f)
-        files = capped_files
+        files, total_chars = _cap_note_text(files)
 
         logger.info(
             "create_timeline: %d notes, ~%dK chars after capping for patient %s (from %s)",
@@ -252,6 +259,8 @@ class PatientDataPlugin:
         if not files:
             files = await accessor.read_all(patient_id)
 
+        files = deduplicate_notes(files, label="process_prompt")
+
         if len(files) > _MAX_TIMELINE_NOTES:
             logger.info(
                 "Capping process_prompt notes from %d to %d for patient %s",
@@ -259,22 +268,7 @@ class PatientDataPlugin:
             )
             files = files[:_MAX_TIMELINE_NOTES]
 
-        # Truncate individual notes to prevent context overflow
-        MAX_CHARS_PER_NOTE = 4000
-        MAX_TOTAL_CHARS = 120_000
-        total_chars = 0
-        capped_files = []
-        for f in files:
-            text_key = "NoteText" if "NoteText" in f else "note_text" if "note_text" in f else "text"
-            text = f.get(text_key, "")
-            if len(text) > MAX_CHARS_PER_NOTE:
-                f = {**f, text_key: text[:MAX_CHARS_PER_NOTE] + " [TRUNCATED]"}
-                text = f[text_key]
-            total_chars += len(text)
-            if total_chars > MAX_TOTAL_CHARS:
-                break
-            capped_files.append(f)
-        files = capped_files
+        files, total_chars = _cap_note_text(files)
 
         logger.info(
             "process_prompt: %d notes, ~%dK chars after capping for patient %s",

@@ -171,6 +171,13 @@
       - NSMP (no specific molecular profile) — intermediate prognosis
       - p53abn (p53 abnormal) — worst prognosis
     8. **Folate Receptor Alpha (FRα)** status if available (relevant for mirvetuximab soravtansine in ovarian)
+    9. **Cervical-Specific Classification** (if cervical cancer):
+      - HPV-associated vs HPV-independent (per 2020 WHO; p16 block positive = HPV surrogate)
+      - Subtype: squamous cell carcinoma, usual-type adenocarcinoma, gastric-type adenocarcinoma, clear cell, etc.
+      - Small cell neuroendocrine carcinoma (NECC) — high-grade, aggressive, distinct management per CERV-13/14
+    10. **GTN-Specific** (if gestational trophoblastic neoplasia):
+      - Classify: complete vs partial hydatidiform mole, invasive mole, choriocarcinoma, PSTT, ETT
+      - Note antecedent pregnancy type and interval to hCG elevation
 
     **CHRONOLOGICAL ORDER RULE**: Present specimens in chronological order — diagnostic biopsy first, primary surgery next, any recurrence biopsies last. Never present a later specimen before an earlier one.
     **DATE RULE**: Every specimen and every test result MUST be labeled with its date. Format each specimen as "**[M/D/YY] [Procedure]:**" (e.g., "**4/11/24 RATLH/BSO:**"). If IHC and molecular results are from a supplemental addendum on a different date, note that date separately (e.g., "IHC addendum 4/17/24").
@@ -277,13 +284,16 @@
       'fra_status': (folate receptor alpha — for ovarian, M/D/YY)
       'tmb': (mutations/Mb, M/D/YY)
       'molecular_classification': (for endometrial: POLEmut/MMRd/NSMP/p53abn, M/D/YY)
+      'hpv_status': (HPV-positive type 16/18 or other / HPV-negative — for cervical cancer, M/D/YY)
+      'who_prognostic_score': (0-20+, low-risk <7 vs high-risk ≥7 — for GTN only)
       'other_mutations': (PIK3CA, KRAS, ARID1A, PTEN, NTRK, etc., M/D/YY)
 
     **Tumor Markers:** (include most recent value AND date; use `get_tumor_marker_trend` for full series)
       'ca_125': (value U/mL, M/D/YY; trend direction and nadir if available)
       'he4': (value pmol/L, M/D/YY if available)
       'cea': (value ng/mL, M/D/YY — for mucinous tumors)
-      'hcg': (value mIU/mL, M/D/YY — for GTD)
+      'hcg': (value mIU/mL, M/D/YY — for GTD/GTN)
+      'scc_ag': (value ng/mL, M/D/YY — for cervical squamous cell carcinoma)
 
     **Treatment History:** (CHRONOLOGICAL ORDER — list each line/modality with its start date, oldest first)
       'surgical_history': (M/D/YY procedure, debulking status: R0/optimal/suboptimal, residual disease)
@@ -333,7 +343,7 @@
     - Vulvar Cancer v2.2026 (VULVA-1 through VULVA-10, vulvovaginal melanoma: VM-1 through VM-3)
     - Ovarian Cancer v3.2026 (epithelial ovarian/fallopian tube/peritoneal: OV-1 through OV-8, less common ovarian cancers: LCOC-1 through LCOC-15)
     - Ovarian Cancer Evidence Blocks v3.2026 (EB-1 through EB-9, EB-DEF for scoring definitions)
-    - Cervical Cancer Evidence Blocks v2.2026 (CERV-1 through CERV-14, including small cell NECC: CERV-13/14)
+    - Cervical Cancer v2.2026 (CERV-1 through CERV-14, including small cell NECC: CERV-13/14; includes Evidence Blocks)
     - Gestational Trophoblastic Neoplasia v2.2026 (hydatidiform mole: HM-1/HM-2, GTN: GTN-1 through GTN-5)
     - Gestational Trophoblastic Neoplasia Evidence Blocks v2.2026
 
