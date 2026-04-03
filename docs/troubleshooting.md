@@ -45,9 +45,9 @@ The issue happens when:
 3. **Re-clone the repository to get correct line endings:**
    ```bash
    cd ..
-   rm -rf healthcare-agent-orchestrator
-   git clone https://github.com/Azure-Samples/healthcare-agent-orchestrator.git
-   cd healthcare-agent-orchestrator
+   rm -rf rushtumorboard
+   git clone https://github.com/RushAI-jcr/rushtumorboard.git
+   cd rushtumorboard
    ```
 
 4. **Run the deployment again:**

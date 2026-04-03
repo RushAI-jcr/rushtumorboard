@@ -23,7 +23,7 @@ The MCP implementation resides in `./src/mcp_app.py`. A route is exposed under `
 | PatientStatus | Synthesizes current clinical status |
 | ClinicalGuidelines | NCCN-based GYN treatment recommendations |
 | ClinicalTrials | Searches for eligible clinical trials |
-| MedicalResearch | GraphRAG-powered research retrieval |
+| MedicalResearch | PubMed/Europe PMC/Semantic Scholar search with RISEN synthesis |
 | ReportCreation | Generates Word doc + PPTX |
 
 ## Clinical Trials MCP Server

@@ -1,56 +1,67 @@
 # Data Ingestion
 
-This code sample uses Azure Blob Storage to store patient data used by agents. Patient data contains clinical notes and images. Clinical notes are stored in JSON. Images are stored in PNG.
+Patient data is stored as Epic Caboodle CSV exports under `infra/patient_data/`. For Azure deployments, data is uploaded to Azure Blob Storage. The system also supports FHIR and Fabric data sources.
 
 > [!CAUTION]
-> The Healthcare Agent Orchestration framework is not meant for processing identifiable health records. Ensure that you follow all PHI/PII regulations when configuring or using the system.
+> The Rush GYN Oncology Tumor Board framework is not meant for processing identifiable health records. Ensure that you follow all PHI/PII regulations when configuring or using the system.
 
 ## Add Your Own Data
 
 > [!WARNING]
 > Data will be publicly available unless you configure authentication as mentioned in [Infrastructure](./infra.md#security)
 
-To manage patient data, follow these steps:
+### Option A: Epic Caboodle CSV Format (Recommended)
 
-1. **Create a New Folder**: 
+This is the primary data format, matching Rush's Epic Clarity/Caboodle exports.
+
+1. **Create a New Folder**:
     - Navigate to `infra/patient_data`.
-    - Create a new folder named after the patient.
-    - Create a `clinical_notes` subfolder.
-    - Create an `images` subfolder.
+    - Create a new folder named after the patient (e.g., `patient_gyn_003`).
 
-2. **Add Clinical Notes**:
-    - Inside the `clinical_notes` subfolder, create JSON files for each clinical note entry.
-    - Each clinical note must contain the following attributes:
-        - id: a unique identifier of the clinical note
-        - date: the date of the clinical note
-        - type: the type of clinical note (e.g. "progress note", "telephone encounter", "pathology", etc...)
-        - text: the clinical note text
+2. **Add CSV Files**:
+    Place the following CSV files in the patient folder:
 
-3. **Add Images**:
-    - Inside the `images` subfolder, copy patient image files to the folder.
-    - Only PNG images are supported.
-    - Create a `metadata.json` file to describe the images.
-    - `metadata.json` is a list of JSON objects that contain the following attributes:
-        - filename: the name of an image file
-        - type: a string that describes the image file (e.g. "CT image", "pathology image", "x-ray image", etc...)
+    | File | Required | Description |
+    |------|----------|-------------|
+    | `clinical_notes.csv` | Yes | All clinical note types (H&P, consults, telephone encounters, etc.) |
+    | `lab_results.csv` | Yes | Lab results with values, units, reference ranges, and dates |
+    | `pathology_reports.csv` | Recommended | Surgical pathology and cytology report text |
+    | `radiology_reports.csv` | Recommended | Structured radiology report text |
+    | `cancer_staging.csv` | Optional | FIGO staging data |
+    | `medications.csv` | Optional | Medication history |
+    | `diagnoses.csv` | Optional | Diagnosis records |
 
-4. **Upload Patient Data**:
-    - From the command line, run `scripts/uploadPatientData.ps1` for Windows or `scripts/uploadPatientData.sh` for Linux/Mac to upload patient data to storage.
-    - Alternatively, running `azd up` or `azd provision` will also upload patient data to Azure Blob Storage. `scripts/uploadPatientData.ps1` and `scripts/uploadPatientData.sh` are called in the `postprovision` step of [azure.yaml](../azure.yaml).
+    Use `scripts/validate_patient_csvs.py` to validate CSV file integrity:
+    ```bash
+    python scripts/validate_patient_csvs.py infra/patient_data/patient_gyn_003
+    ```
 
-5. **Test New Patient Data**:
+    Use `scripts/parse_tumor_board_excel.py` to convert tumor board Excel input into the CSV format:
+    ```bash
+    python scripts/parse_tumor_board_excel.py <input_excel> <output_patient_folder>
+    ```
 
-    From a Teams chat, ask an agent to perform a task using the new patient ID. If you would like to create a personal chat for testing, see [Create Personal Teams Chat](./teams.md#create_personal_chat).
+3. **Add Images** (optional):
+    - Create an `images` subfolder and add PNG image files.
+    - Create a `metadata.json` file describing the images.
 
-    - For new clinical notes and images, use the **Orchestrator** agent.
-        - Send the message "@Orchestrator prepare tumor board for patient id *new_patient_id*". Proceed with the plan proposed by the **Orchestrator** agent.
-        - Verify the patient timeline is created using the new clinical notes.
-        - Click the source links to verify that the new clinical notes are loaded correctly (id, date, type, and text).
-        - Verify new images are loaded by the **Radiology** agent.
-    - For new clinical notes only, use the **PatientHistory** agent.
-        - Send the message "@PatientHistory create patient timeline for patient id *new_patient_id*".
-        - Verify the patient timeline is created using the new clinical notes.
-        - Click the source links to verify that the new clinical notes are loaded correctly (id, date, type, and text).
+### Option B: Legacy JSON Format
 
+For backward compatibility with the upstream `healthcare-agent-orchestrator`, clinical notes can also be stored as JSON files in a `clinical_notes` subfolder. Each JSON file must contain: `id`, `date`, `type`, and `text` fields.
 
+## Upload Patient Data
+
+- From the command line, run `scripts/uploadPatientData.ps1` (Windows) or `scripts/uploadPatientData.sh` (Linux/Mac) to upload patient data to Azure Blob Storage.
+- Alternatively, `azd up` or `azd provision` will upload patient data automatically via the `postprovision` hook.
+
+## Test New Patient Data
+
+From Teams or the React chat UI, test using the new patient ID:
+
+- **Full tumor board review**: `@Orchestrator prepare tumor board for patient id <new_patient_id>`
+- **Timeline only**: `@PatientHistory create patient timeline for patient id <new_patient_id>`
+- **Validate CSV integrity**: `python scripts/validate_patient_csvs.py infra/patient_data/<new_patient_id>`
+- **Local test**: `CLINICAL_NOTES_SOURCE=caboodle python3 -m pytest tests/test_local_agents.py -v`
+
+If you would like to create a personal chat for testing, see [Create Personal Teams Chat](./teams.md#create_personal_chat).
 

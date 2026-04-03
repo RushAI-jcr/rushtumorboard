@@ -14,7 +14,7 @@ Below shows a sample data flow and use cases that HDS unlocks, going from raw FH
 
 ### Prerequisites
 
-The assumption is that you have already deployed Healthcare Agent Orchestrator (HAO) using the default blob storage. Additionally, it is expected you have already onboarded to Fabric and have a baseline understanding of its features and terminiology. More information can be found [here]().
+The assumption is that you have already deployed Rush GYN Oncology Tumor Board using the default blob storage. Additionally, it is expected you have already onboarded to Fabric and have a baseline understanding of its features and terminiology. More information can be found [here]().
 
 ## Deploy healthcare data solutions (HDS) to a Fabric Workspace
 
@@ -26,7 +26,7 @@ In a Fabric workspace, you will want to [deploy the clinical foundations capabil
 
 ## Generate Sample Data
 
-The default storage solution for Healthcare Agent Orchestrator (HAO) uses blob storage. During deployment, the contents of the `infra/data` are uploaded to a storage account. We can re-use the same sample data but it needs to be properly formatted. There is a script `scripts/generate_fhir_resources.py` that needs to be executed to generate FHIR NDJSON files suitable for ingestion by HDS.
+The default storage solution for Rush GYN Oncology Tumor Board uses blob storage. During deployment, the contents of the `infra/data` are uploaded to a storage account. We can re-use the same sample data but it needs to be properly formatted. There is a script `scripts/generate_fhir_resources.py` that needs to be executed to generate FHIR NDJSON files suitable for ingestion by HDS.
 
 Run the script with the following argument to generate the corresponding files:
 ```
@@ -74,7 +74,7 @@ https://msit.powerbi.com/groups/73eb06f4-6494-4d6d-ab7e-f92faa5e8643/userdatafun
 
 ### Onboarding to Fabric REST APIs
 
-The Healthcare Agent Orchestrator (HAO) will interface with Microsoft Fabric by calling some of its [Public REST APIs](https://learn.microsoft.com/en-us/rest/api/fabric/articles/identity-support). In this example we will be using the APIs for Fabric's [User Data Functions](https://blog.fabric.microsoft.com/en-US/blog/service-principal-and-private-library-support-for-fabric-user-data-functions/).
+The Rush GYN Oncology Tumor Board will interface with Microsoft Fabric by calling some of its [Public REST APIs](https://learn.microsoft.com/en-us/rest/api/fabric/articles/identity-support). In this example we will be using the APIs for Fabric's [User Data Functions](https://blog.fabric.microsoft.com/en-US/blog/service-principal-and-private-library-support-for-fabric-user-data-functions/).
 
 If you are interested in exposing data using a Fabric GraphQL instance, more information can be found [here](https://learn.microsoft.com/en-us/fabric/data-engineering/connect-apps-api-graphql).
 

@@ -2,7 +2,7 @@
 
 > For network access control, see [Network Security Architecture](./network.md)
 
-Healthcare Agent Orchestrator provides tenant-level and user-level access control using this [middleware](https://github.com/Azure-Samples/healthcare-agent-orchestrator/blob/main/src/bots/access_control_middleware.py). By default, all tenants and users are allowed to use the deployed agents in Teams.
+Rush GYN Oncology Tumor Board provides tenant-level and user-level access control using this [middleware](https://github.com/RushAI-jcr/rushtumorboard/blob/main/src/bots/access_control_middleware.py). By default, all tenants and users are allowed to use the deployed agents in Teams.
 
 To restrict access to agents, access control can be configured using environment variables. Tenant ID and user ID can be looked up in [Microsoft Entra](https://entra.microsoft.com).
 
@@ -12,7 +12,7 @@ To restrict access to agents, access control can be configured using environment
 If user is not authorized to access an agent, the agent will respond with `You are not authorized to access this agent.`. Check AppService log for the reason of denied access.
 
 > [!IMPORTANT]
-> The user who deploys Healthcare Agent Orchestrator and the tenant where it's deployed are always allowed.
+> The user who deploys Rush GYN Oncology Tumor Board and the tenant where it's deployed are always allowed.
 
 ## Sample Configurations
 This section provides sample configurations for various scenarios of access control.
@@ -30,7 +30,7 @@ azd up
 ```
 
 ### Allow Single User
-Allow only the deployer and the tenant of the Healthcare Agent Orchestrator deployment in Azure.
+Allow only the deployer and the tenant of the Rush GYN Oncology Tumor Board deployment in Azure.
 ```ps
 azd env set ADDITIONAL_ALLOWED_TENANT_IDS ""
 azd env set ADDITIONAL_ALLOWED_USER_IDS ""
@@ -40,7 +40,7 @@ azd up
 ```
 
 ### Allow All Users from Single Tenant
-Allow all users from the tenant of the the Healthcare Agent Orchestrator deployment in Azure.
+Allow all users from the tenant of the the Rush GYN Oncology Tumor Board deployment in Azure.
 
 ```ps
 azd env set ADDITIONAL_ALLOWED_TENANT_IDS ""
@@ -51,7 +51,7 @@ azd up
 ```
 
 ### Allow Selected Users from Single Tenant
-Allow selected users from the tenant of the the Healthcare Agent Orchestrator deployment in Azure.
+Allow selected users from the tenant of the the Rush GYN Oncology Tumor Board deployment in Azure.
 
 ```ps
 azd env set ADDITIONAL_ALLOWED_TENANT_IDS ""

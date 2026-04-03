@@ -1,13 +1,13 @@
 # Network Security Architecture
 
-Healthcare Agent Orchestrator implements a foundational network security architecture that can be enhanced to meet enterprise-grade security requirements for healthcare workloads. This document outlines the current implementation and provides guidance for implementing advanced security features including private App Service deployment with Application Gateway integration.
+Rush GYN Oncology Tumor Board implements a foundational network security architecture that can be enhanced to meet enterprise-grade security requirements for healthcare workloads. This document outlines the current implementation and provides guidance for implementing advanced security features including private App Service deployment with Application Gateway integration.
 
 > [!IMPORTANT]
 > The enhanced private architecture options described in this document are recommended for production healthcare environments handling PHI data. The current basic network implementation is suitable for development and testing scenarios.
 
 ## Current Network Implementation
 
-The Healthcare Agent Orchestrator deploys with a secure network foundation that includes:
+The Rush GYN Oncology Tumor Board deploys with a secure network foundation that includes:
 
 - **Virtual Network (VNet)** isolation with configurable address space (`10.0.0.0/16` default)
 - **App Service subnet** with VNet integration (`10.0.1.0/24` default)

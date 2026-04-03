@@ -1,6 +1,6 @@
-# Healthcare Agent Orchestrator Chat Client
+# Rush GYN Oncology Tumor Board — Chat Client
 
-This is a React-based frontend for the Healthcare Agent Orchestrator. It allows users to interact with the agents through a web interface instead of using Microsoft Teams.
+A React-based frontend for the GYN Oncology Tumor Board agent orchestrator. Built with Vite, FluentUI, and Redux, it allows clinicians to interact with the tumor board agents through a web interface instead of Microsoft Teams.
 
 ## Setup
 
