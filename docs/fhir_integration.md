@@ -12,7 +12,9 @@ The dataflow for integrating AI agents with a FHIR service to retrieve clinical 
 This code sample includes a sample implementation of a FHIR service client named [FhirClinicalNoteAccessor](../src/data_models/fhir/fhir_clinical_note_accessor.py). The [FhirClinicalNoteAccessor](../src/data_models/fhir/fhir_clinical_note_accessor.py) module demonstrates how to connect to a FHIR service and retrieve patient clinical data, specifically clinical notes. Key features of this module include:  
    
 - **Authentication Examples:** Step-by-step examples showing how to authenticate requests to the FHIR service using various methods.  
-- **Querying Clinical Notes by Patient ID:** Example queries for retrieving clinical notes associated with a specific patient ID from the FHIR service.  
+- **Querying Clinical Notes by Patient ID:** Example queries for retrieving clinical notes associated with a specific patient ID from the FHIR service.
+- **Shared Session Management:** The accessor maintains a single `aiohttp.ClientSession` across all requests, initialized lazily under an `asyncio.Lock`. This avoids TCP connection overhead from per-request session creation.
+- **Defensive Resource Parsing:** Patient resources with missing or incomplete `name` fields are skipped with a warning rather than raising `KeyError`, ensuring a single malformed record does not abort the entire patient lookup.
    
 This module serves as a practical starting point for developers who want to integrate with their EHR system.
 

@@ -61,7 +61,7 @@ See the [FHIR Integration Guide](./fhir_integration.md) for Azure Health Data Se
 | Data Model | Type | Description |
 |-|-|-|
 | Chat Artifact | ChatArtifact | Stores generated data from agents: patient timeline, extracted findings, research results |
-| Chat Context | ChatContext | Chat session state including history and loaded patient data |
+| Chat Context | ChatContext | Chat session state including history and loaded patient data. `patient_id` is set-once — overwriting with a different ID raises `ValueError` to prevent cross-patient contamination. |
 | Clinical Note | dict | Clinical notes — H&P, consultation, progress notes, referral letters |
 | Pathology Report | dict | Surgical pathology, cytology, molecular testing reports |
 | Radiology Report | dict | CT, MRI, PET/CT, ultrasound reports |
@@ -91,6 +91,12 @@ Additional accessors:
 ### ClinicalNoteAccessorProtocol
 
 `src/data_models/clinical_note_accessor_protocol.py` defines a Protocol interface (structural subtyping) for the clinical note accessor. This enables duck-typing compatibility across the three accessor implementations — `CaboodleFileAccessor` (local CSV), `FhirClinicalNoteAccessor`, and `FabricClinicalNoteAccessor` — without requiring a shared base class. Any object that implements the methods in the protocol can be used interchangeably by agent tools.
+
+### FHIR Accessor Session Management
+
+`FhirClinicalNoteAccessor` uses a **shared `aiohttp.ClientSession`** across all requests within a conversation. The session is created lazily on first use, guarded by an `asyncio.Lock` to prevent duplicate initialization under concurrent access. Both `fetch_all_entries` and `read()` use this shared session — only `read_all()` opens its own short-lived session for batch note fetching.
+
+Patient resources with missing or malformed `name` fields are skipped with a warning log rather than raising `KeyError` or `IndexError`, allowing the remaining bundle entries to be returned.
 
 ## 3-Layer Note Fallback
 

@@ -79,17 +79,28 @@ For detailed information on SK plugins, see the [official documentation](https:/
 
 | Plugin | Function |
 |--------|----------|
-| `content_export` | Export tumor board summary to landscape 4-column Word document |
-| `presentation_export` | Export 3-slide PPTX with CA-125 trend chart |
+| `content_export` | Export tumor board summary to landscape 5-column Word document (Patient · Dx & History · Previous Tx · Imaging · Discussion) |
+| `presentation_export` | Export 5-slide PPTX with native CA-125 trend chart (one slide per tumor board column) |
 | `oncologic_history_extractor` | Extract structured prior oncologic history from clinical notes |
 | `pathology_extractor` | Extract pathology findings (histology, IHC, molecular markers) |
 | `radiology_extractor` | Extract imaging findings from radiology reports |
 | `tumor_markers` | Extract and trend tumor markers (CA-125, HE4, etc.) |
 | `clinical_trials_nci` | Search NCI ClinicalTrials.gov for eligible GYN trials |
 | `clinical_trials` | Search clinicaltrials.gov (legacy) |
-| `graph_rag` | RAG search of research papers via GraphRAG |
+| `medical_research` | Search PubMed/Europe PMC/Semantic Scholar; RISEN synthesis; validated citations |
 | `patient_data` | Timeline + Q&A over patient notes from Epic Caboodle |
 
+
+> **Required:** Every `@kernel_function` decorator must include a `description=` argument.
+> Without it, the Semantic Kernel planner cannot select the tool and LLM tool calls will fail silently.
+>
+> ```python
+> @kernel_function(
+>     description="Brief description of what this tool does and when to call it."
+> )
+> async def my_tool(self, patient_id: str) -> str:
+>     ...
+> ```
 
 ### Creating and Attaching Custom Tools
 

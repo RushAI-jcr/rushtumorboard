@@ -14,8 +14,8 @@ A multi-agent system that coordinates specialized AI agents to support **Gynecol
 - **NCCN guideline lookup** — Docling + PyMuPDF pipeline loads NCCN GYN PDFs; GPT-4o retrieves algorithm-relevant pages for endometrial, cervical, ovarian, vaginal, and vulvar cancers
 - **Evidence-based research** — real-time PubMed, Europe PMC, and Semantic Scholar search with RISEN synthesis prompt, PubMed-first deduplication, and post-synthesis citation validation (no fabricated PMIDs)
 - **Outside hospital (OSH) transfer support** — structured history extraction for the ~20–30% of patients referred from other institutions
-- **Landscape 4-column Word document** matching the current Rush tumor board format (Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
-- **3-slide PowerPoint** summary with CA-125 trend chart
+- **Landscape 5-column Word document** matching the Rush tumor board format (Patient | Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
+- **5-slide PowerPoint** summary with CA-125 trend chart (one slide per tumor board column)
 - **Clinical trials search** via NCI ClinicalTrials.gov API + AACT with GOG/NRG awareness
 - Integration with Microsoft Teams and Copilot Studio via MCP
 
@@ -109,11 +109,11 @@ flowchart LR
 | **OncologicHistory** | `oncologic_history_extractor`, `patient_data` | Extracts structured prior oncologic history — diagnosis, treatments, recurrences, reason for referral. Critical for OSH transfers |
 | **Pathology** | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel (MMR/p53/ER/HER2), molecular markers, FIGO grade, endometrial molecular classification (POLEmut/MMRd/NSMP/p53abn) |
 | **Radiology** | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM text analysis; RECIST response tracking |
-| **PatientStatus** | `tumor_markers`, `pretumor_board_checklist` | Step 0: pre-meeting procedure pass (labs/imaging/path/consults); then FIGO staging, molecular profile, platinum sensitivity |
+| **PatientStatus** | `tumor_markers`, `pretumor_board_checklist`, `patient_data` | Step 0: pre-meeting procedure pass (labs/imaging/path/consults); then FIGO staging, molecular profile, platinum sensitivity |
 | **ClinicalGuidelines** | `nccn_guidelines` | NCCN-based treatment recommendations using loaded NCCN GYN PDFs (endometrial, cervical, ovarian, vaginal, vulvar) |
 | **ClinicalTrials** | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness and GYN-specific metadata |
 | **MedicalResearch** | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search; RISEN synthesis prompt; post-synthesis citation validation |
-| **ReportCreation** | `content_export`, `presentation_export` | Assembles landscape 4-column Word doc + 3-slide PPTX with CA-125 trend chart |
+| **ReportCreation** | `content_export`, `presentation_export` | Assembles landscape 5-column Word doc + 5-slide PPTX with CA-125 trend chart |
 
 ## Getting Started
 
@@ -177,6 +177,8 @@ azd env set AZURE_APPSERVICE_LOCATION <region>
 | `AZURE_GPT_LOCATION` | Region for GPT resources | Azure region | `AZURE_LOCATION` |
 | `AZURE_APPSERVICE_LOCATION` | Region for App Service deployment | Azure region | `AZURE_LOCATION` |
 | `CLINICAL_NOTES_SOURCE` | Source of clinical notes | `caboodle`, `blob`, `fhir`, `fabric` | `blob` |
+| `AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL` | Reasoning model deployment (required for ClinicalTrials agent) | Azure OpenAI deployment name | — |
+| `AZURE_OPENAI_REASONING_MODEL_ENDPOINT` | Reasoning model endpoint (required for ClinicalTrials agent) | Azure OpenAI endpoint URL | — |
 
 For local development with Epic Clarity CSV exports:
 ```sh
@@ -272,19 +274,22 @@ Before the tumor board review, `PatientStatus` runs a procedure pass that audits
 
 Each item returns ✓ current / ⚠ stale / ✗ missing, with Rush Epic order codes for any gaps.
 
-### Word Document (Landscape 4-Column)
+### Word Document (Landscape 5-Column)
 The ReportCreation agent generates a one-page landscape Word document with:
 
-| Column 1 | Column 2 | Column 3 | Column 4 |
-|-----------|----------|----------|----------|
-| Diagnosis & Pertinent History | Previous Tx or Operative Findings, Tumor Markers | Imaging | Discussion |
+| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 |
+|----------|-----------|----------|----------|----------|
+| Patient (case #, MRN, attending, RTC, location, path date) | Diagnosis & Pertinent History | Previous Tx or Operative Findings, Tumor Markers | Imaging | Discussion |
 
 Content uses clinical shorthand (s/p, dx, bx, LN, OSH, c/w) with M/D/YY date format.
+Staging and genetics (primary site, FIGO stage, germline, somatic) appear in red matching the Rush tumor board format.
 
-### PowerPoint (3 Slides)
-1. **Overview** — patient demographics, diagnosis, staging
-2. **Findings** — pathology, imaging, CA-125 trend chart
-3. **Treatment Plan** — NCCN recommendations, eligible clinical trials
+### PowerPoint (5 Slides)
+1. **Patient** — case logistics (case #, attending, RTC, location, path date)
+2. **Diagnosis** — narrative + staging/genetics in red
+3. **Previous Tx** — treatment history with native CA-125 trend chart
+4. **Imaging** — dated imaging studies (CT/MRI/PET)
+5. **Discussion** — review types, trial eligibility, plan
 
 ## Resources
 
@@ -316,7 +321,12 @@ Deployment creates:
 
 ### Security
 
-All resources use Entra ID authentication. No passwords are stored. The web app exposes a public unauthenticated endpoint — files under `infra/patient_data` will be publicly available.
+All resources use Entra ID authentication. No passwords are stored.
+
+- **API routes** are protected via Azure App Service EasyAuth (Entra ID). WebSocket connections require a valid `X-MS-CLIENT-PRINCIPAL-ID` header — unauthenticated clients are rejected before the connection is accepted.
+- **Demo view routes** (`/view/`) for patient timeline and data-answer HTML pages are disabled by default. Enable only in development environments by setting `DEMO_ROUTES_ENABLED=true`.
+- **Real patient GUIDs** must not be hardcoded in source files. For tests requiring real patient IDs, add them to `src/tests/local_patient_ids.json` (gitignored) or set the `TEST_PATIENT_GUIDS` environment variable.
+- Files under `infra/patient_data/` with UUID-format folder names are gitignored and will not be committed.
 
 ## Ethical Considerations
 Microsoft believes Responsible AI is a shared responsibility. While testing agents with patient data, ensure the data contains no PHI/PII and cannot be traced to a patient identity. Please see [Microsoft's Responsible AI Principles](https://www.microsoft.com/en-us/ai/principles-and-approach/).

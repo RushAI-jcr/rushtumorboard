@@ -9,8 +9,8 @@ A Teams agent will only respond to a message if it contains a mention. Always st
 - Press Enter or click the send button.
 
 You can start a chat using one of the following messages:
-- $\color{#7b83eb}{\text{@Orchestrator}}$ prepare tumor board for patient id patient_4
-- $\color{#7b83eb}{\text{@PatientHistory}}$ create patient timeline for patient id patient_4
+- $\color{#7b83eb}{\text{@Orchestrator}}$ prepare tumor board for patient id patient_gyn_001
+- $\color{#7b83eb}{\text{@PatientHistory}}$ create patient timeline for patient id patient_gyn_001
 - $\color{#7b83eb}{\text{@ClinicalTrials}}$ what trials would the following patient qualify for
   - Age: 66 years old
   - Patient Gender: Female
@@ -45,34 +45,34 @@ It is a known issue that long-running task orchestration may be interrupted if t
 The $\color{#7b83eb}{\text{@Orchestrator}}$ agent is sensitive to the initial request. Depending on how the request is made, the orchestrator's proposed plan will vary.
 
 Consider two requests:
-1. $\color{#7b83eb}{\text{@Orchestrator}}$ _Generate a patient timeline for patient_7._
-2. $\color{#7b83eb}{\text{@Orchestrator}}$ _Based on the full clinical picture of patient_7 - including stage, biomarkers, treatment response, and recent imaging - generate a comprehensive patient timeline._
+1. $\color{#7b83eb}{\text{@Orchestrator}}$ _Generate a patient timeline for patient_gyn_001._
+2. $\color{#7b83eb}{\text{@Orchestrator}}$ _Based on the full clinical picture of patient_gyn_001 - including stage, biomarkers, treatment response, and recent imaging - generate a comprehensive patient timeline._
 
 The second request will result in a more comprehensive plan and a more detailed timeline, while the first one may generate a shorter version of the timeline, e.g., omitting radiological results with images.
 
-## Configuring Research Agent
+## MedicalResearch Agent
 
-The research agent leverages [GraphRAG](https://github.com/microsoft/graphrag), a modular graph-based Retrieval-Augmented Generation (RAG) system developed by Microsoft Research. To use the research agent effectively, deploy and index your own instance of GraphRAG. The [graphrag-accelerator](https://github.com/azure-samples/graphrag-accelerator) simplifies this setup process.
+The MedicalResearch agent searches **PubMed**, **Europe PMC**, and **Semantic Scholar** concurrently for GYN oncology literature, then synthesizes findings using a RISEN-structured prompt. All citations are post-validated against retrieved papers — no fabricated PMIDs.
 
-### Configuration Steps
+### Optional API Keys
 
-1. **Update Configuration File**  
-  Specify the GraphRAG endpoint and index details in the `scenarios/default/config/agents.yaml` file:
-  ```yaml
-  graph_rag_url: "https://graphrag.azure-api.net/"
-  graph_rag_index_name: "wiki-articles-demo-index"
-  ```
+By default the agent uses unauthenticated public APIs (rate limited). Add keys to `.env` for higher throughput:
 
-2. **Set API Key Securely**  
-  Use the Azure Developer CLI to securely store the API key:
-  ```bash
-  azd env set-secret GRAPH_RAG_SUBSCRIPTION_KEY
-  ```
-  Refer to the [Azure Developer CLI documentation](https://learn.microsoft.com/azure/developer/azure-developer-cli/) for detailed instructions on managing secrets.
+```sh
+# NCBI/PubMed — increases rate limit from 3 to 10 req/second
+NCBI_API_KEY=<your-ncbi-api-key>
 
-### Technical Limitations
+# Semantic Scholar — enables higher volume paper metadata access
+SEMANTIC_SCHOLAR_API_KEY=<your-s2-api-key>
+```
 
-The research agent's performance depends on the quality of the indexed data and the configuration of the GraphRAG system. Ensure proper indexing and validation to achieve optimal results.
+### Output
+
+The agent returns a structured evidence summary with:
+- Evidence levels (I–V) assigned per paper
+- Inline PMID citations for every factual claim
+- A References section in Vancouver format
+- A warning note if fewer than 3 relevant papers were found
 
 The Healthcare Agent Orchestration framework is not intended for direct clinical use, including diagnosis, treatment, or disease prevention. It should not replace professional medical advice or judgment. Clinical performance depends on several factors as noted below.
 
@@ -114,7 +114,7 @@ The PatientHistory and PatientStatus agents are based on the Universal Abstracti
 
 **MedicalResearch**
 
-The MedicalResearch agent is based on Microsoft's GraphRAG technology, ensuring that the responses are grounded in high-quality relevant research publications. This technology has been evaluated in a wide variety of domains and scenarios, outperforming traditional RAG or internal LLM knowledge in terms of comprehensiveness, human enfranchisement, and diversity.
+The MedicalResearch agent searches PubMed (primary), Europe PMC, and Semantic Scholar concurrently. It uses a RISEN synthesis prompt and post-validates all citations against retrieved papers. Evidence is graded Level I–V; Level IV–V claims are flagged. Output citations are in Vancouver format with verified PMID links.
 
 **ClinicalTrials**
 
