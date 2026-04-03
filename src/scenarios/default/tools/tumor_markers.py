@@ -294,6 +294,7 @@ class TumorMarkerPlugin:
                 "peak": max(values) if values else None,
                 "unit": points[0]["unit"] if points else "",
                 "trend": self._simple_trend(values),
+                "data_points": points,
             }
 
         return json.dumps({

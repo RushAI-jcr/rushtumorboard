@@ -320,12 +320,15 @@ class PresentationExportPlugin:
             # get_tumor_marker_trend shape: top-level "data_points" list
             if "data_points" in data:
                 data = data["data_points"]
-            # get_all_tumor_markers shape: dict keyed by marker name
-            elif data and all(isinstance(v, dict) for v in data.values()):
-                first = next(iter(data.values()), {})
-                data = first.get("data_points", [])
             else:
-                data = data.get("markers", data.get("results", []))
+                # get_all_tumor_markers shape: {"patient_id": "...", "markers": {"CA-125": {...}}}
+                # "patient_id" maps to a str so all(isinstance(v, dict)) is False — unwrap explicitly
+                inner = data.get("markers", data.get("results", data))
+                if isinstance(inner, dict):
+                    first = next(iter(inner.values()), {})
+                    data = first.get("data_points", []) if isinstance(first, dict) else []
+                else:
+                    data = inner
         if not isinstance(data, list) or len(data) < 2:
             return None
         return data
