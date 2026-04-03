@@ -175,11 +175,16 @@ class TestCaboodleGynMethods:
     @pytest.mark.asyncio
     async def test_get_clinical_notes_by_type(self, caboodle):
         """Layer 2 fallback: filter clinical notes by NoteType."""
-        notes = await caboodle.get_clinical_notes_by_type(PATIENT_ID, ["H&P", "Progress Notes"])
+        # Synthetic data uses "History and Physical" / "Progress Note" (singular);
+        # real Rush data uses "H&P" / "Progress Notes" (plural). Test both forms.
+        notes = await caboodle.get_clinical_notes_by_type(
+            PATIENT_ID, ["H&P", "History and Physical", "Progress Notes", "Progress Note"]
+        )
         assert len(notes) > 0
+        expected = {"h&p", "history and physical", "progress notes", "progress note"}
         for n in notes:
             note_type = n.get("NoteType", n.get("note_type", "")).lower()
-            assert note_type in {"h&p", "progress notes"}
+            assert note_type in expected
 
     @pytest.mark.asyncio
     async def test_get_clinical_notes_by_type_empty(self, caboodle):
@@ -733,6 +738,8 @@ class TestInputValidation:
         For real patients, pathology/radiology info may only be in clinical notes,
         not in dedicated report CSVs. This validates the fallback is viable.
         """
+        if not REAL_GUIDS:
+            pytest.skip("No real patient GUIDs configured (local_patient_ids.json or TEST_PATIENT_GUIDS)")
         caboodle = CaboodleFileAccessor(data_dir=REAL_DATA_DIR)
         # Pick first real GUID
         guid = REAL_GUIDS[0]
