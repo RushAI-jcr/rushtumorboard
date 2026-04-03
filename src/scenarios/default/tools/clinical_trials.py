@@ -72,6 +72,7 @@ class ClinicalTrialsPlugin:
         self.clinical_trial_display = "https://clinicaltrials.gov/study/"
         self.chat_ctx = chat_ctx
         self.app_ctx = app_ctx
+        self._session: aiohttp.ClientSession | None = None
 
         # Clinical trial matching works better with a reasoning model (gpt-5.4 or o3)
         _reasoning_deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL")
@@ -98,6 +99,14 @@ class ClinicalTrialsPlugin:
         else:
             reasoning_kwargs["ad_token_provider"] = self.app_ctx.cognitive_services_token_provider
         self.chat_completion_service = AzureChatCompletion(**reasoning_kwargs)
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        """Return a shared aiohttp session, creating one if needed."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30)
+            )
+        return self._session
 
     @kernel_function(
         description=(
@@ -171,10 +180,10 @@ class ClinicalTrialsPlugin:
             "fields": "ConditionsModule|EligibilityModule|IdentificationModule"
         }
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.clinical_trial_url, params=params) as resp:
-                    resp.raise_for_status()
-                    result = await resp.json()
+            session = self._get_session()
+            async with session.get(self.clinical_trial_url, params=params) as resp:
+                resp.raise_for_status()
+                result = await resp.json()
         except aiohttp.ClientResponseError as e:
             logger.error("ClinicalTrials.gov API error: HTTP %d", e.status)
             return json.dumps({"error": "Clinical trials search temporarily unavailable."})
@@ -289,10 +298,10 @@ class ClinicalTrialsPlugin:
             return json.dumps({"error": f"Invalid NCT ID format: {trial!r}. Expected NCTxxxxxxxx (8 digits)."})
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.clinical_trial_url + nct_id) as resp:
-                    resp.raise_for_status()
-                    result = await resp.json()
+            session = self._get_session()
+            async with session.get(self.clinical_trial_url + nct_id) as resp:
+                resp.raise_for_status()
+                result = await resp.json()
         except aiohttp.ClientResponseError as e:
             logger.error("ClinicalTrials.gov API error for %s: HTTP %d", nct_id, e.status)
             return json.dumps({"error": f"Could not retrieve trial {nct_id}."})

@@ -5,7 +5,7 @@ import json
 import os
 
 from azure.core.exceptions import ResourceNotFoundError
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse
 
 from data_models.chat_artifact import ChatArtifactFilename, ChatArtifactIdentifier
@@ -14,13 +14,22 @@ from data_models.patient_data import PatientDataAnswer
 from routes.views.grounded_clinical_note import render_grounded_clinical_note
 
 
+def _require_authenticated_user(request: Request) -> str:
+    """Reject requests without Azure App Service authentication."""
+    principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID", "")
+    if not principal_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return principal_id
+
+
 def patient_data_answer_source_routes(data_access: DataAccess):
     """
     Create routes for viewing patient data answer sources.
 
     This code is not meant to be used in production. It is for demonstration purposes only.
     """
-    router = APIRouter()
+    router = APIRouter(dependencies=[Depends(_require_authenticated_user)])
 
     @router.get("/view/{conversation_id}/{patient_id}/patient_data_answer/{answer_id}/source/{source_index}.html")
     async def get_source(conversation_id: str, patient_id: str, answer_id: str, source_index: str):

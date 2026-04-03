@@ -13,6 +13,7 @@ from autogen_core import CancellationToken
 from botbuilder.core import ActivityHandler, MessageFactory, TurnContext
 from botbuilder.integration.aiohttp import CloudAdapter
 
+from .bot_context import get_bot_context as _get_bot_context_shared
 from data_models.app_context import AppContext
 from data_models.chat_context import ChatContext
 from group_chat import create_group_chat
@@ -127,9 +128,8 @@ class MagenticBot(ActivityHandler):
         if str(error) == "Unable to proceed while another agent is active.":
             await context.send_activity("Please wait for the current agent to finish.")
         else:
-            # default exception handling
-            logger.exception(f"Agent {self.name} encountered an error")
-            await context.send_activity(f"Orchestrator is working on solving your problems, please retype your request")
+            logger.exception("Agent %s encountered an error", self.name)
+            await context.send_activity("An error occurred. Please retype your request.")
 
     async def user_message_provided(self, message: str, turn_context: TurnContext):
         conv_id = _get_conversation_id(turn_context)
@@ -166,53 +166,13 @@ class MagenticBot(ActivityHandler):
 
         return user_input_func
 
-    async def create_turn_context(self, bot_name, turn_context):
-        app_id = next(
-            agent["bot_id"] for agent in self.all_agents if agent["name"] == bot_name
-        )
-
-        # Lookup adapter for bot_name. bot_name maybe different from self.name.
-        adapter = self.adapters[bot_name]
-        claims_identity = adapter.create_claims_identity(app_id)
-        connector_factory = (
-            adapter.bot_framework_authentication.create_connector_factory(
-                claims_identity
-            )
-        )
-        connector_client = await connector_factory.create(
-            turn_context.activity.service_url, "https://api.botframework.com"
-        )
-        user_token_client = (
-            await adapter.bot_framework_authentication.create_user_token_client(
-                claims_identity
-            )
-        )
-
-        async def logic(context: TurnContext):
-            pass
-
-        context = TurnContext(adapter, turn_context.activity)
-        context.turn_state[CloudAdapter.BOT_IDENTITY_KEY] = claims_identity
-        context.turn_state[CloudAdapter.BOT_CONNECTOR_CLIENT_KEY] = connector_client
-        context.turn_state[CloudAdapter.USER_TOKEN_CLIENT_KEY] = user_token_client
-        context.turn_state[CloudAdapter.CONNECTOR_FACTORY_KEY] = connector_factory
-        context.turn_state[CloudAdapter.BOT_OAUTH_SCOPE_KEY] = "https://api.botframework.com/.default"
-        context.turn_state[CloudAdapter.BOT_CALLBACK_HANDLER_KEY] = logic
-
-        return context
-
-    async def get_bot_context(
+    async def _get_bot_context(
         self, conversation_id: str, bot_name: str, turn_context: TurnContext
-    ):
-        if conversation_id not in self.turn_contexts:
-            self.turn_contexts[conversation_id] = {}
-
-        if bot_name not in self.turn_contexts[conversation_id]:
-            context = await self.create_turn_context(bot_name, turn_context)
-
-            self.turn_contexts[conversation_id][bot_name] = context
-
-        return self.turn_contexts[conversation_id][bot_name]
+    ) -> TurnContext:
+        return await _get_bot_context_shared(
+            self.turn_contexts, self.all_agents, self.adapters,
+            conversation_id, bot_name, turn_context,
+        )
 
     async def process_magentic_chat(self, magentic_chat: MagenticOneGroupChat, text: str, turn_context: TurnContext, chat_ctx: ChatContext):
         conv_id = _get_conversation_id(turn_context)
@@ -223,10 +183,6 @@ class MagenticBot(ActivityHandler):
             logger.debug("Received message type: %s", type(message).__name__)
             if isinstance(message, (ToolCallRequestEvent,
                                     ToolCallExecutionEvent, MemoryQueryEvent, UserInputRequestedEvent, ModelClientStreamingChunkEvent, ThoughtEvent)):
-                continue
-
-            elif isinstance(message, UserInputRequestedEvent):
-                logger.info("user input requested")
                 continue
             elif isinstance(message, TaskResult):
                 logger.info("Task result")
@@ -239,7 +195,7 @@ class MagenticBot(ActivityHandler):
                 if agent_name == "MagenticOneOrchestrator":
                     agent_name = self.name
                     logger.info("MagenticOneOrchestrator agent name")
-                context = await self.get_bot_context(
+                context = await self._get_bot_context(
                     conv_id, agent_name, turn_context
                 )
                 content = message.content if isinstance(message.content, str) else str(message.content)
@@ -255,14 +211,16 @@ class MagenticBot(ActivityHandler):
                 context.activity = activity
                 if self.include_monologue:
                     await context.send_activity(activity)
-            if last_result:
-                if not self.include_monologue:
-                    if chat_ctx.chat_history.messages:
-                        last_content = chat_ctx.chat_history.messages[-1].content or ""
-                        await turn_context.send_activity(
-                            MessageFactory.text(last_content)
-                        )
 
+        if last_result:
+            if not self.include_monologue:
+                if chat_ctx.chat_history.messages:
+                    last_content = chat_ctx.chat_history.messages[-1].content or ""
+                    await turn_context.send_activity(
+                        MessageFactory.text(last_content)
+                    )
+
+            if last_result.stop_reason:
                 await turn_context.send_activity(
-                    MessageFactory.text(last_result.stop_reason or "")
+                    MessageFactory.text(last_result.stop_reason)
                 )

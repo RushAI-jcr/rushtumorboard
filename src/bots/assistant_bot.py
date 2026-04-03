@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 
 import asyncio
+import html
 import logging
 import os
 
@@ -11,6 +12,7 @@ from botbuilder.integration.aiohttp import CloudAdapter
 from botbuilder.schema import Activity, ActivityTypes
 from semantic_kernel.agents import AgentGroupChat
 
+from .bot_context import get_bot_context
 from data_models.app_context import AppContext
 from data_models.chat_context import ChatContext
 from errors import NotAuthorizedError
@@ -36,53 +38,13 @@ class AssistantBot(TeamsActivityHandler):
         self.data_access = app_context.data_access
         self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    async def get_bot_context(
+    async def _get_bot_context(
         self, conversation_id: str, bot_name: str, turn_context: TurnContext
-    ):
-        if conversation_id not in self.turn_contexts:
-            self.turn_contexts[conversation_id] = {}
-
-        if bot_name not in self.turn_contexts[conversation_id]:
-            context = await self.create_turn_context(bot_name, turn_context)
-
-            self.turn_contexts[conversation_id][bot_name] = context
-
-        return self.turn_contexts[conversation_id][bot_name]
-
-    async def create_turn_context(self, bot_name, turn_context):
-        app_id = next(
-            agent["bot_id"] for agent in self.all_agents if agent["name"] == bot_name
+    ) -> TurnContext:
+        return await get_bot_context(
+            self.turn_contexts, self.all_agents, self.adapters,
+            conversation_id, bot_name, turn_context,
         )
-
-        # Lookup adapter for bot_name. bot_name maybe different from self.name.
-        adapter = self.adapters[bot_name]
-        claims_identity = adapter.create_claims_identity(app_id)
-        connector_factory = (
-            adapter.bot_framework_authentication.create_connector_factory(
-                claims_identity
-            )
-        )
-        connector_client = await connector_factory.create(
-            turn_context.activity.service_url, "https://api.botframework.com"
-        )
-        user_token_client = (
-            await adapter.bot_framework_authentication.create_user_token_client(
-                claims_identity
-            )
-        )
-
-        async def logic(context: TurnContext):
-            pass
-
-        context = TurnContext(adapter, turn_context.activity)
-        context.turn_state[CloudAdapter.BOT_IDENTITY_KEY] = claims_identity
-        context.turn_state[CloudAdapter.BOT_CONNECTOR_CLIENT_KEY] = connector_client
-        context.turn_state[CloudAdapter.USER_TOKEN_CLIENT_KEY] = user_token_client
-        context.turn_state[CloudAdapter.CONNECTOR_FACTORY_KEY] = connector_factory
-        context.turn_state[CloudAdapter.BOT_OAUTH_SCOPE_KEY] = "https://api.botframework.com/.default"
-        context.turn_state[CloudAdapter.BOT_CALLBACK_HANDLER_KEY] = logic
-
-        return context
 
     async def on_message_activity(self, turn_context: TurnContext) -> None:
         conversation = turn_context.activity.conversation
@@ -109,7 +71,7 @@ class AssistantBot(TeamsActivityHandler):
         if len(chat_ctx.chat_history.messages) == 0:
             # new conversation. Let's see which agents are available.
             async def is_part_of_conversation(agent):
-                context = await self.get_bot_context(conversation_id, agent["name"], turn_context)
+                context = await self._get_bot_context(conversation_id, agent["name"], turn_context)
                 typing_activity = Activity(
                     type=ActivityTypes.typing,
                     relates_to=turn_context.activity.relates_to,
@@ -151,12 +113,11 @@ class AssistantBot(TeamsActivityHandler):
         if str(error) == "Unable to proceed while another agent is active.":
             await context.send_activity("Please wait for the current agent to finish.")
         elif isinstance(error, NotAuthorizedError):
-            logger.warning(error)
+            logger.warning("Access denied for agent %s: %s", self.name, error)
             await context.send_activity("You are not authorized to access this agent.")
         else:
-            # default exception handling
-            logger.exception(f"Agent {self.name} encountered an error")
-            await context.send_activity(f"Orchestrator is working on solving your problems, please retype your request")
+            logger.exception("Agent %s encountered an error", self.name)
+            await context.send_activity("An error occurred. Please retype your request.")
 
     async def process_chat(
         self, chat: AgentGroupChat, chat_ctx: ChatContext, turn_context: TurnContext
@@ -174,7 +135,7 @@ class AssistantBot(TeamsActivityHandler):
         conv_id = conversation.id
 
         async for response in chat.invoke(agent=mentioned_agent):
-            context = await self.get_bot_context(
+            context = await self._get_bot_context(
                 conv_id, response.name or "", turn_context
             )
             if response.content.strip() == "":
@@ -204,15 +165,17 @@ class AssistantBot(TeamsActivityHandler):
             if image_urls:
                 msgText += "<h2>Patient Images</h2>"
                 for url in image_urls:
-                    filename = url.split("/")[-1]
-                    msgText += f"<img src='{url}' alt='{filename}' height='300px'/>"
+                    safe_url = html.escape(url, quote=True)
+                    filename = html.escape(url.split("/")[-1], quote=True)
+                    msgText += f'<img src="{safe_url}" alt="{filename}" height="300px"/>'
 
             # Display clinical trials
             if clinical_trial_urls:
                 msgText += "<h2>Clinical trials</h2>"
                 for url in clinical_trial_urls:
-                    trial = url.split("/")[-1]
-                    msgText += f"<li><a href='{url}'>{trial}</a></li>"
+                    safe_url = html.escape(url, quote=True)
+                    trial = html.escape(url.split("/")[-1])
+                    msgText += f'<li><a href="{safe_url}">{trial}</a></li>'
 
             return msgText
         finally:

@@ -4,7 +4,7 @@
 import importlib
 import logging
 import os
-from typing import Any, Awaitable, Callable, Tuple, override
+from typing import Any, Awaitable, Callable, override
 
 from pydantic import BaseModel
 from semantic_kernel import Kernel
@@ -109,7 +109,7 @@ class CustomChatCompletionAgent(ChatCompletionAgent):
 
 def create_group_chat(
     app_ctx: AppContext, chat_ctx: ChatContext, participants: list[dict] | None = None
-) -> Tuple[AgentGroupChat, ChatContext]:
+) -> tuple[AgentGroupChat, ChatContext]:
     participant_configs = participants or app_ctx.all_agent_configs
     participant_names = [cfg.get("name", "unnamed") for cfg in participant_configs]
     logger.info("Creating group chat with participants: %s", participant_names)
@@ -237,7 +237,7 @@ def create_group_chat(
             - **Once per turn**: Each participant can only speak once per turn.
             - **Default to {facilitator}**: Always default to {facilitator}. If no other participant is specified, {facilitator} goes next.
             - **Use best judgment**: If the rules are unclear, use your best judgment to determine who should go next, for the natural flow of the conversation.
-            
+
         **Output**: Give the full reasoning for your choice and the verdict. The reasoning should include careful evaluation of each rule with an explanation. The verdict should be the name of the participant who should go next.
 
         History:
@@ -263,8 +263,8 @@ def create_group_chat(
 
         Reply by giving your full reasoning, and the verdict. The verdict should be either "yes" or "no".
 
-        You are part of a group chat with several AI agents and a user. 
-        The agents are names are: 
+        You are part of a group chat with several AI agents and a user.
+        The agents are names are:
             {",".join([f"{agent['name']}" for agent in all_agents_config])}
 
         If the most recent message is a question addressed to the user, return "yes".

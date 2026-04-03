@@ -75,7 +75,7 @@ class LLMUser:
             deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
             api_version="2025-04-01-preview",
             endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-            ad_token_provider=app_ctx.cognitive_services_token_provider if not hasattr(os.environ,"AZURE_OPENAI_API_KEY") else None,
+            ad_token_provider=app_ctx.cognitive_services_token_provider if not hasattr(os.environ, "AZURE_OPENAI_API_KEY") else None,
         )
 
     def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] | None = None):
@@ -355,7 +355,8 @@ class ChatSimulator:
         for _ in range(max_turns):
 
             try:
-                assert self.group_chat is not None
+                if self.group_chat is None:
+                    raise RuntimeError("group_chat must be initialized via setup_group_chat() before use")
                 new_user_message = await self.simulated_user.generate_user_message(self.group_chat.history)
             except Exception as e:
                 print(f"Error generating user message: {e}")
@@ -377,7 +378,8 @@ class ChatSimulator:
         Returns:
             self: Returns the instance for method chaining.
         """
-        assert self.group_chat is not None
+        if self.group_chat is None:
+            raise RuntimeError("group_chat must be initialized via setup_group_chat() before use")
         user_message = ChatMessageContent(role=AuthorRole.USER, content=message)
         self._print_message(user_message)
         await self.group_chat.add_chat_message(user_message)
@@ -403,7 +405,8 @@ class ChatSimulator:
         Returns:
             self: Returns the instance for method chaining.
         """
-        assert self.chat_context is not None
+        if self.chat_context is None:
+            raise RuntimeError("chat_context must be initialized via setup_group_chat() before use")
         group_chat_context = ChatContextAccessor.serialize(self.chat_context)
 
         if output_filename is None:
@@ -420,7 +423,8 @@ class ChatSimulator:
             f.write(group_chat_context)
 
         if save_readable_history:
-            assert self.group_chat is not None
+            if self.group_chat is None:
+                raise RuntimeError("group_chat must be initialized via setup_group_chat() before use")
             messages = chat_history_to_readable_text(self.group_chat.history)
             readable_filename = output_file_path.replace(".json", "_readable.txt")
             with open(readable_filename, 'w', encoding="utf-8") as f:

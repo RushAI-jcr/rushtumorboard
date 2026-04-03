@@ -11,7 +11,7 @@ A multi-agent system that coordinates specialized AI agents to support **Gynecol
 - **Pre-meeting procedure pass** — audits required labs (CBC ≤14d, CMP ≤14d, CA-125 ≤28d), imaging (CT CAP ≤56d, MRI Pelvis ≤42d), pathology, IHC/NGS, and consults before the tumor board; surfaces outstanding items with Rush Epic order codes
 - **GYN oncology-focused** extraction: pathology (histology, IHC, endometrial molecular classification), radiology (RECIST, PCI), tumor markers (CA-125 trending, GCIG criteria), oncologic history
 - **3-layer note fallback** — dedicated CSV → NoteType filter → keyword filter, ensuring pathology and radiology data is recovered even for outside-hospital (OSH) transfer patients
-- **NCCN guideline lookup** — Docling + PyMuPDF pipeline loads NCCN GYN PDFs; GPT-4o retrieves algorithm-relevant pages for endometrial, cervical, ovarian, vaginal, and vulvar cancers
+- **NCCN guideline lookup** — Docling + PyMuPDF pipeline loads NCCN GYN PDFs; GPT-4o retrieves algorithm-relevant pages for uterine/endometrial, vaginal, and vulvar cancers (ovarian and cervical use model training knowledge)
 - **Evidence-based research** — real-time PubMed, Europe PMC, and Semantic Scholar search with RISEN synthesis prompt, PubMed-first deduplication, and post-synthesis citation validation (no fabricated PMIDs)
 - **Outside hospital (OSH) transfer support** — structured history extraction for the ~20–30% of patients referred from other institutions
 - **Landscape 5-column Word document** matching the Rush tumor board format (Patient | Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
@@ -128,7 +128,7 @@ flowchart LR
 | **Pathology** | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel (MMR/p53/ER/HER2), molecular markers, FIGO grade, endometrial molecular classification (POLEmut/MMRd/NSMP/p53abn) |
 | **Radiology** | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM text analysis; RECIST response tracking |
 | **PatientStatus** | `tumor_markers`, `pretumor_board_checklist`, `patient_data` | Step 0: pre-meeting procedure pass (labs/imaging/path/consults); then FIGO staging, molecular profile, platinum sensitivity |
-| **ClinicalGuidelines** | `nccn_guidelines` | NCCN-based treatment recommendations using loaded NCCN GYN PDFs (endometrial, cervical, ovarian, vaginal, vulvar) |
+| **ClinicalGuidelines** | `nccn_guidelines` | NCCN-based treatment recommendations using loaded NCCN PDFs (uterine/endometrial, vaginal, vulvar); ovarian and cervical use model training knowledge |
 | **ClinicalTrials** | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness and GYN-specific metadata |
 | **MedicalResearch** | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search; RISEN synthesis prompt; post-synthesis citation validation |
 | **ReportCreation** | `content_export`, `presentation_export` | Assembles landscape 5-column Word doc + 5-slide PPTX with CA-125 trend chart |

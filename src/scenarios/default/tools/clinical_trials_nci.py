@@ -11,7 +11,9 @@ from data_models.plugin_configuration import PluginConfiguration
 from mcp_servers.clinical_trials_mcp import (
     aact_search,
     gog_nrg_search,
+    keyword_search,
     nci_search,
+    study_statistics,
     trial_details_combined,
 )
 
@@ -95,3 +97,35 @@ class ClinicalTrialsNCIPlugin:
             limit: Max results (default: 20, max: 100)
         """
         return await aact_search(condition, eligibility_keywords, intervention, status, limit)
+
+    @kernel_function(
+        description="Get clinical trial count statistics for a condition from ClinicalTrials.gov. "
+        "Returns counts by status (recruiting, active, completed, not-yet-recruiting)."
+    )
+    async def get_study_statistics(self, condition: str) -> str:
+        """Get trial landscape statistics for a condition.
+
+        Args:
+            condition: Cancer condition (e.g., 'ovarian cancer', 'endometrial cancer')
+        """
+        return await study_statistics(condition)
+
+    @kernel_function(
+        description="General free-text keyword search against ClinicalTrials.gov v2 API. "
+        "Use for unusual diagnoses, combination queries (e.g. 'BRCA ovarian pembrolizumab'), "
+        "or non-GYN conditions."
+    )
+    async def search_trials_by_keyword(
+        self,
+        keyword: str,
+        status: str = "RECRUITING",
+        page_size: int = 20,
+    ) -> str:
+        """Free-text keyword search across all ClinicalTrials.gov studies.
+
+        Args:
+            keyword: Search keywords (e.g., 'BRCA ovarian pembrolizumab')
+            status: Trial status filter (default: RECRUITING)
+            page_size: Max results (default: 20, max: 50)
+        """
+        return await keyword_search(keyword, status, page_size)

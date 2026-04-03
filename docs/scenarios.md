@@ -24,7 +24,7 @@ The default scenario orchestrates a complete tumor board case review with these 
 | Pathology | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel, molecular markers, FIGO grade, endometrial molecular classification |
 | Radiology | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM (no deep learning model) |
 | PatientStatus | `tumor_markers`, `pretumor_board_checklist`, `patient_data` | Step 0: pre-meeting procedure pass; then FIGO staging, molecular profile, platinum sensitivity |
-| ClinicalGuidelines | `nccn_guidelines` | NCCN-based GYN treatment recommendations using loaded NCCN PDFs (endometrial, cervical, vaginal, vulvar, ovarian) |
+| ClinicalGuidelines | `nccn_guidelines` | NCCN-based GYN treatment recommendations using loaded NCCN PDFs (uterine/endometrial, vaginal, vulvar); ovarian and cervical use model training knowledge |
 | ClinicalTrials | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness |
 | MedicalResearch | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search with RISEN synthesis and citation validation |
 | ReportCreation | `content_export`, `presentation_export` | Generates landscape 5-column Word doc + 5-slide PPTX with CA-125 trend chart |
