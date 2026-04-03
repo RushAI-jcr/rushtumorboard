@@ -4,6 +4,7 @@
 # Supports CA-125, HE4, hCG, and other GYN-relevant markers.
 # Calculates nadir, doubling time, and GCIG response criteria.
 
+import asyncio
 import json
 import logging
 import math
@@ -13,6 +14,7 @@ from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
+from .note_type_constants import GENERAL_CLINICAL_TYPES
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -64,13 +66,7 @@ class TumorMarkerPlugin:
     #   "ED Provider Notes" — confirmed for germ cell/complex patients
     #   "Discharge Summary" — inpatient stays often summarize marker trends
     #   "H&P"               — kept for non-Rush sources (FHIR/Fabric)
-    _MARKER_NOTE_TYPES = [
-        "Progress Notes",
-        "Consults",
-        "ED Provider Notes",
-        "Discharge Summary",
-        "H&P",
-    ]
+    _MARKER_NOTE_TYPES: list[str] = list(GENERAL_CLINICAL_TYPES)
     _MARKER_KEYWORDS = [
         "ca-125", "ca125", "ca 125", "he4", "he-4",
         "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",
@@ -94,12 +90,9 @@ class TumorMarkerPlugin:
         # Build keyword list: requested marker + all known marker keywords
         keywords = [marker.lower()] + list(self._MARKER_KEYWORDS)
 
-        if hasattr(accessor, "get_clinical_notes_by_keywords"):
-            notes = await accessor.get_clinical_notes_by_keywords(
-                patient_id, self._MARKER_NOTE_TYPES, keywords
-            )
-        else:
-            return None
+        notes = await accessor.get_clinical_notes_by_keywords(
+            patient_id, self._MARKER_NOTE_TYPES, keywords
+        )
 
         if not notes:
             return None
@@ -145,19 +138,32 @@ class TumorMarkerPlugin:
         if not validate_patient_id(patient_id):
             return json.dumps({"error": "Invalid patient ID."})
 
+        # Validate marker against known GYN markers (soft warning — allow unknown markers)
+        marker_key_norm = marker.lower().replace("-", "").replace(" ", "")
+        known_keys = {k.replace("-", "").replace(" ", "") for k in GYN_MARKERS}
+        if marker_key_norm not in known_keys:
+            logger.warning(
+                "Unrecognized tumor marker %r for patient %s; proceeding with best-effort lab lookup",
+                marker, patient_id,
+            )
+
         accessor = self.data_access.clinical_note_accessor
 
-        # Layer 1: Get structured lab results
-        labs = []
-        if hasattr(accessor, "get_lab_results"):
-            labs = await accessor.get_lab_results(patient_id, component_name=marker)
-        elif hasattr(accessor, "get_tumor_markers"):
-            all_markers = await accessor.get_tumor_markers(patient_id)
-            labs = [
-                m for m in all_markers
-                if marker.lower().replace("-", "") in
-                   m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
-            ]
+        # Layer 1: Get structured lab results — both calls are independent, gather concurrently
+        labs_result, all_markers_result = await asyncio.gather(
+            accessor.get_lab_results(patient_id, component_name=marker),
+            accessor.get_tumor_markers(patient_id),
+            return_exceptions=True,
+        )
+        if isinstance(labs_result, BaseException):
+            labs_result = []
+        if isinstance(all_markers_result, BaseException):
+            all_markers_result = []
+        labs = labs_result or [
+            m for m in all_markers_result
+            if marker.lower().replace("-", "") in
+               m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
+        ]
 
         if not labs:
             # Layer 2/3: Fallback to clinical notes
@@ -233,15 +239,16 @@ class TumorMarkerPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        if hasattr(accessor, "get_tumor_markers"):
-            all_markers = await accessor.get_tumor_markers(patient_id)
-        elif hasattr(accessor, "get_lab_results"):
-            all_markers = await accessor.get_lab_results(patient_id)
-        else:
-            return json.dumps({
-                "patient_id": patient_id,
-                "error": "Data accessor does not support lab results.",
-            })
+        tumor_markers_result, all_labs = await asyncio.gather(
+            accessor.get_tumor_markers(patient_id),
+            accessor.get_lab_results(patient_id),
+            return_exceptions=True,
+        )
+        if isinstance(tumor_markers_result, BaseException):
+            tumor_markers_result = []
+        if isinstance(all_labs, BaseException):
+            all_labs = []
+        all_markers = tumor_markers_result if tumor_markers_result else all_labs
 
         if not all_markers:
             # Fallback to clinical notes

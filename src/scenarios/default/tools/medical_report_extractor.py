@@ -75,8 +75,7 @@ class MedicalReportExtractorBase:
         # --- Layer 1: Dedicated report CSV ---
         reports = []
         source_layer = 1
-        if hasattr(accessor, self.accessor_method):
-            reports = await getattr(accessor, self.accessor_method)(patient_id)
+        reports = await getattr(accessor, self.accessor_method)(patient_id)
 
         # --- Layer 2: Domain-specific NoteTypes ---
         if not reports and self.layer2_note_types:

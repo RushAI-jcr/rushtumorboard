@@ -145,18 +145,9 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
         """
         accessor = self.data_access.clinical_note_accessor
 
-        if hasattr(accessor, "get_clinical_notes_by_type"):
-            notes = await accessor.get_clinical_notes_by_type(
-                patient_id, list(self._RELEVANT_NOTE_TYPES)
-            )
-        else:
-            # Fallback for FHIR/Fabric accessors that only implement read_all()
-            all_notes_raw = await accessor.read_all(patient_id)
-            notes = []
-            for raw in all_notes_raw:
-                note = json.loads(raw) if isinstance(raw, str) else raw
-                if note.get("NoteType", note.get("note_type", "")).lower() in self._RELEVANT_NOTE_TYPES:
-                    notes.append(note)
+        notes = await accessor.get_clinical_notes_by_type(
+            patient_id, list(self._RELEVANT_NOTE_TYPES)
+        )
 
         # Sort by date descending (most recent first) and cap count
         notes.sort(

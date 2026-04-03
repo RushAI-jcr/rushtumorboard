@@ -41,7 +41,7 @@ class ImageAccessor:
                 metadata["url"] = self.get_url(patient_id, filename)
             return metadatas
         finally:
-            logger.info(f"Get image metadata for {patient_id}. Duration: {time() - start}s")
+            logger.info("Get image metadata. Duration: %.3fs", time() - start)
 
     def get_url(self, patient_id: str, filename: str) -> str:
         """Get the URL for the image of a given patient ID and filename."""
@@ -66,4 +66,4 @@ class ImageAccessor:
 
             return stream
         finally:
-            logger.info(f"Read image for {blob_path}. Duration: {time() - start}s")
+            logger.info("Read image. Duration: %.3fs", time() - start)

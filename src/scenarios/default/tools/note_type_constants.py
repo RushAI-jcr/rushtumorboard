@@ -38,3 +38,6 @@ ALL_CLINICAL_TYPES: tuple[str, ...] = (
     GENERAL_CLINICAL_TYPES + OPERATIVE_TYPES + ASSESSMENT_PLAN_TYPES
     + ONCOLOGY_TYPES + EXTERNAL_TYPES + ADDENDUM_TYPES
 )
+# Note: PATHOLOGY_REPORT_TYPES is intentionally excluded from ALL_CLINICAL_TYPES.
+# Pathology notes are retrieved via get_pathology_reports() (Layer 1 CSV) or the
+# pathology extractor's Layer 2 note types, not via the general clinical note filter.

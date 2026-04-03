@@ -3,11 +3,14 @@
 
 Produces tumor_board_template.docx with:
   - Landscape orientation (11" x 8.5")
-  - 4-column table matching current tumor board format:
+  - 5-column table matching the real Rush tumor board handout format:
+    Col 0: Patient (case #, MRN, attending, RTC, location, path date)
     Col 1: Diagnosis & Pertinent History
     Col 2: Previous Tx or Operative Findings, Tumor Markers
     Col 3: Imaging
     Col 4: Discussion
+  - Column widths: 0.93 / 2.00 / 2.94 / 3.31 / 1.12 inches
+  - Margins: 0.5L / 0.5R / 0.6T / 0.5B (matches real doc exactly)
   - Jinja2 placeholders for docxtpl rendering
 
 Run: python scripts/generate_docx_template.py
@@ -25,16 +28,19 @@ from docx.shared import Inches, Pt, RGBColor
 
 
 # Column definitions: (header text, width in inches)
+# Widths measured from real Rush tumor board handout (TB Handout 03.04.2026.docx)
 COLUMNS = [
-    ("Diagnosis & Pertinent History", 2.6),
-    ("Previous Tx or Operative Findings, Tumor Markers", 3.5),
-    ("Imaging", 2.3),
-    ("Discussion", 1.9),
+    ("Patient", 0.93),
+    ("Diagnosis & Pertinent History", 2.00),
+    ("Previous Tx or Operative Findings, Tumor Markers", 2.94),
+    ("Imaging", 3.31),
+    ("Discussion", 1.12),
 ]
 
 # Jinja2 placeholders per column (for docxtpl)
 # Using {{r var}} for RichText support
 CELL_PLACEHOLDERS = [
+    "{{r col0_content}}",
     "{{r col1_content}}",
     "{{r col2_content}}",
     "{{r col3_content}}",
@@ -72,22 +78,23 @@ def create_template():
     doc = Document()
 
     # --- Page setup: landscape ---
+    # Margins match real Rush tumor board handout exactly
     section = doc.sections[0]
     section.orientation = WD_ORIENT.LANDSCAPE
     section.page_width = Inches(11)
     section.page_height = Inches(8.5)
-    section.left_margin = Inches(0.3)
-    section.right_margin = Inches(0.3)
-    section.top_margin = Inches(0.3)
-    section.bottom_margin = Inches(0.3)
+    section.left_margin = Inches(0.5)
+    section.right_margin = Inches(0.5)
+    section.top_margin = Inches(0.6)
+    section.bottom_margin = Inches(0.5)
 
     # Remove default empty paragraph
     if doc.paragraphs:
         p = doc.paragraphs[0]._element
         p.getparent().remove(p)
 
-    # --- Create 4-column table (header row + content row) ---
-    table = doc.add_table(rows=2, cols=4)
+    # --- Create 5-column table (header row + content row) ---
+    table = doc.add_table(rows=2, cols=5)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
 
