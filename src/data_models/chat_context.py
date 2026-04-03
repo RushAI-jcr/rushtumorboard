@@ -7,10 +7,11 @@ from semantic_kernel.contents.chat_history import ChatHistory
 
 
 class ChatContext:
-    def __init__(self, conversation_id: str):
+    def __init__(self, conversation_id: str, request_date: str | None = None):
         self.conversation_id = conversation_id
         self.chat_history = ChatHistory()
         self._patient_id: str | None = None
+        self.request_date = request_date  # ISO YYYY-MM-DD: date the report was requested
         self.patient_data = []
         self.display_blob_urls = []
         self.display_image_urls = []

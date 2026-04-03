@@ -131,6 +131,8 @@ def chats_routes(app_context: AppContext):
             logger.debug(f"Message content: sender={sender}, mention_count={len(mentions or [])}")
             # Read existing chat context; read() returns a fresh ChatContext if none exists
             chat_context = await data_access.chat_context_accessor.read(chat_id)
+            if not chat_context.request_date:
+                chat_context.request_date = datetime.now().strftime("%Y-%m-%d")
 
             # Add user message to history
             chat_context.chat_history.add_user_message(content)

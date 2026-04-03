@@ -99,14 +99,13 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
     system_prompt = RADIOLOGY_SYSTEM_PROMPT
     error_key = "studies"
 
-    # Layer 2: No dedicated radiology note types in typical Epic exports —
-    # radiology_reports.csv (layer 1) is the primary source.
-    layer2_note_types = ()
+    # Layer 2: External/OSH imaging reports may arrive as unmapped notes.
+    layer2_note_types: tuple[str, ...] = EXTERNAL_TYPES
     # Layer 3: General notes where physicians summarize imaging findings.
     # Confirmed NoteTypes in real Rush Epic Clarity exports.
     layer3_note_types: tuple[str, ...] = (
         GENERAL_CLINICAL_TYPES + ASSESSMENT_PLAN_TYPES
-        + ("Multidisciplinary Tumor Board",) + EXTERNAL_TYPES + ADDENDUM_TYPES
+        + ("Multidisciplinary Tumor Board",) + ADDENDUM_TYPES
     )
     layer3_keywords = (
         "ct scan", "ct chest", "ct abdomen", "ct pelvis", "ct a/p", "ct cap",
@@ -116,6 +115,10 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
         "imaging", "radiolog",
         "recist", "lesion", "mass", "tumor", "nodule",
         "ascites", "peritoneal", "omental", "lymph node",
+        # Additional imaging modalities
+        "x-ray", "xray", "cxr", "chest x-ray", "bone scan", "mammogram", "dexa",
+        # OSH imaging
+        "outside imaging", "osh", "prior imaging", "outside hospital",
     )
 
     @kernel_function(

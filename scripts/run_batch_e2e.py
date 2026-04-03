@@ -93,14 +93,15 @@ class PatientResult:
 # AppContext factory for local testing
 # ---------------------------------------------------------------------------
 
-def create_local_app_context() -> AppContext:
+def create_local_app_context(reference_date: str | None = None) -> AppContext:
     """Create an AppContext suitable for local batch testing.
 
     Uses API key auth if AZURE_OPENAI_API_KEY is set, otherwise AzureCliCredential.
     Uses local file accessors instead of Azure Blob Storage.
     """
     agent_configs = load_agent_config(os.environ.get("SCENARIO", "default"))
-    data_access = create_local_data_access(data_dir=DATA_DIR, output_dir=OUTPUT_DIR)
+    ref_date = reference_date or os.environ.get("TUMOR_BOARD_DATE")
+    data_access = create_local_data_access(data_dir=DATA_DIR, output_dir=OUTPUT_DIR, reference_date=ref_date)
 
     api_key = os.environ.get("AZURE_OPENAI_API_KEY")
     if api_key:
@@ -303,8 +304,8 @@ async def run_single_patient(
         logger.error("TIMEOUT for patient %s after %ds", patient_id[:8], timeout)
     except Exception as e:
         status = "FAIL"
-        error = str(e)[:200]
-        logger.error("FAIL for patient %s: %s", patient_id[:8], e)
+        error = str(e)[:500]
+        logger.error("FAIL for patient %s: %s", patient_id[:8], str(e)[:1000])
 
     duration = time.time() - start
 
@@ -423,6 +424,7 @@ async def main():
     parser.add_argument("--print", action="store_true", dest="print_messages", help="Print agent messages to console")
     parser.add_argument("--csv", type=str, default=QUERIES_CSV, help="Path to initial queries CSV")
     parser.add_argument("--patient-id", type=str, default=None, help="Run a single patient by GUID (overrides --csv)")
+    parser.add_argument("--reference-date", type=str, default=None, help="Reference date (YYYY-MM-DD) for data lookback windows (default: TUMOR_BOARD_DATE env var or today)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -446,8 +448,8 @@ async def main():
     )
     os.environ.setdefault("HLS_MODEL_ENDPOINTS", "{}")
 
-    # Create app context
-    app_ctx = create_local_app_context()
+    # Create app context with reference date for data lookback windows
+    app_ctx = create_local_app_context(reference_date=args.reference_date)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Load patient list

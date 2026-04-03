@@ -96,7 +96,8 @@ class DataAccess:
 
 def create_data_access(
     blob_service_client: BlobServiceClient,
-    credential: AsyncTokenCredential
+    credential: AsyncTokenCredential,
+    reference_date: str | None = None,
 ) -> DataAccess:
     """ Factory function to create a DataAccess object. """
     # Create clinical note accessor based on the source
@@ -115,6 +116,7 @@ def create_data_access(
     elif clinical_notes_source == "epic" or clinical_notes_source == "caboodle":
         clinical_note_accessor = CaboodleFileAccessor(
             data_dir=os.getenv("CABOODLE_DATA_DIR"),
+            reference_date=reference_date,
         )
     else:
         if clinical_notes_source:

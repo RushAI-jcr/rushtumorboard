@@ -188,8 +188,12 @@ def create_group_chat(
         else:
             temperature = None
             logger.debug("Agent %s: temperature=None (reasoning model)", agent_config["name"])
+        # Limit agent response length to prevent context window overflow in multi-agent chats.
+        # 128K-token context with 9+ agents means each agent should stay under ~4K tokens output.
+        max_completion_tokens = agent_config.get("max_completion_tokens", 4096)
         settings = AzureChatPromptExecutionSettings(
-            function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, temperature=temperature)
+            function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, temperature=temperature,
+            max_tokens=max_completion_tokens)
         arguments = KernelArguments(settings=settings)
         instructions = agent_config.get("instructions")
         if agent_config.get("facilitator") and instructions:
@@ -319,6 +323,11 @@ def create_group_chat(
             result_parser=evaluate_selection,
             agent_variable_name="agents",
             history_variable_name="history",
+            # Keep last 12 messages for selection (enough to see recent context
+            # without overwhelming the selection model with full chat history)
+            history_reducer=ChatHistoryTruncationReducer(
+                target_count=12, auto_reduce=True
+            ),
         ),
         termination_strategy=KernelFunctionTerminationStrategy(
             agents=[
@@ -330,9 +339,10 @@ def create_group_chat(
             agent_variable_name="agents",
             history_variable_name="history",
             maximum_iterations=30,
-            # Termination only looks at the last message
+            # Termination only looks at the last message — keep minimal history
+            # to reduce tokens sent to the termination LLM
             history_reducer=ChatHistoryTruncationReducer(
-                target_count=3, auto_reduce=True
+                target_count=1, auto_reduce=True
             ),
         ),
     )

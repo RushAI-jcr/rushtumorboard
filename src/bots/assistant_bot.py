@@ -56,8 +56,10 @@ class AssistantBot(TeamsActivityHandler):
         chat_context_accessor = self.data_access.chat_context_accessor
         chat_artifact_accessor = self.data_access.chat_artifact_accessor
 
-        # Load chat context
+        # Load chat context and set reference date from Teams message timestamp
         chat_ctx = await chat_context_accessor.read(conversation_id)
+        if not chat_ctx.request_date and turn_context.activity.timestamp:
+            chat_ctx.request_date = turn_context.activity.timestamp.strftime("%Y-%m-%d")
 
         # Delete thread if user asks
         if (turn_context.activity.text or "").endswith("clear"):

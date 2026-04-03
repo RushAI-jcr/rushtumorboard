@@ -40,13 +40,13 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "nccn_guidelines"
 # ---------------------------------------------------------------------------
 # Page code patterns (bottom-right of every NCCN page)
 # ---------------------------------------------------------------------------
-# Algorithm pages: ENDO-1, VAG-3, VULVA-10, UTSARC-2, VM-1, UN-1
+# Algorithm pages: ENDO-1, VAG-3, VULVA-10, UTSARC-2, VM-1, UN-1, OV-1, LCOC-1, EB-3, CERV-1, GTN-1, HM-1
 _ALGO_CODE_RE = re.compile(
-    r"(ENDO|VAG|VULVA|UTSARC|VM|UN)-(\d+[A-Z]?)\s*$", re.MULTILINE
+    r"(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|EB|CERV|GTN|HM)-(\d+[A-Z]?)\s*$", re.MULTILINE
 )
-# Principles pages: ENDO-A, VAG-D 1 of 4, VULVA-E 2 of 2
+# Principles pages: ENDO-A, VAG-D 1 of 4, VULVA-E 2 of 2, OV-A 1 of 3, CERV-A, GTN-A
 _PRINCIPLES_CODE_RE = re.compile(
-    r"(ENDO|VAG|VULVA|UTSARC|VM|UN)-([A-Z])\s*(\d+\s*of\s*\d+)?\s*$", re.MULTILINE
+    r"(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|CERV|GTN|HM)-([A-Z])\s*(\d+\s*of\s*\d+)?\s*$", re.MULTILINE
 )
 # Staging: ST-1, ST-2, ST-3
 _STAGING_CODE_RE = re.compile(r"ST-(\d+)\s*$", re.MULTILINE)
@@ -54,10 +54,12 @@ _STAGING_CODE_RE = re.compile(r"ST-(\d+)\s*$", re.MULTILINE)
 _DISCUSSION_CODE_RE = re.compile(r"MS-(\d+)\s*$", re.MULTILINE)
 # Abbreviations: ABBR-1
 _ABBR_CODE_RE = re.compile(r"ABBR-(\d+)\s*$", re.MULTILINE)
+# Evidence Blocks definition: EB-DEF
+_EB_DEF_CODE_RE = re.compile(r"(EB-DEF)\s*$", re.MULTILINE)
 
 # Page codes for algorithm pages (numeric suffix) vs principles (letter suffix)
-_ALGO_PAGE_CODES = re.compile(r"^(ENDO|VAG|VULVA|UTSARC|VM|UN)-\d+")
-_PRINCIPLES_PAGE_CODES = re.compile(r"^(ENDO|VAG|VULVA|UTSARC|VM|UN)-[A-Z]")
+_ALGO_PAGE_CODES = re.compile(r"^(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|CERV|GTN|HM)-\d+")
+_PRINCIPLES_PAGE_CODES = re.compile(r"^(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|CERV|GTN|HM)-[A-Z]")
 
 # Disease site mapping
 _DISEASE_MAP = {
@@ -67,6 +69,12 @@ _DISEASE_MAP = {
     "VAG": "vaginal_cancer",
     "VULVA": "vulvar_cancer",
     "VM": "vulvovaginal_melanoma",
+    "OV": "ovarian_cancer",
+    "LCOC": "less_common_ovarian_cancers",
+    "CERV": "cervical_cancer",
+    "GTN": "gestational_trophoblastic_neoplasia",
+    "HM": "hydatidiform_mole",
+    "EB": "evidence_blocks",
     "ST": "staging",
 }
 
@@ -75,6 +83,12 @@ _GUIDELINE_NAMES = {
     "uterine": "Uterine Neoplasms",
     "vaginal": "Vaginal Cancer",
     "vulvar": "Vulvar Cancer",
+    "ovarian": "Ovarian Cancer",
+    "ovarian_blocks": "Ovarian Cancer Evidence Blocks",
+    "cervical": "Cervical Cancer",
+    "cervical_blocks": "Cervical Cancer Evidence Blocks",
+    "gtn": "Gestational Trophoblastic Neoplasia",
+    "gtn_blocks": "Gestational Trophoblastic Neoplasia Evidence Blocks",
 }
 
 
@@ -127,6 +141,11 @@ def extract_page_code(page: pymupdf.Page) -> tuple[str | None, str]:
     m = _ABBR_CODE_RE.search(combined)
     if m:
         return f"ABBR-{m.group(1)}", "abbreviations"
+
+    # Evidence Blocks definition (EB-DEF)
+    m = _EB_DEF_CODE_RE.search(combined)
+    if m:
+        return "EB-DEF", "evidence_blocks"
 
     return None, "unknown"
 
@@ -247,7 +266,7 @@ def extract_footnotes_from_page(page: pymupdf.Page) -> dict[str, str]:
 def extract_cross_references(text: str) -> list[str]:
     """Find NCCN page cross-references in text (e.g., 'See ENDO-4', '(VAG-A)')."""
     refs = set()
-    pattern = re.compile(r"(ENDO|VAG|VULVA|UTSARC|VM|UN)-(\d+[A-Z]?|[A-Z])")
+    pattern = re.compile(r"(ENDO|VAG|VULVA|UTSARC|VM|UN|OV|LCOC|EB|CERV|GTN|HM)-(\d+[A-Z]?|[A-Z]|DEF)")
     for m in pattern.finditer(text):
         refs.add(f"{m.group(1)}-{m.group(2)}")
     return sorted(refs)
@@ -499,6 +518,21 @@ def detect_guideline_info(pdf_path: Path) -> dict:
         name = "Vaginal Cancer"
     elif "Vulvar Cancer" in cover_text:
         name = "Vulvar Cancer"
+    elif "Ovarian Cancer" in cover_text:
+        if "Evidence Blocks" in cover_text:
+            name = "Ovarian Cancer Evidence Blocks"
+        else:
+            name = "Ovarian Cancer"
+    elif "Cervical Cancer" in cover_text:
+        if "Evidence Blocks" in cover_text:
+            name = "Cervical Cancer Evidence Blocks"
+        else:
+            name = "Cervical Cancer"
+    elif "Gestational Trophoblastic" in cover_text:
+        if "Evidence Blocks" in cover_text:
+            name = "Gestational Trophoblastic Neoplasia Evidence Blocks"
+        else:
+            name = "Gestational Trophoblastic Neoplasia"
 
     return {
         "guideline_name": name,

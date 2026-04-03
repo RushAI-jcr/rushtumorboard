@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from collections import OrderedDict
+from datetime import datetime, timedelta
 from pathlib import Path
 from collections.abc import Sequence
 
@@ -84,7 +85,40 @@ class CaboodleFileAccessor:
         "inhibin",
     ])
 
-    def __init__(self, data_dir: str | None = None):
+    # Map file_type → column name containing the date to filter on
+    _DATE_COLUMNS: dict[str, list[str]] = {
+        "clinical_notes": ["EntryDate", "entry_date", "date"],
+        "pathology_reports": ["OrderDate", "order_date", "date"],
+        "radiology_reports": ["OrderDate", "order_date", "date"],
+        "lab_results": ["OrderDate", "order_date", "date"],
+        "cancer_staging": ["StageDate", "stage_date", "date"],
+        "medications": ["StartDate", "start_date", "date"],
+        "diagnoses": ["DateOfEntry", "date_of_entry", "date"],
+    }
+
+    # Per-file-type lookback windows (in days) from the reference date.
+    # None = no date filter (use all data).
+    _DEFAULT_LOOKBACK: dict[str, int | None] = {
+        "clinical_notes": 90,
+        "lab_results": 365,
+        "pathology_reports": None,   # all — always relevant
+        "radiology_reports": None,   # all — always relevant
+        "cancer_staging": None,      # all
+        "medications": None,         # all
+        "diagnoses": None,           # all
+    }
+
+    def __init__(self, data_dir: str | None = None, reference_date: str | None = None):
+        """
+        Args:
+            data_dir: Path to patient CSV data.
+            reference_date: ISO date (YYYY-MM-DD) for date window filtering.
+                Typically today or the tumor board date. Reads TUMOR_BOARD_DATE env
+                var as fallback. When set, per-file-type lookback windows are applied:
+                  - clinical_notes: 90 days
+                  - lab_results: 365 days (1 year for trends)
+                  - pathology/radiology/staging/meds/dx: all (no filter)
+        """
         self.data_dir = data_dir or os.getenv(
             "CABOODLE_DATA_DIR",
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "infra", "patient_data")
@@ -92,6 +126,15 @@ class CaboodleFileAccessor:
         self.data_dir = os.path.abspath(self.data_dir)
         self._resolved_data_dir = Path(self.data_dir).resolve()
         self._cache: OrderedDict[tuple[str, str], list[dict]] = OrderedDict()
+
+        # Reference date for per-file-type lookback windows
+        ref_date_str = reference_date or os.getenv("TUMOR_BOARD_DATE")
+        if ref_date_str:
+            self._reference_date = datetime.strptime(ref_date_str, "%Y-%m-%d").date()
+            logger.info("Reference date for lookback windows: %s", self._reference_date)
+        else:
+            self._reference_date = None
+
         logger.info("CaboodleFileAccessor initialized with data_dir: %s", self.data_dir)
 
     async def get_patients(self) -> list[str]:
@@ -269,6 +312,48 @@ class CaboodleFileAccessor:
 
     # --- Internal helpers ---
 
+    def _apply_date_filter(self, rows: list[dict], file_type: str) -> list[dict]:
+        """Filter rows using per-file-type lookback windows from the reference date.
+
+        Lookback rules (from _DEFAULT_LOOKBACK):
+          - clinical_notes: 90 days
+          - lab_results: 365 days (1 year for trends)
+          - pathology/radiology/staging/meds/dx: None (all data, no filter)
+        """
+        if self._reference_date is None:
+            return rows
+
+        lookback_days = self._DEFAULT_LOOKBACK.get(file_type)
+        if lookback_days is None:
+            return rows  # no filter for this file type
+
+        date_cols = self._DATE_COLUMNS.get(file_type, [])
+        if not date_cols:
+            return rows
+
+        window_start = self._reference_date - timedelta(days=lookback_days)
+
+        filtered = []
+        for row in rows:
+            date_str = ""
+            for col in date_cols:
+                date_str = row.get(col, "")
+                if date_str:
+                    break
+            if not date_str:
+                filtered.append(row)  # keep rows without dates
+                continue
+            try:
+                row_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+                if window_start <= row_date <= self._reference_date:
+                    filtered.append(row)
+            except (ValueError, TypeError):
+                filtered.append(row)  # keep rows with unparseable dates
+
+        logger.info("Date filter %s: %d → %d rows (%d-day lookback, %s to %s)",
+                     file_type, len(rows), len(filtered), lookback_days, window_start, self._reference_date)
+        return filtered
+
     async def _read_file(self, patient_id: str, file_type: str) -> list[dict]:
         """Read a CSV or Parquet file for a patient. Returns list of dicts.
 
@@ -310,6 +395,9 @@ class CaboodleFileAccessor:
             rows = await self._read_legacy_json(patient_id)
         else:
             rows = []
+
+        # Apply date window filter if configured
+        rows = self._apply_date_filter(rows, file_type)
 
         # Evict oldest entries if we've exceeded the per-patient limit
         patients_in_cache = dict.fromkeys(k[0] for k in self._cache)  # preserves insertion order

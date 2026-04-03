@@ -366,6 +366,11 @@ class PreTumorBoardChecklistPlugin:
             "p53 IHC":                   ["p53"],
             "ER/PR":                     ["estrogen receptor", "er ", "progesterone receptor", "pr "],
             "HER2":                      ["her2", "her-2", "erbb2"],
+            "PD-L1":                     ["pd-l1", "pdl1", "pdl-1", "cps"],
+            "Ki-67":                     ["ki67", "ki-67", "mib-1"],
+            "FRα":                       ["folate receptor", "fra", "folr1"],
+            "TMB":                       ["tmb", "tumor mutational burden"],
+            "CCNE1":                     ["ccne1", "cyclin e"],
         }
         for marker, patterns in ihc_markers.items():
             # Check pathology report text
@@ -396,7 +401,8 @@ class PreTumorBoardChecklistPlugin:
         ngs_in_notes = any(
             _match_any(
                 r.get("NoteText", r.get("text", r.get("note_text", ""))),
-                ["ngs", "foundation one", "tempus", "guardant", "myriad", "brca1", "brca2", "pole mutation"]
+                ["ngs", "next generation sequencing", "foundation one", "tempus", "guardant",
+                 "caris", "neogenomics", "myriad", "brca1", "brca2", "pole mutation"]
             )
             for r in notes
         )

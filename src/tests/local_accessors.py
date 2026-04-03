@@ -34,6 +34,9 @@ class LocalChatArtifactAccessor:
 
     async def read(self, artifact_id: ChatArtifactIdentifier) -> ChatArtifact:
         path = self.get_blob_path(artifact_id)
+        if not os.path.exists(path):
+            from azure.core.exceptions import ResourceNotFoundError
+            raise ResourceNotFoundError(f"Artifact not found: {path}")
         with open(path, "rb") as f:
             return ChatArtifact(artifact_id=artifact_id, data=f.read())
 
@@ -88,6 +91,7 @@ class LocalBlobSasDelegate:
 def create_local_data_access(
     data_dir: str | None = None,
     output_dir: str = "output",
+    reference_date: str | None = None,
 ) -> DataAccess:
     """Factory to create a DataAccess with all-local accessors.
 
@@ -104,6 +108,6 @@ def create_local_data_access(
         blob_sas_delegate=LocalBlobSasDelegate(),  # type: ignore[arg-type]
         chat_artifact_accessor=LocalChatArtifactAccessor(output_dir=output_dir),  # type: ignore[arg-type]
         chat_context_accessor=LocalChatContextAccessor(),  # type: ignore[arg-type]
-        clinical_note_accessor=CaboodleFileAccessor(data_dir=data_dir),  # type: ignore[arg-type]
+        clinical_note_accessor=CaboodleFileAccessor(data_dir=data_dir, reference_date=reference_date),  # type: ignore[arg-type]
         image_accessor=LocalImageAccessor(),  # type: ignore[arg-type]
     )

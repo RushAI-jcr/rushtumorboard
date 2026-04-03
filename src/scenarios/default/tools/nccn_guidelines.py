@@ -191,9 +191,14 @@ class NCCNGuidelinesPlugin:
         # Disease terms
         disease_terms = [
             "endometrial", "uterine", "vaginal", "vulvar", "cervical",
+            "ovarian", "fallopian tube", "peritoneal", "epithelial ovarian",
+            "cervical", "cervix", "gestational trophoblastic", "hydatidiform mole",
+            "choriocarcinoma", "neuroendocrine",
             "sarcoma", "melanoma", "carcinoma", "adenocarcinoma",
             "squamous", "serous", "clear cell", "carcinosarcoma",
             "leiomyosarcoma", "stromal", "pecoma",
+            "mucinous", "germ cell", "sex cord", "borderline",
+            "low-grade serous", "high-grade serous", "endometrioid",
         ]
         for term in disease_terms:
             if term in text:
@@ -215,6 +220,12 @@ class NCCNGuidelinesPlugin:
             "hormone therapy", "progestin", "fertility",
             "parp", "pembrolizumab", "dostarlimab", "lenvatinib",
             "bevacizumab", "carboplatin", "paclitaxel", "cisplatin",
+            "olaparib", "niraparib", "rucaparib", "mirvetuximab",
+            "gemcitabine", "doxorubicin", "topotecan", "etoposide",
+            "hipec", "cytoreduction", "debulking", "interval",
+            "chemoradiation", "brachytherapy", "cone biopsy", "trachelectomy",
+            "methotrexate", "actinomycin", "ema-co", "hcg",
+            "tisotumab", "cemiplimab",
             "sentinel lymph node", "adjuvant", "neoadjuvant",
             "recurrent", "recurrence", "surveillance", "follow-up",
             "maintenance", "palliative",
@@ -226,8 +237,10 @@ class NCCNGuidelinesPlugin:
         # Biomarker terms
         biomarker_terms = [
             "mmr", "dmmr", "pmmr", "msi", "msi-h", "mss",
-            "pole", "p53", "nsmp", "her2", "brca", "hrd",
+            "pole", "p53", "nsmp", "her2", "brca", "brca1", "brca2", "hrd",
             "pd-l1", "figo", "lvsi", "er+", "pr+",
+            "ca-125", "he4", "platinum-sensitive", "platinum-resistant",
+            "hpv", "pd-l1 cps", "who score",
         ]
         for term in biomarker_terms:
             if term in text:
@@ -287,7 +300,7 @@ class NCCNGuidelinesPlugin:
 
     @kernel_function(
         description="Look up a specific NCCN guideline page by its code "
-        "(e.g., ENDO-1, ENDO-4, VAG-3, VULVA-E, UTSARC-2, ST-1). "
+        "(e.g., ENDO-1, VAG-3, VULVA-E, OV-1, OV-D, LCOC-1, CERV-1, CERV-F, GTN-1, HM-1, ST-1). "
         "Returns the full content including decision trees, treatment algorithms, "
         "footnotes, and cross-references to related pages. "
         "Use this when you know the specific page code you need."
@@ -317,11 +330,14 @@ class NCCNGuidelinesPlugin:
 
     @kernel_function(
         description="Search NCCN guidelines for a specific clinical scenario. "
-        "Provide the cancer type (endometrial, vaginal, vulvar, uterine sarcoma) "
+        "Provide the cancer type (endometrial, vaginal, vulvar, uterine sarcoma, ovarian, cervical, GTN) "
         "and a clinical question describing the patient's situation "
         "(e.g., 'Stage IIIC endometrial carcinoma adjuvant treatment', "
         "'recurrent vulvar cancer therapy options', "
-        "'fertility-sparing management of endometrial cancer'). "
+        "'Stage IIIC ovarian cancer primary treatment', "
+        "'BRCA+ ovarian cancer maintenance therapy', "
+        "'Stage IB2 cervical cancer primary treatment', "
+        "'low-risk GTN treatment'). "
         "Returns the most relevant guideline pages with treatment algorithms."
     )
     async def search_nccn_guidelines(self, cancer_type: str, clinical_question: str) -> str:
@@ -411,9 +427,9 @@ class NCCNGuidelinesPlugin:
         description="Get NCCN systemic therapy regimen options for a specific cancer type and setting. "
         "Returns preferred, other recommended, and biomarker-directed therapy options "
         "with NCCN evidence categories. "
-        "cancer_type: endometrial, vaginal, vulvar, or uterine_sarcoma. "
+        "cancer_type: endometrial, vaginal, vulvar, uterine_sarcoma, ovarian, cervical, or gtn. "
         "setting: primary, adjuvant, recurrent, or maintenance. "
-        "biomarkers: optional comma-separated biomarker status (e.g., 'dMMR,MSI-H' or 'HER2+' or 'p53abn')."
+        "biomarkers: optional comma-separated biomarker status (e.g., 'dMMR,MSI-H' or 'HER2+' or 'BRCA+' or 'HRD+')."
     )
     async def get_nccn_systemic_therapy(
         self, cancer_type: str, setting: str, biomarkers: str = ""
@@ -427,7 +443,7 @@ class NCCNGuidelinesPlugin:
             if page.get("disease", "") != disease_key:
                 continue
             # Systemic therapy pages have specific suffixes
-            if any(code.startswith(pfx) for pfx in ["ENDO-D", "VAG-D", "VULVA-E", "UTSARC-C"]):
+            if any(code.startswith(pfx) for pfx in ["ENDO-D", "VAG-D", "VULVA-E", "UTSARC-C", "OV-D", "LCOC-A", "LCOC-5A", "CERV-F", "GTN-D"]):
                 therapy_codes.append(code)
             # Also match by title keywords
             title = page.get("title", "").lower()
@@ -519,6 +535,27 @@ class NCCNGuidelinesPlugin:
             "vulvar cancer": "vulvar_cancer",
             "melanoma": "vulvovaginal_melanoma",
             "vulvovaginal melanoma": "vulvovaginal_melanoma",
+            "ovarian": "ovarian_cancer",
+            "ovarian cancer": "ovarian_cancer",
+            "epithelial ovarian": "ovarian_cancer",
+            "fallopian tube": "ovarian_cancer",
+            "peritoneal": "ovarian_cancer",
+            "primary peritoneal": "ovarian_cancer",
+            "lcoc": "less_common_ovarian_cancers",
+            "germ cell": "less_common_ovarian_cancers",
+            "sex cord stromal": "less_common_ovarian_cancers",
+            "borderline ovarian": "less_common_ovarian_cancers",
+            "low-grade serous": "less_common_ovarian_cancers",
+            "mucinous ovarian": "less_common_ovarian_cancers",
+            "cervical": "cervical_cancer",
+            "cervical cancer": "cervical_cancer",
+            "cervix": "cervical_cancer",
+            "gtn": "gestational_trophoblastic_neoplasia",
+            "gestational trophoblastic": "gestational_trophoblastic_neoplasia",
+            "gestational trophoblastic neoplasia": "gestational_trophoblastic_neoplasia",
+            "choriocarcinoma": "gestational_trophoblastic_neoplasia",
+            "hydatidiform mole": "hydatidiform_mole",
+            "molar pregnancy": "hydatidiform_mole",
         }
         return mapping.get(ct, ct)
 

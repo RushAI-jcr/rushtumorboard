@@ -61,7 +61,7 @@ def create_plugin(plugin_config: PluginConfiguration):
     )
 
 
-_MAX_TIMELINE_NOTES = 75  # ~300 KB of text; well within 128K-token context window
+_MAX_TIMELINE_NOTES = 40  # ~160 KB of text; keeps combined chat history + notes within context window
 
 
 class PatientDataPlugin:
@@ -136,9 +136,26 @@ class PatientDataPlugin:
             )
             files = files[:_MAX_TIMELINE_NOTES]
 
+        # Truncate individual notes to prevent context overflow
+        MAX_CHARS_PER_NOTE = 4000
+        MAX_TOTAL_CHARS = 120_000
+        total_chars = 0
+        capped_files = []
+        for f in files:
+            text_key = "NoteText" if "NoteText" in f else "note_text" if "note_text" in f else "text"
+            text = f.get(text_key, "")
+            if len(text) > MAX_CHARS_PER_NOTE:
+                f = {**f, text_key: text[:MAX_CHARS_PER_NOTE] + " [TRUNCATED]"}
+                text = f[text_key]
+            total_chars += len(text)
+            if total_chars > MAX_TOTAL_CHARS:
+                break
+            capped_files.append(f)
+        files = capped_files
+
         logger.info(
-            "create_timeline: %d notes after type filter for patient %s (from %s)",
-            len(files), patient_id, type(accessor).__name__,
+            "create_timeline: %d notes, ~%dK chars after capping for patient %s (from %s)",
+            len(files), total_chars // 1000, patient_id, type(accessor).__name__,
         )
 
         chat_completion_service: AzureChatCompletion = self.kernel.get_service(service_id="default")
@@ -242,9 +259,26 @@ class PatientDataPlugin:
             )
             files = files[:_MAX_TIMELINE_NOTES]
 
+        # Truncate individual notes to prevent context overflow
+        MAX_CHARS_PER_NOTE = 4000
+        MAX_TOTAL_CHARS = 120_000
+        total_chars = 0
+        capped_files = []
+        for f in files:
+            text_key = "NoteText" if "NoteText" in f else "note_text" if "note_text" in f else "text"
+            text = f.get(text_key, "")
+            if len(text) > MAX_CHARS_PER_NOTE:
+                f = {**f, text_key: text[:MAX_CHARS_PER_NOTE] + " [TRUNCATED]"}
+                text = f[text_key]
+            total_chars += len(text)
+            if total_chars > MAX_TOTAL_CHARS:
+                break
+            capped_files.append(f)
+        files = capped_files
+
         logger.info(
-            "process_prompt: %d notes after type filter for patient %s",
-            len(files), patient_id,
+            "process_prompt: %d notes, ~%dK chars after capping for patient %s",
+            len(files), total_chars // 1000, patient_id,
         )
 
         MAX_PROMPT_LEN = 2000

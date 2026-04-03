@@ -121,6 +121,16 @@ class PathologyExtractorPlugin(MedicalReportExtractorBase):
         "brca", "mmr", "msi", "pole", "p53", "her2", "ihc",
         "specimen", "frozen section", "surgical pathology",
         "lymphovascular", "lvsi", "margin", "sentinel lymph",
+        # Molecular/genomic (drives therapy: PARP, immuno, ADCs)
+        "molecular", "genomic", "ngs", "next generation sequencing",
+        "tempus", "foundation", "guardant", "caris",
+        # Serous/clear cell IHC markers
+        "pax-8", "pax8", "wt-1", "wt1", "napsin",
+        # Immuno/ADC eligibility markers
+        "pd-l1", "pdl1", "cps", "folate receptor", "fra", "folr1",
+        "tmb", "tumor mutational", "ki67", "ki-67", "ccne1", "cyclin e",
+        # OSH pathology
+        "outside hospital", "osh path", "reviewed slides", "outside pathology",
     )
 
     @kernel_function(

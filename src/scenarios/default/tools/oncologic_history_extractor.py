@@ -21,7 +21,8 @@ from utils.model_utils import model_supports_temperature
 from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE
 from .note_type_constants import (
     ADDENDUM_TYPES, CONSULT_NOTE_TYPES, DISCHARGE_TYPES,
-    ED_NOTE_TYPES, HP_TYPES, OPERATIVE_TYPES, PROGRESS_NOTE_TYPES,
+    ED_NOTE_TYPES, HP_TYPES, ONCOLOGY_TYPES, OPERATIVE_TYPES,
+    PROGRESS_NOTE_TYPES, TELEPHONE_TYPES,
 )
 from .validation import validate_patient_id
 
@@ -132,6 +133,7 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
         t.lower() for t in (
             PROGRESS_NOTE_TYPES + CONSULT_NOTE_TYPES + HP_TYPES + DISCHARGE_TYPES
             + OPERATIVE_TYPES + ED_NOTE_TYPES + ADDENDUM_TYPES
+            + ONCOLOGY_TYPES + TELEPHONE_TYPES
         )
     )
     MAX_NOTES = 30

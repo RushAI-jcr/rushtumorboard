@@ -42,6 +42,11 @@ NCI_DISEASE_MAP = {
     "gtd": "Gestational Trophoblastic Disease",
     "gtn": "Gestational Trophoblastic Neoplasia",
     "choriocarcinoma": "Choriocarcinoma",
+    "vagina": "Vaginal Cancer",
+    "hydatidiform mole": "Gestational Trophoblastic Disease",
+    "molar pregnancy": "Gestational Trophoblastic Disease",
+    "uterine sarcoma": "Uterine Sarcoma",
+    "leiomyosarcoma": "Uterine Leiomyosarcoma",
 }
 
 # ClinicalTrials.gov condition search terms
@@ -62,6 +67,12 @@ CTG_CONDITION_MAP = {
     "primary peritoneal": "primary peritoneal cancer",
     "gtd": "gestational trophoblastic",
     "gtn": "gestational trophoblastic neoplasia",
+    "choriocarcinoma": "choriocarcinoma",
+    "vagina": "vaginal cancer",
+    "hydatidiform mole": "hydatidiform mole",
+    "molar pregnancy": "molar pregnancy",
+    "uterine sarcoma": "uterine sarcoma",
+    "leiomyosarcoma": "uterine leiomyosarcoma",
 }
 
 NCI_API_BASE = "https://clinicaltrialsapi.cancer.gov/api/v2"

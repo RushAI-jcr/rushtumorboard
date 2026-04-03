@@ -15,7 +15,7 @@ from data_models.plugin_configuration import PluginConfiguration
 
 from utils.date_utils import parse_datetime as _parse_date
 
-from .note_type_constants import GENERAL_CLINICAL_TYPES
+from .note_type_constants import GENERAL_CLINICAL_TYPES, ONCOLOGY_TYPES, TELEPHONE_TYPES
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class TumorMarkerPlugin:
     #   "ED Provider Notes" — confirmed for germ cell/complex patients
     #   "Discharge Summary" — inpatient stays often summarize marker trends
     #   "H&P"               — kept for non-Rush sources (FHIR/Fabric)
-    _MARKER_NOTE_TYPES: list[str] = list(GENERAL_CLINICAL_TYPES)
+    _MARKER_NOTE_TYPES: list[str] = list(GENERAL_CLINICAL_TYPES + ONCOLOGY_TYPES + TELEPHONE_TYPES)
     _MARKER_KEYWORDS = [
         "ca-125", "ca125", "ca 125", "he4", "he-4",
         "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",

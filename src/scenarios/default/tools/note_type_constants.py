@@ -28,6 +28,7 @@ ONCOLOGY_TYPES: tuple[str, ...] = (
 )
 EXTERNAL_TYPES: tuple[str, ...] = ("Unmapped External Note",)
 ADDENDUM_TYPES: tuple[str, ...] = ("Addendum Note",)
+TELEPHONE_TYPES: tuple[str, ...] = ("Telephone Encounter",)
 PATHOLOGY_REPORT_TYPES: tuple[str, ...] = ("Surgical Pathology Final", "Pathology Consultation")
 
 # --- Composite sets (used directly by tool classes) ---
