@@ -164,7 +164,7 @@ class NCCNGuidelinesPlugin:
                 logger.warning("NCCN_DATA_DIR=%s does not exist or is not a directory", env_dir)
 
         # From src/scenarios/default/tools/ → ../../../../data/nccn_guidelines/
-        tools_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+        tools_dir = Path(__file__).resolve().parent
         candidates = [
             tools_dir / ".." / ".." / ".." / ".." / "data" / "nccn_guidelines",
             tools_dir / ".." / ".." / ".." / "data" / "nccn_guidelines",
@@ -324,8 +324,8 @@ class NCCNGuidelinesPlugin:
 
         return keywords
 
-    def _format_page_response(self, page: dict, include_full_markdown: bool = True) -> str:
-        """Format a page entry as a JSON string for the agent."""
+    def _format_page_response(self, page: dict, include_full_markdown: bool = True) -> dict:  # type: ignore[type-arg]
+        """Format a page entry as a dict. Callers that need JSON should call json.dumps()."""
         result = {
             "page_code": page["page_code"],
             "guideline": page.get("guideline", ""),
@@ -362,7 +362,7 @@ class NCCNGuidelinesPlugin:
                 total_len += len(tmd)
             result["tables"] = table_content
 
-        return json.dumps(result, indent=2, ensure_ascii=False)
+        return result
 
     @kernel_function(
         description="Look up a specific NCCN guideline page by its code "
@@ -378,12 +378,12 @@ class NCCNGuidelinesPlugin:
         if code in self._pages:
             page = self._pages[code]
             logger.info("NCCN lookup: %s → %s (%s)", code, page["title"], page["content_type"])
-            return self._format_page_response(page)
+            return json.dumps(self._format_page_response(page), indent=2, ensure_ascii=False)
 
         # Try partial match (e.g., "ENDO4" → "ENDO-4")
         normalized = re.sub(r"(\D)(\d)", r"\1-\2", code)
         if normalized in self._pages:
-            return self._format_page_response(self._pages[normalized])
+            return json.dumps(self._format_page_response(self._pages[normalized]), indent=2, ensure_ascii=False)
 
         # List available codes for the prefix
         prefix = code.split("-")[0] if "-" in code else code[:4]
@@ -480,13 +480,14 @@ class NCCNGuidelinesPlugin:
         total_chars = 0
         for code, _ in ranked[:7]:
             page = self._pages[code]
-            page_response = self._format_page_response(page, include_full_markdown=True)
-            if total_chars + len(page_response) > MAX_RESPONSE_CHARS:
+            page_dict = self._format_page_response(page, include_full_markdown=True)
+            page_size = len(json.dumps(page_dict, ensure_ascii=False))
+            if total_chars + page_size > MAX_RESPONSE_CHARS:
                 # Add summary only for remaining pages
                 results.append(self._format_page_summary(page))
             else:
-                results.append(json.loads(page_response))
-                total_chars += len(page_response)
+                results.append(page_dict)
+                total_chars += page_size
 
         return json.dumps({
             "query": f"{cancer_type}: {clinical_question}",

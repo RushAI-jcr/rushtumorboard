@@ -230,12 +230,12 @@ def extract_page_title(page: pymupdf.Page) -> str:
     top_rect = pymupdf.Rect(rect.x0, rect.y0 + 60, rect.x1, rect.y0 + 150)
     text = page.get_text("text", clip=top_rect).strip()  # type: ignore[attr-defined]
     # Clean up multiple lines
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
     # Skip NCCN header lines
-    filtered = [l for l in lines if not l.startswith("NCCN") and not l.startswith("Version")
-                and not l.startswith("PLEASE NOTE") and not l.startswith("Printed by")
-                and "Guidelines" not in l and "Table of Contents" not in l
-                and "Discussion" not in l and "NCCN Guidelines Index" not in l]
+    filtered = [line for line in lines if not line.startswith("NCCN") and not line.startswith("Version")
+                and not line.startswith("PLEASE NOTE") and not line.startswith("Printed by")
+                and "Guidelines" not in line and "Table of Contents" not in line
+                and "Discussion" not in line and "NCCN Guidelines Index" not in line]
     return " — ".join(filtered[:2]) if filtered else ""
 
 
