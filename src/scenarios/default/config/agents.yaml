@@ -344,7 +344,7 @@
     - Vulvar Cancer v2.2026 (VULVA-1 through VULVA-10, vulvovaginal melanoma: VM-1 through VM-3)
     - Ovarian Cancer v3.2026 (epithelial ovarian/fallopian tube/peritoneal: OV-1 through OV-8, less common ovarian cancers: LCOC-1 through LCOC-15)
     - Ovarian Cancer Evidence Blocks v3.2026 (EB-1 through EB-9, EB-DEF for scoring definitions)
-    - Cervical Cancer v2.2026 (CERV-1 through CERV-14, including small cell NECC: CERV-13/14; includes Evidence Blocks)
+    - Cervical Cancer v2.2026 (algorithm: CERV-1 through CERV-14 including NECC CERV-13/14; principles: CERV-A through CERV-G; Evidence Blocks in separate file)
     - Gestational Trophoblastic Neoplasia v2.2026 (hydatidiform mole: HM-1/HM-2, GTN: GTN-1 through GTN-5)
     - Gestational Trophoblastic Neoplasia Evidence Blocks v2.2026
 
