@@ -7,18 +7,19 @@ import json
 import logging
 import re
 from collections.abc import Sequence
-from datetime import date, timedelta
 from typing import Any, Callable, Coroutine
 
 import aiohttp
 from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import get_bearer_token_provider
 
-from data_models.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
+from utils.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
 
 logger = logging.getLogger(__name__)
 
 class FabricClinicalNoteAccessor:
+    _CACHE_MAX_PATIENTS: int = 5
+
     def __init__(
         self,
         fabric_user_data_function_endpoint: str,
@@ -37,7 +38,7 @@ class FabricClinicalNoteAccessor:
         self.api_endpoint = f"https://api.fabric.microsoft.com/v1/workspaces/{workspace_id}/userDataFunctions/{data_function_id}"
         self.bearer_token_provider = bearer_token_provider
         self._note_cache: dict[str, list[str]] = {}
-        self._CACHE_MAX_PATIENTS: int = 5
+        self._read_locks: dict[str, asyncio.Lock] = {}
         self._session: aiohttp.ClientSession | None = None
 
     def __parse_fabric_endpoint(self, url: str) -> tuple[str, str] | None:
@@ -70,7 +71,7 @@ class FabricClinicalNoteAccessor:
         token_provider = get_bearer_token_provider(credential, "https://analysis.windows.net/powerbi/api")
         return FabricClinicalNoteAccessor(fabric_user_data_function_endpoint, token_provider)
 
-    async def get_headers(self) -> dict:
+    async def get_headers(self) -> dict[str, str]:
         """
         Returns the headers required for Fabric API requests.
 
@@ -134,20 +135,17 @@ class FabricClinicalNoteAccessor:
         document_reference_data = document_reference["content"][0]["attachment"]["data"]
         note_content = base64.b64decode(document_reference_data).decode("utf-8")
 
-        note_json = {}
         try:
             note_json = json.loads(note_content)
             note_json['id'] = note_id
-        except json.JSONDecodeError as e:
-            logger.warning("Non-JSON content for note %s: %s — using plain text fallback", note_id, e)
-            if note_content:
-                target_date = date.today() - timedelta(days=30)
-                note_json = {
-                    "id": note_id,
-                    "text": note_content,
-                    "date": target_date.isoformat(),
-                    "type": "clinical note",
-                }
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("Non-JSON content for Fabric note: %s — using plain text fallback", exc)
+            note_json = {
+                "id": note_id,
+                "text": note_content,
+                "date": "",
+                "type": "clinical note",
+            }
         return json.dumps(note_json)
 
     async def read(self, patient_id: str, note_id: str) -> str:
@@ -156,26 +154,33 @@ class FabricClinicalNoteAccessor:
         return await self._read_note(note_id, session)
 
     async def read_all(self, patient_id: str) -> list[str]:
-        """Retrieves all clinical notes for a given patient ID (cached per-patient, LRU eviction)."""
+        """Retrieves all clinical notes for a given patient ID (cached per-patient, FIFO eviction)."""
         if patient_id in self._note_cache:
             return self._note_cache[patient_id]
 
-        metadata_list = await self.get_metadata_list(patient_id)
+        if patient_id not in self._read_locks:
+            self._read_locks[patient_id] = asyncio.Lock()
 
-        notes = []
-        batch_size = 10
-        session = await self._get_session()
-        for i in range(0, len(metadata_list), batch_size):
-            batch_input = metadata_list[i:i + batch_size]
-            batch = [self._read_note(note["id"], session) for note in batch_input]
-            batch_results = await asyncio.gather(*batch)
-            notes.extend(batch_results)
+        async with self._read_locks[patient_id]:
+            if patient_id in self._note_cache:
+                return self._note_cache[patient_id]
 
-        # LRU eviction
-        if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
-            oldest = next(iter(self._note_cache))
-            del self._note_cache[oldest]
-        self._note_cache[patient_id] = notes
+            metadata_list = await self.get_metadata_list(patient_id)
+
+            notes = []
+            batch_size = 10
+            session = await self._get_session()
+            for i in range(0, len(metadata_list), batch_size):
+                batch_input = metadata_list[i:i + batch_size]
+                batch = [self._read_note(note["id"], session) for note in batch_input]
+                batch_results = await asyncio.gather(*batch)
+                notes.extend(batch_results)
+
+            # FIFO eviction (oldest entry removed first)
+            if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
+                oldest = next(iter(self._note_cache))
+                del self._note_cache[oldest]
+            self._note_cache[patient_id] = notes
 
         return notes
 

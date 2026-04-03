@@ -15,6 +15,7 @@ from starlette.routing import Mount
 
 import group_chat
 from data_models.app_context import AppContext
+from data_models.fabric.fabric_clinical_note_accessor import FabricClinicalNoteAccessor
 from mcp_servers.clinical_trials_mcp import create_clinical_trials_mcp
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
                 if task_group:
                     tg.cancel_scope.cancel()
                     task_group = None
+                accessor = data_access.clinical_note_accessor
+                if isinstance(accessor, FabricClinicalNoteAccessor):
+                    await accessor.close()
                 logger.info("Resources cleaned up successfully.")
 
     def create_app(session_id):

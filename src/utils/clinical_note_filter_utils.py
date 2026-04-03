@@ -4,8 +4,6 @@ Extracted from ClinicalNoteAccessor, FhirClinicalNoteAccessor, and
 FabricClinicalNoteAccessor to eliminate byte-for-byte duplication of
 get_clinical_notes_by_type and get_clinical_notes_by_keywords logic.
 """
-from __future__ import annotations
-
 import json
 from collections.abc import Sequence
 
@@ -30,7 +28,7 @@ def filter_notes_by_type(
     type_set = {t.lower() for t in note_types}
     return [
         note for note in parsed
-        if note.get("note_type", note.get("NoteType", "")).lower() in type_set
+        if note.get("NoteType", note.get("note_type", "")).lower() in type_set
     ]
 
 
@@ -55,7 +53,7 @@ def filter_notes_by_keywords(
     return [
         note for note in notes
         if any(
-            kw in str(note.get("text", note.get("NoteText", note.get("note_text", "")))).lower()
+            kw in (str(note.get("NoteText", note.get("text", note.get("note_text", ""))) or "")).lower()
             for kw in kw_lower
         )
     ]

@@ -12,7 +12,7 @@ from azure.storage.blob.aio import BlobServiceClient
 
 from data_models.chat_artifact_accessor import ChatArtifactAccessor
 from data_models.chat_context_accessor import ChatContextAccessor
-from data_models.clinical_note_accessor import ClinicalNoteAccessor
+from data_models.clinical_note_accessor import BlobClinicalNoteAccessor
 from data_models.clinical_note_accessor_protocol import ClinicalNoteAccessorProtocol
 from data_models.epic.caboodle_file_accessor import CaboodleFileAccessor
 from data_models.fabric.fabric_clinical_note_accessor import FabricClinicalNoteAccessor
@@ -116,7 +116,7 @@ def create_data_access(
     else:
         if clinical_notes_source:
             logger.warning(f"Unrecognized CLINICAL_NOTES_SOURCE value: {clinical_notes_source!r}. Falling back to default blob accessor.")
-        clinical_note_accessor = ClinicalNoteAccessor(blob_service_client)
+        clinical_note_accessor = BlobClinicalNoteAccessor(blob_service_client)
 
     return DataAccess(
         blob_sas_delegate=BlobSasDelegate(blob_service_client),

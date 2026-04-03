@@ -40,7 +40,7 @@ const BODY_H   = H - BODY_Y - FTR_H - 0.06;  // ~5.86"
 
 // ── Base slide frame ───────────────────────────────────────────────────────────
 
-function frame(prs, slide, titleText, subtitleText, slideNum, total = 5) {
+function frame(prs, slide, titleText, subtitleText, slideNum) {
   // Navy header bar
   slide.addShape(prs.ShapeType.rect, {
     x: 0, y: 0, w: W, h: HDR_H,
@@ -72,7 +72,7 @@ function frame(prs, slide, titleText, subtitleText, slideNum, total = 5) {
   }
 
   // Slide number badge (top-right of header)
-  slide.addText(`${slideNum} / ${total}`, {
+  slide.addText(`${slideNum} / 5`, {
     x: W - 1.25, y: 0.19, w: 1.05, h: 0.34,
     fontFace: FONT, fontSize: 10, bold: true, color: TEAL_DIM,
     margin: 0, align: "right", valign: "middle",
@@ -92,9 +92,9 @@ function frame(prs, slide, titleText, subtitleText, slideNum, total = 5) {
 
 // ── Drawing helpers ────────────────────────────────────────────────────────────
 
-function hRule(prs, slide, y, color = RULE, xOff = 0, wAdj = 0) {
+function hRule(prs, slide, y, color = RULE) {
   slide.addShape(prs.ShapeType.rect, {
-    x: MARGIN + xOff, y, w: W - MARGIN * 2 + wAdj, h: 0.02,
+    x: MARGIN, y, w: W - MARGIN * 2, h: 0.02,
     fill: { color }, line: { color },
   });
 }
@@ -128,7 +128,8 @@ function mkBullets(items, { size = 13, color = DARK, maxItems = 20, gap = 5 } = 
  * Split "Label: value" strings into bold-muted label + dark value runs.
  * Falls back to plain text for strings without ": ".
  */
-function mkLabelValue(items, { size = 14, gap = 9 } = {}) {
+function mkLabelValue(items) {
+  const size = 15, gap = 11;
   return items.flatMap((txt, i) => {
     const sep = txt.indexOf(": ");
     const last = i === items.length - 1;
@@ -176,7 +177,7 @@ function buildSlide1(prs, sc) {
     fill: { color: TEAL }, line: { color: TEAL },
   });
 
-  slide.addText(mkLabelValue(items, { size: 15, gap: 11 }), {
+  slide.addText(mkLabelValue(items), {
     x: MARGIN + 0.22, y: BODY_Y + 0.24,
     w: W - MARGIN * 2 - 0.40, h: BODY_H - 0.44,
     fontFace: FONT, valign: "top",
@@ -213,7 +214,7 @@ function buildSlide2(prs, sc) {
   }
 
   // RED rule above staging panel
-  hRule(prs, slide, BODY_Y + narrativeH + 0.06, RED_RULE, 0, 0);
+  hRule(prs, slide, BODY_Y + narrativeH + 0.06, RED_RULE);
 
   const panelY = BODY_Y + narrativeH + 0.11;
 
@@ -392,10 +393,16 @@ function buildSlide5(prs, sc) {
   // ── Clinical discussion agenda — primary content ───────────────────────────
   const planItems  = sc.discussion_bullets || [];
   const trialItems = sc.trial_entries      || [];
+  const refItems   = (sc.references || []).slice(0, 4);
 
-  // Trials footnote height: single compact line per entry
-  const trialsH = trialItems.length > 0 ? 0.22 + trialItems.slice(0, 3).length * 0.24 : 0;
-  const planH   = Math.max(BODY_H - (y - BODY_Y) - (trialsH > 0 ? trialsH + 0.26 : 0), 0.5);
+  // Evidence footnote height — scales with the taller of the two columns
+  const trialLines = Math.min(trialItems.length, 3);
+  const refLines   = refItems.length;
+  const footLines  = trialItems.length > 0 && refItems.length > 0
+    ? Math.max(trialLines, refLines)
+    : trialLines + refLines;
+  const trialsH    = footLines > 0 ? 0.22 + footLines * 0.26 : 0;
+  const planH      = Math.max(BODY_H - (y - BODY_Y) - (trialsH > 0 ? trialsH + 0.26 : 0), 0.5);
 
   if (planItems.length > 0) {
     slide.addText(mkBullets(planItems, { size: 14, gap: 7 }), {
@@ -404,26 +411,59 @@ function buildSlide5(prs, sc) {
     });
   }
 
-  // ── Trials to consider — subdued AI reference footnote ────────────────────
-  if (trialItems.length > 0) {
-    const trialsY = H - FTR_H - trialsH - 0.04;
+  // ── Evidence footnote: trials (NCT) + PubMed references ─────────────────
+  if (trialItems.length > 0 || refItems.length > 0) {
+    const footY = H - FTR_H - trialsH - 0.04;
+    hRule(prs, slide, footY - 0.10, RULE);
 
-    hRule(prs, slide, trialsY - 0.10, RULE);
+    if (trialItems.length > 0 && refItems.length > 0) {
+      // Two-column: NCT left, PMID right
+      const colW = (W - MARGIN * 2 - 0.30) / 2;
 
-    // Label: muted, smaller, clearly secondary
-    slide.addText("Trials to consider  (AI-identified):", {
-      x: MARGIN, y: trialsY - 0.02, w: W - MARGIN * 2, h: 0.22,
-      fontFace: FONT, fontSize: 10, bold: false, color: SUBTLE,
-      margin: 0,
-    });
+      slide.addText("Trials to consider:", {
+        x: MARGIN, y: footY - 0.02, w: colW, h: 0.20,
+        fontFace: FONT, fontSize: 9.5, bold: false, color: SUBTLE, margin: 0,
+      });
+      slide.addText(trialItems.slice(0, 3).join("\n"), {
+        x: MARGIN, y: footY + 0.20, w: colW, h: trialsH - 0.22,
+        fontFace: FONT, fontSize: 10, color: TEAL_DIM,
+        margin: 0, valign: "top",
+      });
 
-    // Trial entries as compact inline text, not bullet list
-    const trialLine = trialItems.slice(0, 3).join("   ·   ");
-    slide.addText(trialLine, {
-      x: MARGIN, y: trialsY + 0.22, w: W - MARGIN * 2, h: trialsH - 0.22,
-      fontFace: FONT, fontSize: 10.5, color: MUTED,
-      margin: 0, valign: "top",
-    });
+      vRule(prs, slide, MARGIN + colW + 0.13, footY - 0.02, trialsH + 0.04);
+
+      slide.addText("Key references:", {
+        x: MARGIN + colW + 0.28, y: footY - 0.02, w: colW, h: 0.20,
+        fontFace: FONT, fontSize: 9.5, bold: false, color: SUBTLE, margin: 0,
+      });
+      slide.addText(refItems.join("\n"), {
+        x: MARGIN + colW + 0.28, y: footY + 0.20, w: colW, h: trialsH - 0.22,
+        fontFace: FONT, fontSize: 10, color: MUTED,
+        margin: 0, valign: "top",
+      });
+
+    } else if (trialItems.length > 0) {
+      slide.addText("Trials to consider  (AI-identified):", {
+        x: MARGIN, y: footY - 0.02, w: W - MARGIN * 2, h: 0.20,
+        fontFace: FONT, fontSize: 9.5, color: SUBTLE, margin: 0,
+      });
+      slide.addText(trialItems.slice(0, 3).join("   ·   "), {
+        x: MARGIN, y: footY + 0.20, w: W - MARGIN * 2, h: trialsH - 0.22,
+        fontFace: FONT, fontSize: 10.5, color: TEAL_DIM,
+        margin: 0, valign: "top",
+      });
+
+    } else {
+      slide.addText("Key references:", {
+        x: MARGIN, y: footY - 0.02, w: W - MARGIN * 2, h: 0.20,
+        fontFace: FONT, fontSize: 9.5, color: SUBTLE, margin: 0,
+      });
+      slide.addText(refItems.join("   ·   "), {
+        x: MARGIN, y: footY + 0.20, w: W - MARGIN * 2, h: trialsH - 0.22,
+        fontFace: FONT, fontSize: 10.5, color: MUTED,
+        margin: 0, valign: "top",
+      });
+    }
   }
 }
 

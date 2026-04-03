@@ -242,7 +242,12 @@ class TumorMarkerPlugin:
         tumor_markers_result, all_labs = await asyncio.gather(
             accessor.get_tumor_markers(patient_id),
             accessor.get_lab_results(patient_id),
+            return_exceptions=True,
         )
+        if isinstance(tumor_markers_result, BaseException):
+            tumor_markers_result = []
+        if isinstance(all_labs, BaseException):
+            all_labs = []
         all_markers = tumor_markers_result if tumor_markers_result else all_labs
 
         if not all_markers:

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -54,12 +55,16 @@ RED = "FF0000"
 DARK_TEXT = "333333"
 GRAY = "666666"
 
+_LLM_TIMEOUT_SECS_STANDARD  = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
+_LLM_TIMEOUT_SECS_REASONING = 150.0  # max wait for reasoning models (o3-mini, o3)
+
 # Character caps for high-variability fields before LLM summarization.
 # Prevents unbounded token counts in the highest-cost LLM call per patient export.
 _MAX_ONCOLOGIC_HISTORY_CHARS = 4000
 _MAX_MEDICAL_HISTORY_CHARS = 2000
 _MAX_BOARD_DISCUSSION_CHARS = 3000
-_MAX_CT_FINDINGS_CHARS = 3000  # per element in list
+_MAX_CT_FINDINGS_CHARS = 3000      # per element in list
+_MAX_ACTION_ITEM_CHARS = 200       # per action item in Col 4
 
 # Prompt for LLM summarization into 5-column clinical shorthand
 TUMOR_BOARD_DOC_PROMPT = """\
@@ -108,6 +113,10 @@ Return valid JSON matching the TumorBoardDocContent schema:
   "discussion": "Tumor board discussion narrative. Do NOT repeat review_types here.",
   "action_items": ["Short action directives shown in red, e.g., Request path on BSO for Rush review.", "Plan for 3C and cuff"]
 }
+
+IMPORTANT — staging fields: Use the explicit `figo_stage` parameter as the authoritative FIGO stage value.
+Do NOT re-extract stage from narrative text — use the provided value verbatim.
+Same for `molecular_profile` — use it verbatim for germline/somatic genetics fields.
 
 review_types vocabulary (use only these terms as applicable):
   "Path Review" — if pathology slides/report need board review
@@ -245,13 +254,25 @@ class ContentExportPlugin:
         stream.seek(0)
 
         artifact = ChatArtifact(artifact_id=artifact_id, data=stream.getvalue())
-        await self.data_access.chat_artifact_accessor.write(artifact)
+        for _attempt in range(2):
+            try:
+                await self.data_access.chat_artifact_accessor.write(artifact)
+                break
+            except Exception as exc:
+                if _attempt == 1:
+                    logger.error(
+                        "Word doc upload failed (conv=%s): %s",
+                        self.chat_ctx.conversation_id,
+                        type(exc).__name__,
+                    )
+                    return "ERROR_TYPE: STORAGE_FAILED\nWord document was generated but could not be saved. Please try again."
+                await asyncio.sleep(1.0)
 
         safe_url = html.escape(doc_output_url, quote=True)
-        safe_name = html.escape(artifact_id.filename)
         return (
-            f"The tumor board Word document has been created. "
-            f'Download: <a href="{safe_url}">{safe_name}</a>'
+            f"Word document created successfully.\n"
+            f"Download URL: {safe_url}\n\n"
+            f'<a href="{safe_url}">Download Tumor Board Handout</a>'
         )
 
     # ── Column RichText builders ──
@@ -396,15 +417,15 @@ class ContentExportPlugin:
             settings = AzureChatPromptExecutionSettings(response_format=TumorBoardDocContent)
 
         chat_service = self.kernel.get_service(service_id="default")
-        response = await chat_service.get_chat_message_content(
-            chat_history=chat_history, settings=settings
-        )
-
         try:
+            llm_timeout = _LLM_TIMEOUT_SECS_REASONING if not model_supports_temperature() else _LLM_TIMEOUT_SECS_STANDARD
+            response = await asyncio.wait_for(
+                chat_service.get_chat_message_content(chat_history=chat_history, settings=settings),
+                timeout=llm_timeout,
+            )
             parsed = json.loads(response.content)
             doc = TumorBoardDocContent(**parsed)
             # Validate action_items: cap length and filter suspicious content
-            _MAX_ACTION_ITEM_CHARS = 200
             doc = doc.model_copy(update={
                 "action_items": [
                     item[:_MAX_ACTION_ITEM_CHARS]
@@ -413,8 +434,17 @@ class ContentExportPlugin:
                 ]
             })
             return doc
+        except asyncio.TimeoutError:
+            logger.warning(
+                "TumorBoardDocContent LLM call timed out for patient %s",
+                all_data.get("patient_id", "Unknown"),
+            )
+            return self._fallback_doc_content(all_data)
         except Exception as exc:
-            logger.warning("LLM response did not match TumorBoardDocContent schema, using fallback: %s", exc, exc_info=True)
+            logger.warning(
+                "LLM response did not match TumorBoardDocContent schema (type=%s), using fallback",
+                type(exc).__name__,
+            )
             return self._fallback_doc_content(all_data)
 
     @staticmethod
@@ -452,7 +482,7 @@ class ContentExportPlugin:
                 f"Tx Plan: {str(data.get('treatment_plan', ''))[:200]}\n\n"
                 f"{str(data.get('board_discussion', ''))[:200]}"
             ),
-            action_items=[],
+            action_items=["[FALLBACK] Export used LLM fallback — review all fields before printing."],
         )
 
     # ── Legacy helpers (kept for backward compatibility) ──

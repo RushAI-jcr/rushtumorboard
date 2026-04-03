@@ -9,12 +9,14 @@ from time import time
 
 from azure.storage.blob.aio import BlobServiceClient
 
-from data_models.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
+from utils.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
 
 logger = logging.getLogger(__name__)
 
 
-class ClinicalNoteAccessor:
+class BlobClinicalNoteAccessor:
+    _CACHE_MAX_PATIENTS: int = 5
+
     def __init__(
         self, blob_service_client: BlobServiceClient,
         container_name: str = "patient-data",
@@ -25,7 +27,6 @@ class ClinicalNoteAccessor:
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
         self.folder_name = folder_name
         self._note_cache: dict[str, list[str]] = {}
-        self._CACHE_MAX_PATIENTS: int = 5
 
     async def get_patients(self) -> list[str]:
         """Get the list of patients."""
@@ -63,7 +64,7 @@ class ClinicalNoteAccessor:
             logger.info("Read clinical note. Duration: %.3fs", time() - start)
 
     async def read_all(self, patient_id: str) -> list[str]:
-        """Read all clinical notes for a given patient ID (cached per-patient, LRU eviction)."""
+        """Read all clinical notes for a given patient ID (cached per-patient, FIFO eviction)."""
         if patient_id in self._note_cache:
             return self._note_cache[patient_id]
 
@@ -81,7 +82,7 @@ class ClinicalNoteAccessor:
                 batch_results = await asyncio.gather(*batch)
                 notes.extend(batch_results)
 
-            # LRU eviction
+            # FIFO eviction (oldest entry removed first)
             if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:
                 oldest = next(iter(self._note_cache))
                 del self._note_cache[oldest]
@@ -109,11 +110,33 @@ class ClinicalNoteAccessor:
     async def get_lab_results(
         self, patient_id: str, component_name: str | None = None
     ) -> list[dict]:
-        """FHIR backend does not expose structured lab results via this accessor. Returns empty list."""
+        """Structured lab results are not available via this accessor. Returns empty list."""
         return []
 
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
-        """FHIR backend does not expose structured tumor markers via this accessor. Returns empty list."""
+        """Structured tumor markers are not available via this accessor. Returns empty list."""
+        return []
+
+    async def get_pathology_reports(self, patient_id: str) -> list[dict]:
+        """Dedicated pathology reports are not available via this accessor. Returns empty list."""
+        return []
+
+    async def get_radiology_reports(self, patient_id: str) -> list[dict]:
+        """Dedicated radiology reports are not available via this accessor. Returns empty list."""
+        return []
+
+    async def get_cancer_staging(self, patient_id: str) -> list[dict]:
+        """Structured cancer staging is not available via this accessor. Returns empty list."""
+        return []
+
+    async def get_medications(
+        self, patient_id: str, order_class: str | None = None
+    ) -> list[dict]:
+        """Structured medications are not available via this accessor. Returns empty list."""
+        return []
+
+    async def get_diagnoses(self, patient_id: str) -> list[dict]:
+        """Structured diagnoses are not available via this accessor. Returns empty list."""
         return []
 
     async def _read_blob(self, blob_name: str) -> str:
