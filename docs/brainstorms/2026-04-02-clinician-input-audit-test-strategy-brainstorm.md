@@ -16,7 +16,7 @@ Two things:
 ### Input: MRN-only (GUID as MRN for pilot)
 
 - Clinician types a single identifier into Teams — nothing else
-- For the pilot, the Caboodle GUID *is* the MRN (e.g., `REDACTED-PATIENT-001`)
+- For the pilot, the Caboodle GUID *is* the MRN (e.g., `XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`)
 - System extracts everything from Epic Caboodle CSVs automatically
 - No clinical question, no context override, no structured fields — the agents handle all extraction
 - Production MRN→GUID resolver deferred to post-pilot
@@ -33,7 +33,7 @@ Clinician types MRN/GUID in Teams
 
 **What the clinician sees:**
 ```
-Clinician: "REDACTED-PATIENT-001"
+Clinician: "<PATIENT-GUID>"
 [System processes for ~3-5 minutes]
 [Agents stream status updates in chat]
 [Final output: Word doc + PPTX download links]
@@ -104,9 +104,9 @@ A script that:
 ```
 Patient GUID                              | Status  | Time  | Agents OK | Artifacts | Notes
 ------------------------------------------|---------|-------|-----------|-----------|------
-REDACTED-PATIENT-001     | PASS    | 4m12s | 10/10     | Doc+PPTX  |
-REDACTED-PATIENT-002     | PASS    | 3m45s | 10/10     | Doc+PPTX  |
-REDACTED-PATIENT-003     | FAIL    | 2m01s | 7/10      | Doc only  | Radiology agent error
+<PATIENT-GUID-01>                         | PASS    | 4m12s | 10/10     | Doc+PPTX  |
+<PATIENT-GUID-02>                         | PASS    | 3m45s | 10/10     | Doc+PPTX  |
+<PATIENT-GUID-03>                         | FAIL    | 2m01s | 7/10      | Doc only  | Radiology agent error
 ...
 ```
 

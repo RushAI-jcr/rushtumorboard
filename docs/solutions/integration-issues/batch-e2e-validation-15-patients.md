@@ -11,7 +11,7 @@ symptoms:
 root_causes:
   - "Missing batch test harness for full agent workflow"
   - "No input validation layer for patient data completeness"
-  - "AAFEE08B patient has only benign D-codes (D21.9, D25.9, D47.3), not malignant C-codes"
+  - "<PATIENT-XX> patient has only benign D-codes (D21.9, D25.9, D47.3), not malignant C-codes"
   - "Radiology/pathology data often embedded in clinical_notes.csv, not dedicated CSVs"
 technologies:
   - asyncio
@@ -42,7 +42,7 @@ Clinician input requirements were also undefined — specifically, what exactly 
 2. Analyzed `AppContext`/`ChatContext` requirements for group chat creation to understand the dependency graph.
 3. Identified local accessors (`LocalChatArtifactAccessor`, `LocalChatContextAccessor`, etc.) as drop-in replacements for Azure Blob storage, enabling fully local E2E runs.
 4. Validated all 15 real patient GUIDs have complete data across 7 CSV types.
-5. Discovered patient `AAFEE08B` has only benign D-codes (no malignant C-codes) — the ICD-10 validation needed to accept `D*` codes alongside `C*` codes.
+5. Discovered patient `<PATIENT-XX>` has only benign D-codes (no malignant C-codes) — the ICD-10 validation needed to accept `D*` codes alongside `C*` codes.
 6. Confirmed radiology/pathology data lives in `clinical_notes.csv` via the 3-layer fallback pattern (dedicated report CSV -> filtered clinical notes by NoteType -> keyword-matched clinical notes).
 7. Agent detection regex needed the `"agent id: {name}"` format to correctly match agent responses in the group chat transcript.
 
@@ -123,7 +123,7 @@ assert any(code.startswith(("C", "D")) for code in icd_codes), \
 |-------|-----|
 | 120s per-patient timeout too short; complex cases timed out | Increased default to 300s (5 minutes) |
 | Agent detection regex used wrong format, failing to parse agent turns | Fixed to match `"agent id: {name}"` format from readable text |
-| AAFEE08B failed ICD-10 assertion (only benign D-codes, no C-codes) | Broadened validation to accept both `C*` and `D*` prefixes |
+| <PATIENT-XX> failed ICD-10 assertion (only benign D-codes, no C-codes) | Broadened validation to accept both `C*` and `D*` prefixes |
 | logfire ImportError (`_ExtendedAttributes`) when running pytest | Run with `-p no:logfire` to disable the plugin |
 
 ## Prevention Strategies
@@ -143,7 +143,7 @@ assert any(code.startswith(("C", "D")) for code in icd_codes), \
 ### ICD-10 Code Coverage
 
 - **Rule**: Accept the full ICD-10 spectrum for GYN oncology: `C*`, `D*`, `N*`, `Z*`, `R*`.
-- **Why**: AAFEE08B had only D-category codes (benign neoplasms). Single-prefix check incorrectly flagged as missing diagnosis.
+- **Why**: <PATIENT-XX> had only D-category codes (benign neoplasms). Single-prefix check incorrectly flagged as missing diagnosis.
 - **How to apply**: When adding patients, inspect diagnosis codes and verify the validation whitelist covers all prefixes present.
 
 ### Three-Layer Data Fallback

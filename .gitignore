@@ -31,3 +31,6 @@ src/tests/local_patient_ids.json
 
 # Batch E2E evaluation output
 src/evaluation/batch_e2e_output/
+
+# Real patient GUID evaluation queries — populate locally from local_patient_ids.json
+src/evaluation/initial_queries_gyn15.csv

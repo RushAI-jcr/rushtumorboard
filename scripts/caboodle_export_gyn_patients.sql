@@ -13,7 +13,7 @@
  *   2. For each patient, set @PAT_ID and run each block.
  *   3. Export results → Save as UTF-8 CSV with headers.
  *   4. Place in: infra/patient_data/{PAT_ID}/{file_type}.csv
- *      e.g., infra/patient_data/REDACTED-PATIENT-001/clinical_notes.csv
+ *      e.g., infra/patient_data/<YOUR-PAT-ID-HERE>/clinical_notes.csv
  *   5. Validate: python3 scripts/validate_patient_csvs.py
  *
  * SCHEMA:
@@ -25,7 +25,7 @@
 /* ============================================================
  * PARAMETERS — set per patient
  * ============================================================ */
-DECLARE @PAT_ID  VARCHAR(50) = 'REDACTED-PATIENT-001';
+DECLARE @PAT_ID  VARCHAR(50) = '<YOUR-PAT-ID-HERE>';
 DECLARE @Days    INT         = 1825;   -- 5-year lookback
 
 /* Helper: resolve to internal PAT_ENC_CSN_ID key set */

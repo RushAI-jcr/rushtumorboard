@@ -175,7 +175,7 @@ Added to `.gitignore` at repository root:
 infra/patient_data/[A-F0-9]*-*-*-*-*/
 ```
 
-The glob pattern matches UUID-formatted folder names (e.g., `REDACTED-PATIENT-003`) while preserving synthetic test patients (`patient_gyn_001`, `patient_gyn_002`, `patient_4`).
+The glob pattern matches UUID-formatted folder names (e.g., `XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`) while preserving synthetic test patients (`patient_gyn_001`, `patient_gyn_002`, `patient_4`).
 
 ### 7. Type Safety Fixes
 

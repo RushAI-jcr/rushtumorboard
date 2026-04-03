@@ -29,8 +29,8 @@ Create `evaluation/initial_queries_gyn15.csv` with one row per real patient GUID
 
 ```csv
 patient_id,initial_query,followup
-REDACTED-PATIENT-001,"Prepare tumor board case for patient REDACTED-PATIENT-001",
-REDACTED-PATIENT-002,"Prepare tumor board case for patient REDACTED-PATIENT-002",
+<PATIENT-GUID-01>,"Prepare tumor board case for patient <PATIENT-GUID-01>",
+<PATIENT-GUID-02>,"Prepare tumor board case for patient <PATIENT-GUID-02>",
 ...
 ```
 
@@ -193,9 +193,9 @@ BATCH E2E TEST REPORT — 2026-04-02 15:30:00
 
 Patient GUID                              Status   Time    Agents  Doc  PPTX  NCCN
 ──────────────────────────────────────────────────────────────────────────────────
-REDACTED-PATIENT-001     PASS     4m12s   10/10   OK   OK    N/A (ovarian)
-REDACTED-PATIENT-002     PASS     3m45s   10/10   OK   OK    ENDO-4,ENDO-7
-REDACTED-PATIENT-003     FAIL     2m01s   7/10    OK   MISS  —
+<PATIENT-GUID-01>                         PASS     4m12s   10/10   OK   OK    N/A (ovarian)
+<PATIENT-GUID-02>                         PASS     3m45s   10/10   OK   OK    ENDO-4,ENDO-7
+<PATIENT-GUID-03>                         FAIL     2m01s   7/10    OK   MISS  —
 ...
 ──────────────────────────────────────────────────────────────────────────────────
 TOTAL: 13/15 PASS, 1 FAIL, 1 TIMEOUT
