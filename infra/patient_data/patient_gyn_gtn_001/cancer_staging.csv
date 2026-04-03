@@ -1,0 +1,2 @@
+PatientID,StageDate,StagingSystem,TNM_T,TNM_N,TNM_M,StageGroup,FIGOStage
+patient_gyn_gtn_001,2026-01-20,FIGO GTN Staging,N/A,N/A,M1a,III,III

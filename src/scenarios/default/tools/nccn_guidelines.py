@@ -44,6 +44,44 @@ class NCCNGuidelinesPlugin:
     _guidelines: ClassVar[list[dict]] = []           # metadata per guideline
     _load_lock: ClassVar[threading.Lock] = threading.Lock()
 
+    _CANCER_TYPE_MAP: ClassVar[dict[str, str]] = {
+        "endometrial": "endometrial_carcinoma",
+        "uterine": "endometrial_carcinoma",
+        "uterine carcinoma": "endometrial_carcinoma",
+        "endometrial carcinoma": "endometrial_carcinoma",
+        "uterine sarcoma": "uterine_sarcoma",
+        "sarcoma": "uterine_sarcoma",
+        "leiomyosarcoma": "uterine_sarcoma",
+        "vaginal": "vaginal_cancer",
+        "vaginal cancer": "vaginal_cancer",
+        "vagina": "vaginal_cancer",
+        "vulvar": "vulvar_cancer",
+        "vulvar cancer": "vulvar_cancer",
+        "melanoma": "vulvovaginal_melanoma",
+        "vulvovaginal melanoma": "vulvovaginal_melanoma",
+        "ovarian": "ovarian_cancer",
+        "ovarian cancer": "ovarian_cancer",
+        "epithelial ovarian": "ovarian_cancer",
+        "fallopian tube": "ovarian_cancer",
+        "peritoneal": "ovarian_cancer",
+        "primary peritoneal": "ovarian_cancer",
+        "lcoc": "less_common_ovarian_cancers",
+        "germ cell": "less_common_ovarian_cancers",
+        "sex cord stromal": "less_common_ovarian_cancers",
+        "borderline ovarian": "less_common_ovarian_cancers",
+        "low-grade serous": "less_common_ovarian_cancers",
+        "mucinous ovarian": "less_common_ovarian_cancers",
+        "cervical": "cervical_cancer",
+        "cervical cancer": "cervical_cancer",
+        "cervix": "cervical_cancer",
+        "gtn": "gestational_trophoblastic_neoplasia",
+        "gestational trophoblastic": "gestational_trophoblastic_neoplasia",
+        "gestational trophoblastic neoplasia": "gestational_trophoblastic_neoplasia",
+        "choriocarcinoma": "gestational_trophoblastic_neoplasia",
+        "hydatidiform mole": "hydatidiform_mole",
+        "molar pregnancy": "hydatidiform_mole",
+    }
+
     def __init__(self, config: PluginConfiguration):
         self._ensure_loaded()
 
@@ -369,6 +407,9 @@ class NCCNGuidelinesPlugin:
                 all_terms.add(kw_set)
         query_keywords.update(all_terms)
 
+        # Down-weight overly broad terms that match most pages
+        _BROAD_TERMS = {"carcinoma", "adenocarcinoma", "surgery", "chemotherapy", "radiation", "stage i", "stage ii", "stage iii", "stage iv"}
+
         # Score pages by keyword overlap
         page_scores: dict[str, float] = {}
         for kw in query_keywords:
@@ -389,6 +430,8 @@ class NCCNGuidelinesPlugin:
                     weight = 1.5
                 elif page["content_type"] == "discussion":
                     weight = 0.5
+                if kw in _BROAD_TERMS:
+                    weight *= 0.3
                 page_scores[code] = page_scores.get(code, 0) + weight
 
         if not page_scores:
@@ -449,12 +492,14 @@ class NCCNGuidelinesPlugin:
         # Find systemic therapy pages (typically *-D or *-E suffix)
         therapy_codes = []
         disease_key = self._map_cancer_type(cancer_type)
+        _SYSTEMIC_PREFIXES = ("ENDO-D", "VAG-D", "VULVA-E", "UTSARC-C", "OV-D", "LCOC-A", "LCOC-5A", "LCOC-5B", "CERV-F", "GTN-D")
 
-        for code, page in self._pages.items():
-            if page.get("disease", "") != disease_key:
+        for code in self._disease_index.get(disease_key, []):
+            page = self._pages.get(code)
+            if not page:
                 continue
             # Systemic therapy pages have specific suffixes
-            if any(code.startswith(pfx) for pfx in ["ENDO-D", "VAG-D", "VULVA-E", "UTSARC-C", "OV-D", "LCOC-A", "LCOC-5A", "CERV-F", "GTN-D"]):
+            if any(code.startswith(pfx) for pfx in _SYSTEMIC_PREFIXES):
                 therapy_codes.append(code)
             # Also match by title keywords
             title = page.get("title", "").lower()
@@ -537,48 +582,11 @@ class NCCNGuidelinesPlugin:
             "therapy_pages": capped_results,
         }, indent=2, ensure_ascii=False)
 
-    @staticmethod
-    def _map_cancer_type(cancer_type: str) -> str:
+    @classmethod
+    def _map_cancer_type(cls, cancer_type: str) -> str:
         """Map user-friendly cancer type to disease index key."""
         ct = cancer_type.lower().strip()
-        mapping = {
-            "endometrial": "endometrial_carcinoma",
-            "uterine": "endometrial_carcinoma",
-            "uterine carcinoma": "endometrial_carcinoma",
-            "endometrial carcinoma": "endometrial_carcinoma",
-            "uterine sarcoma": "uterine_sarcoma",
-            "sarcoma": "uterine_sarcoma",
-            "leiomyosarcoma": "uterine_sarcoma",
-            "vaginal": "vaginal_cancer",
-            "vaginal cancer": "vaginal_cancer",
-            "vagina": "vaginal_cancer",
-            "vulvar": "vulvar_cancer",
-            "vulvar cancer": "vulvar_cancer",
-            "melanoma": "vulvovaginal_melanoma",
-            "vulvovaginal melanoma": "vulvovaginal_melanoma",
-            "ovarian": "ovarian_cancer",
-            "ovarian cancer": "ovarian_cancer",
-            "epithelial ovarian": "ovarian_cancer",
-            "fallopian tube": "ovarian_cancer",
-            "peritoneal": "ovarian_cancer",
-            "primary peritoneal": "ovarian_cancer",
-            "lcoc": "less_common_ovarian_cancers",
-            "germ cell": "less_common_ovarian_cancers",
-            "sex cord stromal": "less_common_ovarian_cancers",
-            "borderline ovarian": "less_common_ovarian_cancers",
-            "low-grade serous": "less_common_ovarian_cancers",
-            "mucinous ovarian": "less_common_ovarian_cancers",
-            "cervical": "cervical_cancer",
-            "cervical cancer": "cervical_cancer",
-            "cervix": "cervical_cancer",
-            "gtn": "gestational_trophoblastic_neoplasia",
-            "gestational trophoblastic": "gestational_trophoblastic_neoplasia",
-            "gestational trophoblastic neoplasia": "gestational_trophoblastic_neoplasia",
-            "choriocarcinoma": "gestational_trophoblastic_neoplasia",
-            "hydatidiform mole": "hydatidiform_mole",
-            "molar pregnancy": "hydatidiform_mole",
-        }
-        return mapping.get(ct, ct)
+        return cls._CANCER_TYPE_MAP.get(ct, ct)
 
     @staticmethod
     def _format_page_summary(page: dict) -> dict:

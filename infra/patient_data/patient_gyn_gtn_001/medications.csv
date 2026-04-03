@@ -1,0 +1,12 @@
+PatientID,MedicationName,StartDate,EndDate,Route,Dose,Frequency,OrderClass
+patient_gyn_gtn_001,Etoposide,2026-01-27,,IV,100 mg/m2,Day 1 of EMA week (q2wk),Chemotherapy
+patient_gyn_gtn_001,Methotrexate,2026-01-27,,IV,300 mg/m2,Day 1 of EMA week (q2wk),Chemotherapy
+patient_gyn_gtn_001,Folinic Acid (Leucovorin),2026-01-28,,IM/PO,15 mg,q12h x 4 doses after MTX,Supportive Care
+patient_gyn_gtn_001,Actinomycin D (Dactinomycin),2026-01-28,,IV,0.5 mg,Day 2 of EMA week (q2wk),Chemotherapy
+patient_gyn_gtn_001,Cyclophosphamide,2026-02-03,,IV,600 mg/m2,Day 8 CO week (q2wk),Chemotherapy
+patient_gyn_gtn_001,Vincristine,2026-02-03,,IV,1 mg/m2,Day 8 CO week (q2wk),Chemotherapy
+patient_gyn_gtn_001,Pegfilgrastim,2026-02-04,,SC,6 mg,Day after CO week,Supportive Care
+patient_gyn_gtn_001,Ondansetron,2026-01-27,,IV/Oral,16 mg,Pre-chemo and PRN,Supportive Care
+patient_gyn_gtn_001,Dexamethasone,2026-01-27,,IV,12 mg,Pre-chemo,Supportive Care
+patient_gyn_gtn_001,Olanzapine,2026-02-10,,Oral,5 mg,Daily PRN nausea,Supportive Care
+patient_gyn_gtn_001,Norgestimate-Ethinyl Estradiol (OCP),2025-09-15,,Oral,1 tab,Daily,Medication

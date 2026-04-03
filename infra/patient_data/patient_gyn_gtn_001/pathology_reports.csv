@@ -1,0 +1,42 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+PATH001,patient_gyn_gtn_001,Suction curettage - products of conception,2025-09-15,"PATHOLOGY REPORT - PRODUCTS OF CONCEPTION
+
+SPECIMEN: Endometrial curettings (suction evacuation of molar pregnancy)
+
+GROSS: Received in formalin labeled 'products of conception,' consisting of 180 mL of hemorrhagic and vesicular tissue with grape-like villi. No identifiable fetal parts.
+
+DIAGNOSIS: Complete hydatidiform mole.
+
+MICROSCOPIC: Sections show hydropic chorionic villi with diffuse circumferential trophoblastic hyperplasia involving both cytotrophoblast and syncytiotrophoblast. Marked villous edema with central cistern formation. No identifiable embryonic or fetal tissue. No villous blood vessels containing nucleated fetal red blood cells. Focal atypia in trophoblastic proliferation. No definitive evidence of invasion into myometrial tissue in this specimen.
+
+IMMUNOHISTOCHEMISTRY:
+- p57 (KIP2): Negative in villous cytotrophoblast and stromal cells (consistent with COMPLETE mole; paternally imprinted, maternally expressed gene absent)
+- Ki-67: Elevated in trophoblastic proliferation (60-70%)
+
+FLOW CYTOMETRY / PLOIDY: DNA index consistent with diploidy (diploid androgenetic complete mole).
+
+COMMENT: Morphologic features and p57 immunostaining pattern are diagnostic of a complete hydatidiform mole. Serial hCG monitoring is essential. Risk of progression to gestational trophoblastic neoplasia (GTN) is approximately 15-20% for complete moles. Recommend weekly serum beta-hCG monitoring until undetectable for 3 consecutive values, then monthly for 12 months."
+PATH002,patient_gyn_gtn_001,Endometrial curettage - GTN workup,2026-01-06,"PATHOLOGY REPORT - ENDOMETRIAL CURETTAGE
+
+SPECIMEN: Endometrial curettings
+
+CLINICAL HISTORY: 28-year-old female with rising hCG 4 months after evacuation of complete hydatidiform mole. Current beta-hCG 68,000 mIU/mL. CT chest showing bilateral pulmonary nodules. Curettage for tissue diagnosis.
+
+GROSS: Received in formalin, 15 mL of hemorrhagic, friable tissue fragments.
+
+DIAGNOSIS: Choriocarcinoma.
+
+MICROSCOPIC: Sections show sheets and nests of markedly atypical trophoblastic tissue with a biphasic pattern of cytotrophoblast and syncytiotrophoblast. Extensive hemorrhage and necrosis are present, a hallmark feature of choriocarcinoma. No chorionic villi are identified (distinguishing this from invasive mole). High mitotic activity with atypical mitotic figures. Vascular invasion identified in multiple foci. Tumor invades into superficial myometrium.
+
+IMMUNOHISTOCHEMISTRY:
+- hCG: Positive (strong, diffuse in syncytiotrophoblast)
+- hPL (human placental lactogen): Positive (focal, in intermediate trophoblast)
+- p63: Positive (cytotrophoblast)
+- GATA3: Positive
+- Inhibin-alpha: Positive
+- Cytokeratin AE1/AE3: Positive
+- EMA: Negative (typical for trophoblastic tumors)
+- Ki-67: >90%
+- p57 (KIP2): Negative (consistent with androgenetic origin, as in preceding complete mole)
+
+COMMENT: The morphologic and immunohistochemical findings are diagnostic of choriocarcinoma arising in the setting of a prior complete hydatidiform mole. The absence of chorionic villi excludes invasive hydatidiform mole. Given bilateral pulmonary metastases and high hCG level, this represents FIGO Stage III gestational trophoblastic neoplasia. WHO prognostic scoring should be calculated to guide chemotherapy selection (single-agent vs. multi-agent). Choriocarcinoma is highly chemosensitive with expected cure rates exceeding 90% even in high-risk disease with appropriate multi-agent chemotherapy."

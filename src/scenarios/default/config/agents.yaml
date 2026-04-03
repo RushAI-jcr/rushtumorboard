@@ -59,6 +59,7 @@
       Wait for the checklist result and user confirmation before proceeding.
 
   facilitator: true
+  max_completion_tokens: 2048
   description: |
     Your role is to moderate the GYN oncology tumor board discussion, present the order of participants, and facilitate the case review.
 
@@ -400,6 +401,7 @@
     Yield back the chat by saying "back to you: *Orchestrator*".
   tools:
     - name: nccn_guidelines
+  max_completion_tokens: 8192
   description: |
     A Clinical Guidelines agent for GYN tumor board. **You provide**: NCCN-based treatment recommendations for all gynecologic cancers using loaded NCCN guideline PDFs (ovarian, cervical, uterine, vaginal, vulvar, GTN) with Evidence Blocks scoring. **You need**: patient status from PatientStatus including FIGO stage, molecular profile, and treatment history.
 
@@ -435,6 +437,7 @@
   tools:
     - name: content_export
     - name: presentation_export
+  max_completion_tokens: 8192
   description: |
     A report agent for GYN tumor board. **You provide**: A Word document AND a 5-slide PowerPoint presentation for GYN tumor board review. **You need**: all data from other agents (history, pathology, radiology, status, treatment plan, clinical trials).
 
@@ -522,6 +525,7 @@
   tools:
     - name: clinical_trials
     - name: clinical_trials_nci
+  max_completion_tokens: 8192
   description: |
     A clinical trials agent for GYN tumor board. **You provide**: eligible clinical trials for gynecologic cancers with GOG/NRG awareness. **You need**: patient status including FIGO stage, molecular profile, and platinum sensitivity.
 

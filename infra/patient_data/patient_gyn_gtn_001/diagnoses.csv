@@ -1,0 +1,6 @@
+PatientID,DiagnosisName,ICD10Code,DateOfEntry,Status
+patient_gyn_gtn_001,Choriocarcinoma of uterus,C58,2026-01-20,Active
+patient_gyn_gtn_001,Secondary malignant neoplasm of lung,C78.00,2026-01-20,Active
+patient_gyn_gtn_001,Hydatidiform mole complete,O01.0,2025-09-15,Resolved
+patient_gyn_gtn_001,Gestational trophoblastic neoplasia,O01.9,2026-01-20,Active
+patient_gyn_gtn_001,Elevated human chorionic gonadotropin,R97.8,2025-12-18,Active

@@ -1,0 +1,117 @@
+ReportID,PatientID,ProcedureName,OrderDate,ReportText
+RAD001,patient_gyn_gtn_001,CT Chest Abdomen Pelvis with contrast,2025-12-15,"CT CHEST/ABDOMEN/PELVIS WITH IV CONTRAST
+
+CLINICAL INDICATION: Rising beta-hCG after evacuation of complete hydatidiform mole. Evaluate for metastatic gestational trophoblastic neoplasia.
+
+TECHNIQUE: Helical CT of the chest, abdomen, and pelvis performed after administration of 100 mL Omnipaque 350 IV contrast.
+
+FINDINGS:
+
+CHEST:
+Lungs: Multiple bilateral pulmonary nodules identified:
+- Right lower lobe: 1.8 cm well-circumscribed nodule (dominant lesion)
+- Right upper lobe: 0.9 cm nodule
+- Right middle lobe: 0.6 cm nodule
+- Left lower lobe: 1.2 cm and 0.7 cm nodules
+- Left upper lobe: 0.8 cm, 0.5 cm, and 0.4 cm nodules
+Total: 8 pulmonary nodules. Several nodules demonstrate a peripheral halo of ground-glass opacity, suggestive of hemorrhagic metastases (characteristic of choriocarcinoma).
+No pleural effusions. No pneumothorax.
+Mediastinum: No mediastinal or hilar lymphadenopathy.
+Heart: Normal size. No pericardial effusion.
+
+ABDOMEN:
+Liver: No focal hepatic lesions. No metastases.
+Gallbladder and biliary: Unremarkable.
+Pancreas: Normal.
+Spleen: Normal.
+Adrenals: Normal bilaterally.
+Kidneys: Normal bilaterally. No hydronephrosis.
+No retroperitoneal lymphadenopathy.
+No ascites.
+
+PELVIS:
+Uterus: Heterogeneously enhancing mass within the endometrial cavity/myometrium measuring 3.2 x 2.8 x 3.5 cm with areas of necrosis and prominent surrounding vascularity. Findings consistent with intrauterine trophoblastic disease. Myometrial invasion appears to extend to the outer half of the myometrium.
+Bilateral theca lutein cysts: Right ovary 3.8 cm, left ovary 2.4 cm (decreased from prior US).
+Bladder: Normal.
+No pelvic lymphadenopathy.
+
+IMPRESSION:
+1. Bilateral pulmonary nodules (8 total, largest 1.8 cm right lower lobe) consistent with metastatic gestational trophoblastic neoplasia. Hemorrhagic halos suggest choriocarcinoma.
+2. Heterogeneous intrauterine mass (3.2 cm) with deep myometrial invasion and prominent vascularity, consistent with choriocarcinoma.
+3. Bilateral theca lutein cysts, decreasing.
+4. No hepatic, renal, or other extrapulmonary metastases.
+5. No brain imaging performed on this study - recommend dedicated brain MRI for complete staging."
+RAD002,patient_gyn_gtn_001,MRI Brain with and without contrast,2025-12-18,"MRI BRAIN WITH AND WITHOUT GADOLINIUM CONTRAST
+
+CLINICAL INDICATION: Staging for gestational trophoblastic neoplasia (choriocarcinoma) with known lung metastases. Rule out brain metastases.
+
+TECHNIQUE: Multiplanar multisequence MRI of the brain performed before and after administration of 15 mL Gadavist IV contrast. Sequences: T1, T2, FLAIR, DWI, SWI, post-contrast T1 (axial, coronal, sagittal).
+
+FINDINGS:
+Brain parenchyma: No enhancing lesions. No restricted diffusion. No hemorrhagic foci on SWI. Normal gray-white matter differentiation. No mass effect or midline shift. No cerebral edema.
+Ventricles: Normal in size and configuration. No hydrocephalus.
+Extra-axial spaces: Normal. No extra-axial collections.
+Posterior fossa: Normal cerebellum and brainstem. No lesions.
+Sella/pituitary: Normal.
+Vessels: Normal flow voids in the major intracranial arteries. No aneurysm.
+Calvarium and skull base: Normal marrow signal. No osseous lesions.
+
+IMPRESSION:
+1. No evidence of intracranial metastatic disease.
+2. Normal brain MRI.
+3. Recommend repeat brain MRI in 4-6 weeks given high-risk GTN with lung metastases."
+RAD003,patient_gyn_gtn_001,Pelvic Ultrasound with Doppler,2025-12-16,"PELVIC ULTRASOUND WITH DOPPLER
+
+CLINICAL INDICATION: Post-molar GTN with rising hCG. Evaluate uterine disease.
+
+TECHNIQUE: Transabdominal and transvaginal ultrasound with color Doppler.
+
+FINDINGS:
+Uterus: Anteverted, enlarged measuring 10.2 x 6.8 x 7.4 cm. Heterogeneous echogenic mass within the endometrial cavity extending into the myometrium, measuring 2.8 x 2.5 x 3.0 cm. The mass demonstrates markedly increased vascularity on color Doppler with low-resistance arterial flow (RI 0.38). The mass appears to invade the outer half of the myometrium. No definite serosal extension. Endometrial stripe is obliterated by the mass.
+
+Right ovary: Enlarged at 4.0 x 3.2 cm with multiple anechoic cystic spaces consistent with theca lutein cysts (decreased from prior, previously 6.2 cm).
+Left ovary: 2.6 x 2.0 cm, residual theca lutein cysts (previously 4.8 cm).
+
+No free fluid in the cul-de-sac.
+
+IMPRESSION:
+1. Hypervascular intrauterine mass (2.8 cm) with deep myometrial invasion and low-resistance flow on Doppler, consistent with gestational trophoblastic neoplasia (choriocarcinoma). No definite serosal breach.
+2. Bilateral theca lutein cysts, decreasing in size.
+3. No free pelvic fluid."
+RAD004,patient_gyn_gtn_001,MRI Brain with and without contrast - follow-up,2026-02-24,"MRI BRAIN WITH AND WITHOUT GADOLINIUM CONTRAST - FOLLOW-UP
+
+CLINICAL INDICATION: High-risk GTN (choriocarcinoma, FIGO Stage III, WHO score 11) on EMA-CO chemotherapy. Follow-up brain MRI per protocol.
+
+COMPARISON: MRI Brain 2025-12-18
+
+FINDINGS:
+Brain parenchyma: No new or interval enhancing lesions. No restricted diffusion. No hemorrhagic foci. Normal appearance.
+Ventricles: Unchanged, normal.
+Extra-axial spaces: Normal.
+Posterior fossa: Normal.
+
+IMPRESSION:
+1. No evidence of intracranial metastatic disease, unchanged from prior study.
+2. Continue surveillance per protocol."
+RAD005,patient_gyn_gtn_001,CT Chest with contrast - restaging,2026-03-17,"CT CHEST WITH IV CONTRAST - RESTAGING
+
+CLINICAL INDICATION: High-risk GTN (choriocarcinoma), FIGO Stage III, on EMA-CO cycle 4. Restaging to assess treatment response.
+
+COMPARISON: CT Chest 2025-12-15
+
+FINDINGS:
+CHEST:
+Lungs: Interval marked decrease in pulmonary metastases:
+- Right lower lobe: 0.8 cm (previously 1.8 cm)
+- Right upper lobe: 0.3 cm (previously 0.9 cm)
+- Right middle lobe: Not visualized (previously 0.6 cm, resolved)
+- Left lower lobe: 0.5 cm (previously 1.2 cm); second nodule not visualized (previously 0.7 cm, resolved)
+- Left upper lobe: 0.4 cm (previously 0.8 cm); two smaller nodules resolved
+Total remaining: 4 nodules (previously 8). All significantly decreased. No new nodules.
+No pleural effusions.
+Mediastinum: No lymphadenopathy.
+
+IMPRESSION:
+1. Excellent treatment response with marked interval decrease in bilateral pulmonary metastases. Four of 8 nodules have resolved; remaining 4 are significantly smaller.
+2. No new pulmonary disease.
+3. Findings consistent with partial response to EMA-CO chemotherapy by RECIST criteria (>30% decrease in sum of target lesion diameters)."
