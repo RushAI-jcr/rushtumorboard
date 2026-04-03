@@ -43,7 +43,7 @@ Your response must begin with "Rating: X" where X is your score (1-5), followed 
 
     def __init__(self,
                  evaluation_llm_service: AzureChatCompletion,
-                 system_prompt: str = None,
+                 system_prompt: str | None = None,
                  metric_name: str = "turn_by_turn_agent_selection",
                  description: str = "Evaluates each individual agent selection decision by the orchestrator",
                  agent_name: str = "Orchestrator",

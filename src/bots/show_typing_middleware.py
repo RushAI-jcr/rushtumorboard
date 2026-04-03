@@ -92,7 +92,7 @@ class ShowTypingMiddleware(Middleware):
 
         try:
             # call the bot logic
-            return await logic()
+            return await logic()  # type: ignore[call-arg]
         finally:
             stop_interval()
 

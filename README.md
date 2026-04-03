@@ -17,6 +17,7 @@ A multi-agent system that coordinates specialized AI agents to support **Gynecol
 - **Landscape 5-column Word document** matching the Rush tumor board format (Patient | Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
 - **5-slide PowerPoint** summary with CA-125 trend chart (one slide per tumor board column)
 - **Clinical trials search** via NCI ClinicalTrials.gov API + AACT with GOG/NRG awareness
+- **MCP server** for clinical trials (6 FastMCP tools) with Copilot Studio integration
 - Integration with Microsoft Teams and Copilot Studio via MCP
 
 ## Solution Architecture
@@ -100,6 +101,23 @@ flowchart LR
     fallback --> RadExt["RadiologyExtractorPlugin"]
 ```
 
+### MCP Integration
+
+```mermaid
+flowchart LR
+    subgraph mcp_server["Clinical Trials MCP Server\n(FastMCP at /mcp)"]
+        T1["search_nci_gyn_trials"]
+        T2["get_gog_nrg_trials"]
+        T3["get_trial_details_combined"]
+        T4["search_aact_trials"]
+        T5["get_study_statistics"]
+        T6["search_trials_by_keyword"]
+    end
+
+    CTA["ClinicalTrials Agent\nclinical_trials_nci"] --> mcp_server
+    CS2["Copilot Studio"] --> mcp_server
+```
+
 ## AI Agent Role Summaries
 
 | Agent | Tools | Role |
@@ -127,6 +145,7 @@ flowchart LR
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 - [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd?tabs=winget-windows%2Cbrew-mac%2Cscript-linux&pivots=os-linux)
 - Python 3.12 or later (for running locally)
+- Node.js 18+ (for PptxGenJS PowerPoint generation)
 - Epic Clarity/Caboodle access (for production patient data)
 
 ### Step 1: Verify Prerequisites (Quota & Permissions)
@@ -179,6 +198,7 @@ azd env set AZURE_APPSERVICE_LOCATION <region>
 | `CLINICAL_NOTES_SOURCE` | Source of clinical notes | `caboodle`, `blob`, `fhir`, `fabric` | `blob` |
 | `AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL` | Reasoning model deployment (required for ClinicalTrials agent) | Azure OpenAI deployment name | — |
 | `AZURE_OPENAI_REASONING_MODEL_ENDPOINT` | Reasoning model endpoint (required for ClinicalTrials agent) | Azure OpenAI endpoint URL | — |
+| `DEMO_ROUTES_ENABLED` | Enable demo view routes (`/view/` endpoints) | `true`, `false` | `false` |
 
 For local development with Epic Clarity CSV exports:
 ```sh
@@ -291,6 +311,19 @@ Staging and genetics (primary site, FIGO stage, germline, somatic) appear in red
 4. **Imaging** — dated imaging studies (CT/MRI/PET)
 5. **Discussion** — review types, trial eligibility, plan
 
+## Utility Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/parse_tumor_board_excel.py` | Parse tumor board Excel input into patient CSV folders |
+| `scripts/nccn_pdf_processor.py` | Process NCCN GYN PDF guidelines for guideline agent |
+| `scripts/validate_patient_csvs.py` | Validate patient CSV file integrity and completeness |
+| `scripts/run_batch_e2e.py` | Batch end-to-end test runner across all 15+ patients |
+| `scripts/generate_docx_template.py` | Generate Word template for content_export |
+| `scripts/generate_pptx_template.py` | Generate PPTX template for presentation_export |
+| `scripts/generate_fhir_resources.py` | Generate synthetic FHIR test data |
+| `scripts/ingest_fhir_resources.py` | Ingest FHIR data into Azure Health Data Services |
+
 ## Resources
 
 ### Project Documentation
@@ -299,6 +332,8 @@ Staging and genetics (primary site, FIGO stage, germline, somatic) appear in red
 - [Agent Development Guide](./docs/agent_development.md) for building and customizing agents
 - [GYN Tumor Board Scenario Guide](./docs/scenarios.md)
 - [Data Access & Epic Integration](./docs/data_access.md)
+- [FHIR Integration](./docs/fhir_integration.md)
+- [Fabric Integration](./docs/fabric/fabric_integration.md)
 - [Data Ingestion Guide](./docs/data_ingestion.md) for adding patient data
 - [MCP & Copilot Integration](./docs/mcp.md)
 - [Network Architecture](./docs/network.md)

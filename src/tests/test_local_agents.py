@@ -18,6 +18,7 @@ import logging
 import os
 import pathlib
 import sys
+from typing import Any
 
 import pytest
 
@@ -295,6 +296,8 @@ class TestAzureOpenAI:
     async def test_azure_openai_connection(self):
         """Create a Semantic Kernel and send a test message."""
         from semantic_kernel import Kernel
+        from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import \
+            AzureChatPromptExecutionSettings
         from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AzureChatCompletion
         from semantic_kernel.contents.chat_history import ChatHistory
 
@@ -332,7 +335,7 @@ class TestAzureOpenAI:
         history.add_system_message("You are a helpful assistant. Respond in one sentence.")
         history.add_user_message("What is 2 + 2?")
 
-        response = await chat_service.get_chat_message_content(chat_history=history)
+        response = await chat_service.get_chat_message_content(chat_history=history, settings=AzureChatPromptExecutionSettings())
         assert response is not None
         assert len(response.content) > 0
         logger.info(f"Azure OpenAI response: {response.content}")
@@ -552,7 +555,7 @@ class TestClinicalGuidelinesE2E:
         # Build kernel with Azure OpenAI
         kernel = Kernel()
         api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
-        service_kwargs = {
+        service_kwargs: dict[str, Any] = {
             "service_id": "default",
             "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
             "api_version": "2025-04-01-preview",

@@ -4,6 +4,7 @@
 import os
 
 from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+from autogen_agentchat.base import ChatAgent
 from autogen_agentchat.teams import MagenticOneGroupChat
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 from semantic_kernel.agents import Agent, AgentGroupChat
@@ -15,7 +16,7 @@ def convert_tools(agent: Agent):
     tools = []
     for plugin in agent.kernel.plugins.values():
         for function in plugin.functions.values():
-            tools.append(function.method)
+            tools.append(function)
 
     return tools
 
@@ -30,7 +31,7 @@ def create_magentic_chat(chat: AgentGroupChat, app_context: AppContext, input_fu
         azure_ad_token_provider=app_context.cognitive_services_token_provider,
     )
 
-    assistants = [
+    assistants: list[ChatAgent] = [
         AssistantAgent(agent.name, model_client=az_model_client, tools=convert_tools(agent),
                        system_message=agent.instructions, description=next((
                            config["description"]

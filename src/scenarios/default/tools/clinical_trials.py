@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from typing import Any
 
 import aiohttp
@@ -13,72 +14,46 @@ from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_
     AzureChatPromptExecutionSettings
 from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AzureChatCompletion
 from semantic_kernel.contents.chat_history import ChatHistory
+from semantic_kernel.contents.chat_message_content import ChatMessageContent
 from semantic_kernel.functions import kernel_function
 
 from data_models.app_context import AppContext
 from data_models.chat_context import ChatContext
+from data_models.gyn_patient_profile import GynPatientProfile
 from data_models.plugin_configuration import PluginConfiguration
 
 logger = logging.getLogger(__name__)
-PROMPT = “””You are a gynecologic oncology clinical trial eligibility specialist. Analyze the structured patient data against the clinical trial eligibility criteria.
 
-Respond with **”Yes”** if the patient likely meets eligibility, **”No”** if clearly ineligible, or **”Maybe — requires verification”** if borderline or data is missing.
+# --- Constants for PHI safety ---
+_PHI_SCRUB_PATTERNS = [
+    re.compile(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b'),   # date patterns (M/D/YY, MM/DD/YYYY)
+    re.compile(r'\b\d{7,}\b'),                       # MRN-like long numbers
+]
+_TRIAL_EVAL_TIMEOUT = float(os.environ.get("CLINICAL_TRIAL_EVAL_TIMEOUT", "90"))
 
-Then provide a structured explanation:
 
-**1. Key Inclusion Criteria — Match/Mismatch:**
-Evaluate each of these critical GYN oncology trial enrollment factors against the trial criteria:
-  - **Age**: Does the patient fall within the trial’s age range?
-  - **FIGO Stage / Disease Extent**: Does the patient’s staging match the required stage(s)?
-  - **Histology**: Does the trial require specific histologic types (e.g., serous only, endometrioid, clear cell, squamous)? Does the patient match?
-  - **Biomarker / Molecular Requirements**: Does the trial require specific biomarker status (BRCA+, HRD+, MMR-deficient, PD-L1 CPS ≥1, HER2+, FRα+, POLE-mutated)? Does the patient qualify?
-  - **Prior Lines of Therapy**: How many prior systemic regimens has the patient received? Does the trial specify a line (e.g., “1-3 prior lines”, “second-line or later”)?
-  - **Platinum Sensitivity**: Does the trial require platinum-sensitive, platinum-resistant, or platinum-refractory disease? What is the patient’s platinum-free interval?
-  - **ECOG Performance Status**: Does the patient’s ECOG (0, 1, 2) meet the trial requirement (most require 0-1)?
-  - **Prior Specific Agents**: Does the trial exclude patients with prior PARP inhibitor, prior immunotherapy, prior bevacizumab, or prior specific agents? Has the patient received any of these?
+def _load_prompt(filename: str) -> str:
+    """Load a prompt template from the config/prompts/ directory."""
+    prompts_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "config", "prompts",
+    )
+    filepath = os.path.join(prompts_dir, filename)
+    with open(filepath, encoding="utf-8") as f:
+        return f.read()
 
-**2. Key Exclusion Criteria — Flags:**
-  - CNS metastases (many trials exclude active brain mets)
-  - Organ function (renal, hepatic — if data available)
-  - Autoimmune disease (relevant for immunotherapy trials)
-  - Prior malignancy (second primary cancers within 3-5 years)
-  - Specific comorbidities mentioned in the trial criteria
 
-**3. Missing Data:**
-List any patient data fields that are needed for a definitive eligibility determination but are not provided. Be specific (e.g., “BRCA status not provided — trial requires BRCA1/2 mutation”).
+# Prompts loaded at module import from external files (separates clinical knowledge from code)
+PROMPT = _load_prompt("clinical_trials_eligibility.txt")
+CLINICAL_TRIALS_SEARCH_QUERY = _load_prompt("clinical_trials_search_query.txt")
 
-**4. Clinical Relevance:**
-Briefly note why this trial may or may not be a good fit for this patient’s clinical situation beyond strict eligibility (e.g., “Patient is platinum-resistant with BRCA1 mutation — this PARP inhibitor trial is highly relevant”).
 
-The treatment history provided in the structured patient attributes represents the patient’s complete treatment record. Do not assume additional treatments were given.
-“””
-
-CLINICAL_TRIALS_SEARCH_QUERY = """
-You are a helpful assistant designed to generate free text search queries for ClinicalTrials.gov based on patient attributes. When given specific patient information, you will construct a query that maximizes the chances of finding relevant clinical trials.
-
-**Instructions:**
-
-1. Identify the key attributes of the patient's condition, including disease stage, primary site, histology, and biomarkers.
-2. Construct a search query using free text that includes variations and synonyms for these attributes to ensure comprehensive search results.
-3. Focus only on positive attributes. Ignore negative attributes such as negetive biomarkers.
-4. Ensure the query is formatted to match terms that might appear in clinical trial descriptions.
-5. Use logical operators (AND, OR) to combine different attributes effectively. Make sure the query conforms to the ESSIE expression syntax.
-
-**Example:**
-
-*Patient Attributes:*
-- Staging: Likely stage IV disease
-- Primary Site: Lung
-- Histology: Non-small cell lung carcinoma, adenocarcinoma type
-- Biomarkers: EGFR mutation, TP53 mutation, RTK mutation
-
-*Generated Query:*
-```
-("stage IV" OR "stage 4" OR metastatic) AND "lung cancer" AND "non-small cell" AND "adenocarcinoma" AND (EGFR OR TP53 OR RTK)
-```
-
-Given the patient's attributes, generate a search query following the example above. Only output the query.
-"""
+def _scrub_phi(query: str) -> str:
+    """Remove potential PHI patterns from an LLM-generated search query before sending to external API."""
+    scrubbed = query
+    for pattern in _PHI_SCRUB_PATTERNS:
+        scrubbed = pattern.sub('', scrubbed)
+    return scrubbed.strip()
 
 
 def create_plugin(plugin_config: PluginConfiguration) -> "ClinicalTrialsPlugin":
@@ -127,127 +102,171 @@ class ClinicalTrialsPlugin:
     @kernel_function(
         description=(
             "Generate a structured free-text search query for ClinicalTrials.gov based on the patient's "
-            "biomarkers, histology, and staging. Call this before search_clinical_trials."
+            "GYN cancer profile. Call this before search_clinical_trials to get the query string. "
+            "Pass the patient_profile with at least primary_site, histology, figo_stage, and biomarkers."
         )
     )
-    async def generate_clinical_trial_search_criteria(self, biomarkers: list[str], histology: str, staging: str):
+    async def generate_clinical_trial_search_criteria(
+        self,
+        patient_profile: GynPatientProfile,
+    ) -> str:
         """
-        Generates a search query that can be used to call the clinical trial API on https://clinicaltrials.gov.
+        Generates a search query for ClinicalTrials.gov tailored to the patient's GYN cancer profile.
 
         Args:
-            biomarkers (str): The biomarkers information of the patient.
-            histology (str): The histology information of the patient.
-            staging (str): The staging information of the patient.
+            patient_profile: The patient's full GYN oncology clinical profile including primary_site,
+                histology, figo_stage, biomarkers, and optionally platinum_sensitivity,
+                current_disease_status, and prior_therapies for more targeted searches.
         """
         chat_history = ChatHistory()
         chat_history.add_system_message(CLINICAL_TRIALS_SEARCH_QUERY)
-        chat_history.add_user_message("Structured Patient Attributes: \ndata= " +
-                                      json.dumps({
-                                          'biomarkers': biomarkers,
-                                          'histology': histology,
-                                          'staging': staging,
-                                      }, indent=4))
+        chat_history.add_user_message(
+            "Structured Patient Attributes: \ndata= "
+            + json.dumps(patient_profile.to_search_dict(), indent=2)
+        )
 
         chat_completion_response = await self.chat_completion_service.get_chat_message_content(
             chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
-        logger.debug("Generated search query: %s", chat_completion_response)
+        logger.debug("Generated search query length: %d", len(str(chat_completion_response)))
         return str(chat_completion_response)
 
     @kernel_function(
         description=(
-            "Search ClinicalTrials.gov for recruiting trials matching the patient's eligibility criteria. "
-            "Evaluates each trial against patient data and returns Yes/No eligibility with explanation. "
-            "Call generate_clinical_trial_search_criteria first to get the query string."
+            "Search ClinicalTrials.gov for recruiting trials matching the patient's full clinical profile. "
+            "Evaluates each trial against comprehensive patient data (age, stage, histology, biomarkers, "
+            "prior therapies, platinum sensitivity, ECOG, comorbidities) and returns eligibility assessment. "
+            "Call generate_clinical_trial_search_criteria first to get the query string. "
+            "Pass the complete patient_profile with all available clinical fields for best results."
         )
     )
-    async def search_clinical_trials(self, clinical_trials_query: str, age: str, biomarkers: list[str], histology: str, staging: str, ecog_performance_status: str, first_line_treatment: str, second_line_treatment: str) -> str:
+    async def search_clinical_trials(
+        self,
+        clinical_trials_query: str,
+        patient_profile: GynPatientProfile,
+    ) -> str:
         """
-        Asynchronously searches for clinical trials based on patient data and returns a response for each trial, indicating Yes/No if the patient meets all eligibility criteria. Additionally provides an exaplanation as to why.
+        Searches ClinicalTrials.gov and evaluates each trial's eligibility criteria against
+        the patient's complete clinical profile. Returns Yes/No/Maybe for each trial with
+        a structured explanation of matching and mismatching criteria.
 
         Args:
-            clinical_trials_query(str): The search query for clinical trials.
-            age(str): The age of the patient.
-            biomarkers(str): The biomarkers information of the patient.
-            histology(str): The histology information of the patient.
-            staging(str): The staging information of the patient.
-            ecog_performance_status(str): The ECOG performance status of the patient.
-            first_line_treatment(str): The first line treatment information of the patient.
-            second_line_treatment(str): The second line treatment information of the patient.
+            clinical_trials_query: The ESSIE search query (from generate_clinical_trial_search_criteria).
+            patient_profile: The patient's full GYN oncology clinical profile. Include all available
+                fields -- age, primary_site, histology, figo_stage, biomarkers, ecog_performance_status,
+                prior_therapies are required. platinum_sensitivity, molecular_profile, comorbidities,
+                organ_function_labs, measurable_disease, ascites, cns_metastases improve accuracy.
 
         Returns:
-            str: A JSON string containing the responses for each clinical trial.
+            str: A JSON string containing eligibility assessments for each clinical trial.
         """
-        structured_patient_data = {
-            'biomarkers': biomarkers,
-            'histology': histology,
-            'staging': staging,
-            'ecog performance status': ecog_performance_status,
-            'first line treatment': first_line_treatment,
-            'second line treatment': second_line_treatment,
-            'age': age,
-        }
+        structured_patient_data = patient_profile.to_prompt_dict()
+
+        # Scrub potential PHI from LLM-generated query before sending to external API
+        scrubbed_query = _scrub_phi(clinical_trials_query)
 
         params = {
-            "query.term": clinical_trials_query,
+            "query.term": scrubbed_query,
             "pageSize": 15,
             "filter.overallStatus": "RECRUITING",
             "fields": "ConditionsModule|EligibilityModule|IdentificationModule"
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://clinicaltrials.gov/api/v2/studies", params=params) as resp:
-                resp.raise_for_status()
-                result = await resp.json()
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.clinical_trial_url, params=params) as resp:
+                    resp.raise_for_status()
+                    result = await resp.json()
+        except aiohttp.ClientResponseError as e:
+            logger.error("ClinicalTrials.gov API error: HTTP %d", e.status)
+            return json.dumps({"error": "Clinical trials search temporarily unavailable."})
+        except aiohttp.ClientError as e:
+            logger.error("ClinicalTrials.gov connection error: %s", type(e).__name__)
+            return json.dumps({"error": "Clinical trials search temporarily unavailable."})
 
-        study_count = len(result["studies"])
+        studies = result.get("studies", [])
+        study_count = len(studies)
         logger.info("Clinical trials found: %d", study_count)
 
         _sem = asyncio.Semaphore(5)
-        _trial_timeout = 45.0
 
-        async def _evaluate_one(trial: dict) -> object | None:
+        async def _evaluate_one(trial: dict) -> ChatMessageContent | None:
+            nct = (
+                trial.get("protocolSection", {})
+                .get("identificationModule", {})
+                .get("nctId", "unknown")
+            )
             async with _sem:
                 ch = ChatHistory()
                 ch.add_system_message(PROMPT)
                 ch.add_user_message(
-                    "Structured Patient Attributes: \ndata= "
-                    + json.dumps(structured_patient_data, indent=4)
+                    "<PATIENT_DATA>\n"
+                    + json.dumps(structured_patient_data, indent=2)
+                    + "\n</PATIENT_DATA>"
                 )
+                # Extract only eligibility-relevant fields to reduce token usage
+                elig = trial.get("protocolSection", {}).get("eligibilityModule", {})
+                trial_for_eval = {
+                    "nctId": nct,
+                    "briefTitle": (
+                        trial.get("protocolSection", {})
+                        .get("identificationModule", {})
+                        .get("briefTitle", "")
+                    ),
+                    "eligibilityCriteria": elig.get("eligibilityCriteria", ""),
+                    "minimumAge": elig.get("minimumAge", ""),
+                    "maximumAge": elig.get("maximumAge", ""),
+                    "sex": elig.get("sex", ""),
+                }
                 ch.add_user_message(
-                    "Clinical Trial Eligibility Criteria:\n" + json.dumps(trial, indent=4)
+                    "Clinical Trial Eligibility Criteria:\n" + json.dumps(trial_for_eval, indent=2)
                 )
                 try:
                     return await asyncio.wait_for(
                         self.chat_completion_service.get_chat_message_content(
                             chat_history=ch,
-                            settings=AzureChatPromptExecutionSettings(temperature=0),
+                            settings=AzureChatPromptExecutionSettings(),
                         ),
-                        timeout=_trial_timeout,
+                        timeout=_TRIAL_EVAL_TIMEOUT,
                     )
-                except (asyncio.TimeoutError, Exception) as exc:
-                    nct = (
-                        trial.get("protocolSection", {})
-                        .get("identificationModule", {})
-                        .get("nctId", "unknown")
-                    )
-                    logger.warning("Trial evaluation failed for %s: %s", nct, type(exc).__name__)
+                except asyncio.TimeoutError:
+                    logger.warning("Trial evaluation timed out for %s (%.0fs)", nct, _TRIAL_EVAL_TIMEOUT)
+                    return None
+                except Exception as exc:
+                    logger.error("Trial evaluation failed for %s: %s: %s", nct, type(exc).__name__, str(exc)[:200])
                     return None
 
         chat_completion_responses = await asyncio.gather(
-            *[_evaluate_one(t) for t in result["studies"]],
-            return_exceptions=True,
+            *[_evaluate_one(t) for t in studies],
         )
 
         trial_dict_results = {}
-        for trial, response_result in zip(result["studies"], chat_completion_responses):
-            if response_result is None or isinstance(response_result, BaseException):
-                continue
-            nct_id = trial["protocolSection"]["identificationModule"]["nctId"]
-            trial_dict_results[nct_id] = {
-                "eligibility": str(response_result),
-                "title": trial["protocolSection"]["identificationModule"]["briefTitle"],
-            }
+        for trial, response_result in zip(studies, chat_completion_responses):
+            nct_id = (
+                trial.get("protocolSection", {})
+                .get("identificationModule", {})
+                .get("nctId", "unknown")
+            )
+            title = (
+                trial.get("protocolSection", {})
+                .get("identificationModule", {})
+                .get("briefTitle", "")
+            )
+            if response_result is None:
+                trial_dict_results[nct_id] = {
+                    "eligibility": "Evaluation timed out or failed -- manual review needed",
+                    "title": title,
+                }
+            elif isinstance(response_result, BaseException):
+                trial_dict_results[nct_id] = {
+                    "eligibility": "Evaluation error -- manual review needed",
+                    "title": title,
+                }
+            else:
+                trial_dict_results[nct_id] = {
+                    "eligibility": str(response_result),
+                    "title": title,
+                }
 
-        return json.dumps(trial_dict_results, indent=4)
+        return json.dumps(trial_dict_results, indent=2)
 
     @kernel_function(
         description=(
@@ -265,26 +284,30 @@ class ClinicalTrialsPlugin:
         Returns:
             str: A summary of the clinical trial information.
         """
-
-        import re as _re
         nct_id = trial.strip().upper()
-        if not _re.fullmatch(r"NCT\d{8,11}", nct_id):
-            return json.dumps({"error": f"Invalid NCT ID format: {trial!r}. Expected NCTxxxxxxxx."})
+        if not re.fullmatch(r"NCT\d{8}", nct_id):
+            return json.dumps({"error": f"Invalid NCT ID format: {trial!r}. Expected NCTxxxxxxxx (8 digits)."})
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(self.clinical_trial_url + nct_id) as resp:
-                resp.raise_for_status()
-                result = await resp.json()
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.clinical_trial_url + nct_id) as resp:
+                    resp.raise_for_status()
+                    result = await resp.json()
+        except aiohttp.ClientResponseError as e:
+            logger.error("ClinicalTrials.gov API error for %s: HTTP %d", nct_id, e.status)
+            return json.dumps({"error": f"Could not retrieve trial {nct_id}."})
+        except aiohttp.ClientError as e:
+            logger.error("ClinicalTrials.gov connection error for %s: %s", nct_id, type(e).__name__)
+            return json.dumps({"error": f"Could not retrieve trial {nct_id}."})
 
         chat_history = ChatHistory()
         chat_history.add_system_message("You are a clinical trial summarizer. Summarize the provided trial information, focusing on what is relevant for an oncologist or patient.")
         chat_history.add_user_message(
-            "Summarize the following clinical trial:\n" + json.dumps(result, indent=4)
+            "Summarize the following clinical trial:\n" + json.dumps(result, indent=2)
         )
 
-        settings = AzureChatPromptExecutionSettings(temperature=0)
         chat_completion_response = await self.chat_completion_service.get_chat_message_content(
-            chat_history=chat_history, settings=settings)
+            chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
         self.chat_ctx.display_clinical_trials.append(
             self.clinical_trial_display + trial)
         return str(chat_completion_response)

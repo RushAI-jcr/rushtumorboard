@@ -21,6 +21,14 @@ from magentic_chat import create_magentic_chat
 logger = logging.getLogger(__name__)
 
 
+def _get_conversation_id(turn_context: TurnContext) -> str:
+    """Extract conversation ID from turn context, rejecting requests without one."""
+    conversation = turn_context.activity.conversation
+    if not conversation or not conversation.id:
+        raise ValueError("Received message with no conversation ID")
+    return conversation.id
+
+
 class MagenticBot(ActivityHandler):
     """
     Provides a bot that can be used to interact with the MagenticOneOrchestrator agent.
@@ -49,7 +57,7 @@ class MagenticBot(ActivityHandler):
         self.include_monologue = True
 
     async def on_message_activity(self, turn_context: TurnContext) -> None:
-        conversation_id = turn_context.activity.conversation.id
+        conversation_id = _get_conversation_id(turn_context)
         chat_context_accessor = self.data_access.chat_context_accessor
         chat_artifact_accessor = self.data_access.chat_artifact_accessor
 
@@ -57,7 +65,7 @@ class MagenticBot(ActivityHandler):
         chat_ctx = await chat_context_accessor.read(conversation_id)
 
         # Delete thread if user asks
-        if turn_context.activity.text.endswith("monologue"):
+        if (turn_context.activity.text or "").endswith("monologue"):
             if self.include_monologue:
                 await turn_context.send_activity("Monologue mode disabled.")
                 self.include_monologue = False
@@ -66,24 +74,24 @@ class MagenticBot(ActivityHandler):
                 self.include_monologue = True
             return
 
-        if turn_context.activity.text.endswith("clear"):
+        if (turn_context.activity.text or "").endswith("clear"):
             # Add clear message to chat history
-            chat_ctx.chat_history.add_user_message(turn_context.activity.text.strip())
+            chat_ctx.chat_history.add_user_message((turn_context.activity.text or "").strip())
             await chat_context_accessor.archive(chat_ctx)
             await chat_artifact_accessor.archive(conversation_id)
-            blob_path = f"{turn_context.activity.conversation.id}/user_message.txt"
+            blob_path = f"{conversation_id}/user_message.txt"
             blob_client = self.container_client.get_blob_client(blob_path)
             try:
                 await blob_client.delete_blob()
-            except:
+            except Exception:
                 logger.exception("Failed to delete user message blob.")
 
-            blob_path_conversation = f"{turn_context.activity.conversation.id}/conversation_in_progress.txt"
+            blob_path_conversation = f"{conversation_id}/conversation_in_progress.txt"
 
             blob_client = self.container_client.get_blob_client(blob_path_conversation)
             try:
                 await blob_client.delete_blob()
-            except:
+            except Exception:
                 logger.exception("Failed to delete conversation in progress blob.")
 
             await turn_context.send_activity("Conversation cleared!")
@@ -92,7 +100,7 @@ class MagenticBot(ActivityHandler):
         (chat, chat_ctx) = create_group_chat(self.app_context, chat_ctx)
         logger.info(f"Created chat for conversation {conversation_id}")
 
-        blob_path_conversation = f"{turn_context.activity.conversation.id}/conversation_in_progress.txt"
+        blob_path_conversation = f"{conversation_id}/conversation_in_progress.txt"
         blob_client = self.container_client.get_blob_client(blob_path_conversation)
 
         text = turn_context.remove_recipient_mention(turn_context.activity).strip()
@@ -111,7 +119,7 @@ class MagenticBot(ActivityHandler):
         # Save chat context
         try:
             await chat_context_accessor.write(chat_ctx)
-        except:
+        except Exception:
             logger.exception("Failed to save chat context.")
 
     async def on_error(self, context: TurnContext, error: Exception):
@@ -124,20 +132,25 @@ class MagenticBot(ActivityHandler):
             await context.send_activity(f"Orchestrator is working on solving your problems, please retype your request")
 
     async def user_message_provided(self, message: str, turn_context: TurnContext):
-        blob_path = f"{turn_context.activity.conversation.id}/user_message.txt"
+        conv_id = _get_conversation_id(turn_context)
+        blob_path = f"{conv_id}/user_message.txt"
         blob_client = self.container_client.get_blob_client(blob_path)
         await blob_client.upload_blob(message, overwrite=True)
 
     def create_input_func_callback(self, turn_context: TurnContext, chat_ctx: ChatContext):
-        async def user_input_func(prompt: str, cancellation_token: CancellationToken):
-            logger.info(f"User input requested: {prompt}")
-            await turn_context.send_activity("**User**: " + chat_ctx.chat_history.messages[-1].content)
+        conv_id = _get_conversation_id(turn_context)
 
-            blob_path_conversation = f"{turn_context.activity.conversation.id}/conversation_in_progress.txt"
+        async def user_input_func(prompt: str, cancellation_token: CancellationToken):
+            logger.debug("User input requested (prompt length: %d)", len(prompt))
+            if chat_ctx.chat_history.messages:
+                last_content = chat_ctx.chat_history.messages[-1].content or ""
+                await turn_context.send_activity("**User**: " + last_content)
+
+            blob_path_conversation = f"{conv_id}/conversation_in_progress.txt"
             conversation_blob = self.container_client.get_blob_client(blob_path_conversation)
             await conversation_blob.upload_blob("conversation in progress", overwrite=True)
 
-            blob_path = f"{turn_context.activity.conversation.id}/user_message.txt"
+            blob_path = f"{conv_id}/user_message.txt"
             user_message_blob = self.container_client.get_blob_client(blob_path)
             while not (await user_message_blob.exists()):
                 await asyncio.sleep(0.5)
@@ -202,11 +215,12 @@ class MagenticBot(ActivityHandler):
         return self.turn_contexts[conversation_id][bot_name]
 
     async def process_magentic_chat(self, magentic_chat: MagenticOneGroupChat, text: str, turn_context: TurnContext, chat_ctx: ChatContext):
+        conv_id = _get_conversation_id(turn_context)
         last_result = None
         stream = magentic_chat.run_stream(task=text, cancellation_token=CancellationToken())
-        logger.info(f"Processing Magentic chat for conversation {turn_context.activity.conversation.id}")
+        logger.info(f"Processing Magentic chat for conversation {conv_id}")
         async for message in stream:
-            logger.info(f"received message: {message}")
+            logger.debug("Received message type: %s", type(message).__name__)
             if isinstance(message, (ToolCallRequestEvent,
                                     ToolCallExecutionEvent, MemoryQueryEvent, UserInputRequestedEvent, ModelClientStreamingChunkEvent, ThoughtEvent)):
                 continue
@@ -226,14 +240,15 @@ class MagenticBot(ActivityHandler):
                     agent_name = self.name
                     logger.info("MagenticOneOrchestrator agent name")
                 context = await self.get_bot_context(
-                    turn_context.activity.conversation.id, agent_name, turn_context
+                    conv_id, agent_name, turn_context
                 )
-                if message.content.strip() == "":
+                content = message.content if isinstance(message.content, str) else str(message.content)
+                if content.strip() == "":
                     continue
 
-                chat_ctx.chat_history.add_assistant_message(message.content, name=agent_name)
+                chat_ctx.chat_history.add_assistant_message(content, name=agent_name)
 
-                activity = MessageFactory.text(message.content)
+                activity = MessageFactory.text(content)
                 activity.apply_conversation_reference(
                     turn_context.activity.get_conversation_reference()
                 )
@@ -242,10 +257,12 @@ class MagenticBot(ActivityHandler):
                     await context.send_activity(activity)
             if last_result:
                 if not self.include_monologue:
-                    await turn_context.send_activity(
-                        MessageFactory.text(chat_ctx.chat_history.messages[-1].content)
-                    )
+                    if chat_ctx.chat_history.messages:
+                        last_content = chat_ctx.chat_history.messages[-1].content or ""
+                        await turn_context.send_activity(
+                            MessageFactory.text(last_content)
+                        )
 
                 await turn_context.send_activity(
-                    MessageFactory.text(last_result.stop_reason)
+                    MessageFactory.text(last_result.stop_reason or "")
                 )

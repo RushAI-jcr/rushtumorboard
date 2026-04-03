@@ -25,7 +25,7 @@ class AccessControlMiddleware(Middleware):
     ):
         # Skip middleware for non-message activities or installation updates
         if context.activity.type not in [ActivityTypes.message, ActivityTypes.installation_update]:
-            return await logic()
+            return await logic()  # type: ignore[call-arg]
 
         # Check if the activity is from Teams channel
         if context.activity.channel_id != Channels.ms_teams:
@@ -69,7 +69,7 @@ class AccessControlMiddleware(Middleware):
                 f"Access denied for tenant {tenant_id}."
             )
 
-        return await logic()
+        return await logic()  # type: ignore[call-arg]
 
     @staticmethod
     def _get_allowed_ids(default_allowed_id_name: str, additional_allowed_ids_name: str) -> list[str]:

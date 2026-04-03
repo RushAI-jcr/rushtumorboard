@@ -23,7 +23,7 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.contents.chat_message_content import ChatMessageContent
 from semantic_kernel.contents.history_reducer.chat_history_truncation_reducer import ChatHistoryTruncationReducer
 from semantic_kernel.functions.kernel_function_from_prompt import KernelFunctionFromPrompt
-from semantic_kernel.kernel import Kernel, KernelArguments
+from semantic_kernel.functions.kernel_arguments import KernelArguments
 from semantic_kernel.prompt_template.input_variable import InputVariable
 from semantic_kernel.prompt_template.prompt_template_config import PromptTemplateConfig
 
@@ -108,7 +108,7 @@ class CustomChatCompletionAgent(ChatCompletionAgent):
 
 
 def create_group_chat(
-    app_ctx: AppContext, chat_ctx: ChatContext, participants: list[dict] = None
+    app_ctx: AppContext, chat_ctx: ChatContext, participants: list[dict] | None = None
 ) -> Tuple[AgentGroupChat, ChatContext]:
     participant_configs = participants or app_ctx.all_agent_configs
     participant_names = [cfg.get("name", "unnamed") for cfg in participant_configs]
@@ -123,7 +123,7 @@ def create_group_chat(
         kernel = Kernel()
         deployment = deployment_override or os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"]
         api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
-        service_kwargs = {
+        service_kwargs: dict[str, Any] = {
             "service_id": "default",
             "deployment_name": deployment,
             "api_version": api_version,
@@ -295,7 +295,8 @@ def create_group_chat(
         prompt_template_config=termination_prompt_config,
         prompt_execution_settings=settings
     )
-    agents = [_create_agent(agent) for agent in all_agents_config]
+    from semantic_kernel.agents.agent import Agent
+    agents: list[Agent] = [_create_agent(agent) for agent in all_agents_config]
 
     def evaluate_termination(result):
         logger.debug("Termination function result: %s", result)

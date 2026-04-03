@@ -102,19 +102,6 @@ class EvaluationMetric(ABC):
         """
         raise NotImplementedError
 
-    def chat_history_to_text(self, chat_history: ChatHistory) -> str:
-        """
-        Convert the chat history to a text format.
-
-        Args:
-            chat_history: The chat history to convert
-
-        Returns:
-            The chat history as a string
-        """
-        return chat_history_to_readable_text(chat_history)
-
-
 class AgentEvaluationMetric(EvaluationMetric):
     """
     Base class for metrics that evaluate specific agent responses.
@@ -433,7 +420,7 @@ class LLMasJudge(EvaluationMetric):
             settings=AzureChatPromptExecutionSettings()
         )
 
-        content = response.content
+        content = response.content if response is not None else ""
 
         # Extract the score using the subclass implementation
         try:
@@ -465,7 +452,7 @@ class LLMasJudge(EvaluationMetric):
                 score = int(rating_text[0])
                 if self.min_score <= score <= self.max_score:
                     return score
-        except:
+        except Exception:
             pass
 
         # Fall back to regex pattern for "Rating: X"
@@ -602,7 +589,7 @@ class AgentReferenceBasedLLMasJudge(AgentLLMasJudge, ReferenceBasedMetric):
             settings=AzureChatPromptExecutionSettings()
         )
 
-        content = response.content
+        content = response.content if response is not None else ""
 
         # Extract the score
         try:

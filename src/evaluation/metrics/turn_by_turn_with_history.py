@@ -12,6 +12,8 @@ from .base import AgentLLMasJudge
 class TurnByTurnEvaluatorWithContext(AgentLLMasJudge):
     """Evaluates each turn with conversation context."""
 
+    DEFAULT_SYSTEM_PROMPT = ""
+
     VALID_METRIC_NAMES = {
         "turn_by_turn_agent_selection",
         "turn_by_turn_intent_resolution",
@@ -20,9 +22,9 @@ class TurnByTurnEvaluatorWithContext(AgentLLMasJudge):
 
     def __init__(self,
                  evaluation_llm_service: AzureChatCompletion,
-                 system_prompt: str = None,
+                 system_prompt: str | None = None,
                  metric_name: str = "turn_by_turn_agent_selection",
-                 description: str = None,
+                 description: str | None = None,
                  agent_name: str = "Orchestrator",
                  context_window: int = 3):
         """Initialize the evaluator with optional custom system prompt and metric name."""

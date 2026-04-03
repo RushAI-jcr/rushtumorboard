@@ -36,8 +36,8 @@ class Evaluator:
 
     def __init__(
         self,
-        chats_contexts: list[ChatContext] = None,
-        metrics: list[EvaluationMetric] = None,
+        chats_contexts: list[ChatContext] | None = None,
+        metrics: list[EvaluationMetric] | None = None,
         output_folder_path: str = "evaluation_runs",
     ):
         """

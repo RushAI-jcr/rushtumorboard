@@ -88,7 +88,7 @@ class LocalBlobSasDelegate:
 
 
 def create_local_data_access(
-    data_dir: str = None,
+    data_dir: str | None = None,
     output_dir: str = "output",
 ) -> DataAccess:
     """Factory to create a DataAccess with all-local accessors.
@@ -103,9 +103,9 @@ def create_local_data_access(
         )
 
     return DataAccess(
-        blob_sas_delegate=LocalBlobSasDelegate(),
-        chat_artifact_accessor=LocalChatArtifactAccessor(output_dir=output_dir),
-        chat_context_accessor=LocalChatContextAccessor(),
-        clinical_note_accessor=CaboodleFileAccessor(data_dir=data_dir),
-        image_accessor=LocalImageAccessor(),
+        blob_sas_delegate=LocalBlobSasDelegate(),  # type: ignore[arg-type]
+        chat_artifact_accessor=LocalChatArtifactAccessor(output_dir=output_dir),  # type: ignore[arg-type]
+        chat_context_accessor=LocalChatContextAccessor(),  # type: ignore[arg-type]
+        clinical_note_accessor=CaboodleFileAccessor(data_dir=data_dir),  # type: ignore[arg-type]
+        image_accessor=LocalImageAccessor(),  # type: ignore[arg-type]
     )

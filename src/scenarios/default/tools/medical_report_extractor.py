@@ -54,6 +54,13 @@ class MedicalReportExtractorBase:
     layer3_note_types: tuple[str, ...] = ()
     layer3_keywords: tuple[str, ...] = ()
 
+    # Known OSH (outside hospital) disclaimer patterns — reports matching these
+    # contain no clinical findings and should not block fallback to Layer 2/3.
+    _OSH_DISCLAIMER_PATTERNS: tuple[str, ...] = (
+        "not performed at rush",
+        "performed at an outside institution",
+    )
+
     # Volume caps to prevent LLM context window overflow
     MAX_REPORTS = 25
     MAX_CHARS_PER_REPORT = 4000
@@ -71,6 +78,16 @@ class MedicalReportExtractorBase:
         self.chat_ctx = config.chat_ctx
         self.data_access = config.data_access
 
+    @classmethod
+    def _is_osh_stub(cls, report: dict) -> bool:
+        """Return True if a report is an OSH disclaimer stub with no clinical findings."""
+        text = report.get(
+            "ReportText", report.get("report_text",
+            report.get("NoteText", report.get("note_text",
+            report.get("text", ""))))
+        ).strip().lower()
+        return any(pattern in text for pattern in cls._OSH_DISCLAIMER_PATTERNS)
+
     async def _extract(self, patient_id: str) -> str:
         """Layered extraction: dedicated reports → domain notes → keyword-filtered notes → LLM."""
         accessor = self.data_access.clinical_note_accessor
@@ -79,6 +96,17 @@ class MedicalReportExtractorBase:
         reports = []
         source_layer = 1
         reports = await getattr(accessor, self.accessor_method)(patient_id)
+
+        # Filter out OSH disclaimer stubs that contain no clinical findings.
+        # If all Layer 1 reports are stubs, the list empties and falls through.
+        if reports:
+            filtered = [r for r in reports if not self._is_osh_stub(r)]
+            if len(filtered) < len(reports):
+                logger.info(
+                    "Filtered %d OSH disclaimer stub(s) from %d %s report(s) for patient %s",
+                    len(reports) - len(filtered), len(reports), self.report_type, patient_id,
+                )
+            reports = filtered
 
         # --- Layer 2: Domain-specific NoteTypes ---
         if not reports and self.layer2_note_types:

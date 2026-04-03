@@ -85,7 +85,12 @@ class AssistantBot(TeamsActivityHandler):
         return context
 
     async def on_message_activity(self, turn_context: TurnContext) -> None:
-        conversation_id = turn_context.activity.conversation.id
+        conversation = turn_context.activity.conversation
+        if not conversation or not conversation.id:
+            logger.error("Received message with no conversation ID; dropping.")
+            await turn_context.send_activity("Unable to process: no conversation context.")
+            return
+        conversation_id = conversation.id
         chat_context_accessor = self.data_access.chat_context_accessor
         chat_artifact_accessor = self.data_access.chat_artifact_accessor
 
@@ -93,9 +98,9 @@ class AssistantBot(TeamsActivityHandler):
         chat_ctx = await chat_context_accessor.read(conversation_id)
 
         # Delete thread if user asks
-        if turn_context.activity.text.endswith("clear"):
+        if (turn_context.activity.text or "").endswith("clear"):
             # Add clear message to chat history
-            chat_ctx.chat_history.add_user_message(turn_context.activity.text.strip())
+            chat_ctx.chat_history.add_user_message((turn_context.activity.text or "").strip())
             await chat_context_accessor.archive(chat_ctx)
             await chat_artifact_accessor.archive(conversation_id)
             await turn_context.send_activity("Conversation cleared!")
@@ -104,7 +109,7 @@ class AssistantBot(TeamsActivityHandler):
         if len(chat_ctx.chat_history.messages) == 0:
             # new conversation. Let's see which agents are available.
             async def is_part_of_conversation(agent):
-                context = await self.get_bot_context(turn_context.activity.conversation.id, agent["name"], turn_context)
+                context = await self.get_bot_context(conversation_id, agent["name"], turn_context)
                 typing_activity = Activity(
                     type=ActivityTypes.typing,
                     relates_to=turn_context.activity.relates_to,
@@ -138,7 +143,7 @@ class AssistantBot(TeamsActivityHandler):
         # Save chat context
         try:
             await chat_context_accessor.write(chat_ctx)
-        except:
+        except Exception:
             logger.exception("Failed to save chat context.")
 
     async def on_error(self, context: TurnContext, error: Exception):
@@ -162,9 +167,15 @@ class AssistantBot(TeamsActivityHandler):
         mentioned_agent = None if agent_config.get("facilitator", False) \
             else next(agent for agent in chat.agents if agent.name == self.name)
 
+        conversation = turn_context.activity.conversation
+        if not conversation or not conversation.id:
+            logger.error("Lost conversation ID during process_chat; dropping.")
+            return
+        conv_id = conversation.id
+
         async for response in chat.invoke(agent=mentioned_agent):
             context = await self.get_bot_context(
-                turn_context.activity.conversation.id, response.name, turn_context
+                conv_id, response.name or "", turn_context
             )
             if response.content.strip() == "":
                 continue

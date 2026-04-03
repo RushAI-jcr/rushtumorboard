@@ -12,6 +12,7 @@ from typing import Protocol
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import \
     AzureChatPromptExecutionSettings
 from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AzureChatCompletion
+from semantic_kernel.agents import AgentGroupChat
 from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.contents.chat_message_content import ChatMessageContent
 from semantic_kernel.contents.utils.author_role import AuthorRole
@@ -28,7 +29,7 @@ class SimulatedUserProtocol(Protocol):
     def is_complete(self) -> bool:
         ...
 
-    def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] = None):
+    def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] | None = None):
         """Prepare the user to start the conversation."""
         ...
 
@@ -46,7 +47,7 @@ class ProceedUser:
     def is_complete(self) -> bool:
         return False
 
-    def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] = None):
+    def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] | None = None):
         self.followup_questions = followup_questions
         self.followup_asked = False
 
@@ -77,7 +78,7 @@ class LLMUser:
             ad_token_provider=app_ctx.cognitive_services_token_provider if not hasattr(os.environ,"AZURE_OPENAI_API_KEY") else None,
         )
 
-    def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] = None):
+    def setup(self, patient_id: str, initial_query: str, followup_questions: list[str] | None = None):
         """Prepare the user to start the conversation."""
         followup_question_prompt = ""
         if followup_questions:
@@ -129,11 +130,11 @@ Remember to ask only one follow-up question at a time, waiting for the agent's r
             chat_history=self.chat_history, settings=AzureChatPromptExecutionSettings()
         )
 
-        if response.content == self.chat_complete_message:
+        if response is None or response.content == self.chat_complete_message:
             self.is_complete = True
             return ""
 
-        return response.content
+        return response.content or ""
 
     def _extract_new_messages(self, chat_history: ChatHistory) -> list[ChatMessageContent]:
         """
@@ -197,18 +198,18 @@ class ChatSimulator:
         self,
         simulated_user: SimulatedUserProtocol,
         group_chat_kwargs: dict,
-        patients_id: list[str] = None,
-        initial_queries: list[str] = None,
+        patients_id: list[str] | None = None,
+        initial_queries: list[str] | None = None,
         trial_count: int = 2,
         max_turns: int = 5,
-        followup_questions: list[list[str]] = None,
+        followup_questions: list[list[str]] | None = None,
         output_folder_path: str = "chat_simulations",
         save_readable_history: bool = True,
         print_messages: bool = False,
         raise_errors: bool = False,
     ):
-        self.group_chat = None
-        self.chat_context = None
+        self.group_chat: AgentGroupChat | None = None
+        self.chat_context: ChatContext | None = None
 
         # Chat simulation data
         self.patients_id = patients_id or []
@@ -246,8 +247,6 @@ class ChatSimulator:
             kwargs["chat_ctx"] = ChatContext(chat_id)
         self.group_chat, self.chat_context = create_group_chat(**kwargs)
 
-        return self
-
     def load_initial_queries(
         self,
         csv_file_path: str,
@@ -274,7 +273,7 @@ class ChatSimulator:
             # Try UTF-8 first
             with open(csv_file_path, mode="r", encoding="utf-8") as csv_file:
                 reader = csv.DictReader(csv_file, delimiter=delimiter)
-                if any('\ufeff' in field for field in reader.fieldnames):
+                if reader.fieldnames and any('\ufeff' in field for field in reader.fieldnames):
                     # If UTF-8 failed to properly read headers, try UTF-8-SIG
                     raise UnicodeError("BOM detected, retrying with utf-8-sig")
 
@@ -356,6 +355,7 @@ class ChatSimulator:
         for _ in range(max_turns):
 
             try:
+                assert self.group_chat is not None
                 new_user_message = await self.simulated_user.generate_user_message(self.group_chat.history)
             except Exception as e:
                 print(f"Error generating user message: {e}")
@@ -377,6 +377,7 @@ class ChatSimulator:
         Returns:
             self: Returns the instance for method chaining.
         """
+        assert self.group_chat is not None
         user_message = ChatMessageContent(role=AuthorRole.USER, content=message)
         self._print_message(user_message)
         await self.group_chat.add_chat_message(user_message)
@@ -390,9 +391,7 @@ class ChatSimulator:
         # Give it some time to agents to be idle again.
         await asyncio.sleep(1)
 
-        return self
-
-    def save(self, output_filename: str = None, save_readable_history: bool = False) -> None:
+    def save(self, output_filename: str | None = None, save_readable_history: bool = False) -> None:
         """
         Save the chat history to a file.
 
@@ -404,6 +403,7 @@ class ChatSimulator:
         Returns:
             self: Returns the instance for method chaining.
         """
+        assert self.chat_context is not None
         group_chat_context = ChatContextAccessor.serialize(self.chat_context)
 
         if output_filename is None:
@@ -420,12 +420,11 @@ class ChatSimulator:
             f.write(group_chat_context)
 
         if save_readable_history:
+            assert self.group_chat is not None
             messages = chat_history_to_readable_text(self.group_chat.history)
             readable_filename = output_file_path.replace(".json", "_readable.txt")
             with open(readable_filename, 'w', encoding="utf-8") as f:
                 f.write(messages)
-
-        return self
 
     def _print_message(self, message: ChatMessageContent):
         """Print the message to the console if print_messages is enabled."""
@@ -454,13 +453,14 @@ class ChatSimulator:
         Raises:
             ValueError: If the specified columns are not found in the CSV file.
         """
-        if initial_queries_column not in reader.fieldnames:
+        fieldnames = reader.fieldnames or []
+        if initial_queries_column not in fieldnames:
             raise ValueError(f"Column '{initial_queries_column}' not found in the CSV file.")
 
-        if patients_id_column not in reader.fieldnames:
+        if patients_id_column not in fieldnames:
             raise ValueError(f"Columns '{patients_id_column}' not found in the CSV file.")
 
-        followup_column_available = followup_column is not None and followup_column in reader.fieldnames
+        followup_column_available = followup_column is not None and followup_column in fieldnames
 
         patient_id_questions_map: dict[str, dict[str, list]] = {}
         for row in reader:

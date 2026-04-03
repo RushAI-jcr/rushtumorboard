@@ -36,7 +36,7 @@ class HealthcareAgentChannel(AgentChannel):
                 self.history.append(message)
 
     @override
-    async def invoke(self, agent: "HealthcareAgent") -> AsyncIterable[tuple[bool, ChatMessageContent]]:
+    async def invoke(self, agent: "HealthcareAgent") -> AsyncIterable[tuple[bool, ChatMessageContent]]:  # type: ignore[override]
         logger.debug("Invoking agent: %s, with user input: %s", agent.name, self.history[-1].content)
         user_input = self.history[-1].content
         user_message = ChatMessageContent(role=AuthorRole.USER,
@@ -56,7 +56,7 @@ class HealthcareAgentChannel(AgentChannel):
             yield True, user_message
 
     @override
-    async def invoke_stream(self, agent: "HealthcareAgent", history: "list[ChatMessageContent]"):
+    async def invoke_stream(self, agent: "HealthcareAgent", history: "list[ChatMessageContent]"):  # type: ignore[override]
         raise NotImplementedError("invoke_stream is not implemented yet.")
 
     @override
@@ -74,19 +74,13 @@ class HealthcareAgentChannel(AgentChannel):
 class HealthcareAgent(Agent):
     """Healthcare Agent class for interacting with Healthcare Agent Service."""
 
-    channel_type: ClassVar[type[AgentChannel]] = HealthcareAgentChannel
+    channel_type: ClassVar[type[AgentChannel]] = HealthcareAgentChannel  # type: ignore[misc]
 
     def __init__(self,
-                 name: str = None,
-                 chat_ctx: ChatContext = None,
-                 app_ctx: AppContext = None,
+                 name: str | None = None,
+                 chat_ctx: ChatContext | None = None,
+                 app_ctx: AppContext | None = None,
                  ):
-        super().__init__(name=name)
-        self.name = name
-        self._chat_ctx = chat_ctx
-        self._data_access = app_ctx.data_access
-        self._client: HealthcareAgentServiceClient = None
-
         if not name:
             raise ValueError("Agent name is required.")
         if not chat_ctx:
@@ -94,14 +88,20 @@ class HealthcareAgent(Agent):
         if not app_ctx:
             raise ValueError("Application context is required.")
 
+        super().__init__(name=name)
+        self.name = name
+        self._chat_ctx: ChatContext = chat_ctx
+        self._data_access = app_ctx.data_access
+        self._client: HealthcareAgentServiceClient | None = None
+
         # Initialize the HealthcareAgentServiceClient
         logger.debug("Initializing HealthcareAgentServiceClient.")
-        self._client: HealthcareAgentServiceClient = HealthcareAgentServiceClient(
+        self._client = HealthcareAgentServiceClient(
             agent_name=name,
             chat_ctx=chat_ctx,
             url=config.directline_url,
             keyvault_client=SecretClient(
-                vault_url=os.getenv("KEYVAULT_ENDPOINT"),
+                vault_url=os.getenv("KEYVAULT_ENDPOINT") or "",
                 credential=app_ctx.credential,
             ),
             directline_secret_key=config.keyvault_secret_key_name.format(name=name),
@@ -109,6 +109,7 @@ class HealthcareAgent(Agent):
             retry_delay=config.retry_delay,
             timeout=config.timeout
         )
+        assert self._client is not None
         # Restore conversation ID if it exists
         if name in self._chat_ctx.healthcare_agents:
             self._client.set_conversation_id(
@@ -124,7 +125,7 @@ class HealthcareAgent(Agent):
         return HealthcareAgentChannel()
 
     @override
-    async def get_response(self, message: str) -> ChatMessageContent:
+    async def get_response(self, message: str) -> ChatMessageContent:  # type: ignore[override]
         logger.debug("Getting response for message: %s", message)
         attachments = await self.get_attachments()
         response_dict = await self.client.process(message, attachments)
@@ -135,7 +136,7 @@ class HealthcareAgent(Agent):
         )
 
     @override
-    async def invoke(self, *args, **kwargs) -> AsyncIterable[ChatMessageContent]:
+    async def invoke(self, *args, **kwargs) -> AsyncIterable[ChatMessageContent]:  # type: ignore[override]
         """Invoke the agent and yield a response."""
         message = kwargs.get("message")
         logger.debug("Invoking HealthcareAgent with message: %s", message)
@@ -145,7 +146,7 @@ class HealthcareAgent(Agent):
         yield response
 
     @override
-    async def invoke_stream(self, *args, **kwargs) -> AsyncIterable[ChatMessageContent]:
+    async def invoke_stream(self, *args, **kwargs) -> AsyncIterable[ChatMessageContent]:  # type: ignore[override]
         """Invoke the agent as a stream."""
         raise NotImplementedError("invoke_stream is not implemented.")
 

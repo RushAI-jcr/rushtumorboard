@@ -14,9 +14,10 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 
 ```
 ├── src/                         # Python application
-│   ├── app.py                   # FastAPI + Starlette entrypoint
+│   ├── app.py                   # FastAPI + Starlette entrypoint (+ MCP mount at /mcp)
 │   ├── config.py                # Agent config loader, logging, Azure Monitor
 │   ├── group_chat.py            # Semantic Kernel group chat orchestration
+│   ├── mcp_app.py               # FastMCP app factory for Copilot Studio integration
 │   ├── scenarios/default/
 │   │   ├── config/
 │   │   │   ├── agents.yaml      # 10 agent definitions (tools, instructions, prompts)
@@ -35,27 +36,49 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   │       ├── clinical_trials_nci.py            # NCI API wrapper (calls mcp_servers/)
 │   │       ├── graph_rag.py                      # GraphRAG (fallback, not primary)
 │   │       ├── validation.py                     # Shared input validation helpers
-│   │       ├── content_export/content_export.py  # Landscape 4-column Word doc
-│   │       └── presentation_export.py            # 3-slide PPTX with CA-125 chart
+│   │       ├── note_type_constants.py            # TIMELINE_NOTE_TYPES + extractor NoteType lists
+│   │       ├── content_export/content_export.py  # Landscape 5-column Word doc (docxtpl)
+│   │       ├── content_export/timeline_image.py  # Timeline image generation helper
+│   │       └── presentation_export.py            # 5-slide PPTX via PptxGenJS (Node.js)
 │   ├── data_models/
 │   │   ├── epic/caboodle_file_accessor.py  # Epic Clarity CSV reader (7 CSVs per patient)
+│   │   ├── clinical_note_accessor.py       # Blob-based clinical note accessor
 │   │   ├── clinical_note_accessor_protocol.py  # Protocol interface for accessor duck-typing
-│   │   ├── data_access.py       # Factory: caboodle | fhir | fabric | blob
-│   │   └── ...                  # Pydantic models, accessors
+│   │   ├── accessor_stub_mixin.py          # Mixin for stub accessors (missing CSV graceful handling)
+│   │   ├── data_access.py                  # Factory: caboodle | fhir | fabric | blob
+│   │   ├── tumor_board_summary.py          # Pydantic models: TumorBoardDocContent, SlideContent
+│   │   ├── image_accessor.py               # Medical image accessor
+│   │   ├── chat_artifact_accessor.py       # Artifact read/write/archive
+│   │   ├── chat_context_accessor.py        # Chat session state accessor
+│   │   ├── chat_context.py                 # ChatContext with set-once patient_id
+│   │   ├── fhir/fhir_clinical_note_accessor.py  # FHIR server accessor (shared aiohttp session)
+│   │   └── fabric/fabric_clinical_note_accessor.py  # Microsoft Fabric accessor
 │   ├── mcp_servers/
-│   │   └── clinical_trials_mcp.py  # NCI + GOG/NRG + AACT trial search
-│   ├── bots/                    # Teams bot adapters
+│   │   └── clinical_trials_mcp.py  # NCI + GOG/NRG + AACT trial search (6 FastMCP tools)
+│   ├── bots/                    # Teams bot adapters + access control middleware
 │   ├── routes/                  # FastAPI route handlers
-│   └── tests/                   # Local agent tests
-├── docs/                        # Markdown documentation + LaTeX architecture doc
-├── infra/                       # Azure Bicep IaC + synthetic patient data
+│   │   ├── api/                 # chats, messages, user, time
+│   │   ├── patient_data/        # Patient CSV upload/access
+│   │   └── views/               # Demo routes (disabled by default): timeline, grounded notes
+│   ├── utils/                   # date_utils, model_utils, clinical_note_filter_utils, logging_http_client
+│   └── tests/                   # Local agent tests + schema alignment tests
+├── docs/                        # Markdown documentation
+├── infra/                       # Azure Bicep IaC + patient data
 │   └── patient_data/
 │       ├── patient_gyn_001/     # Synthetic GYN case (CSV files)
 │       ├── patient_gyn_002/     # Synthetic GYN case (CSV files)
-│       └── patient_4/           # Legacy generic case (JSON clinical notes)
+│       ├── patient_4/           # Legacy generic case (JSON clinical notes)
+│       └── <15 UUID folders>/   # Real Rush patient data (gitignored)
 ├── democlient/                  # React/TypeScript chat UI
-├── notebooks/                   # Jupyter test notebooks
-├── scripts/                     # Deployment + dev setup scripts
+├── scripts/                     # Deployment + dev utilities
+│   ├── parse_tumor_board_excel.py    # Parse tumor board Excel input to patient CSVs
+│   ├── nccn_pdf_processor.py         # NCCN PDF → structured guideline data
+│   ├── validate_patient_csvs.py      # Validate patient CSV file integrity
+│   ├── run_batch_e2e.py              # Batch end-to-end test runner (15 patients)
+│   ├── generate_docx_template.py     # Generate Word template for content_export
+│   ├── generate_pptx_template.py     # Generate PPTX template
+│   ├── generate_fhir_resources.py    # Generate FHIR test data
+│   └── ingest_fhir_resources.py      # Ingest FHIR data into AHDS
 ├── teamsApp/                    # Teams app manifest
 ├── .github/workflows/           # GitHub Actions CI/CD
 └── .azdo/pipelines/             # Azure DevOps pipelines
@@ -70,19 +93,19 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 | OncologicHistory | oncologic_history_extractor, patient_data | Prior onc history, OSH transfers |
 | Pathology | pathology_extractor, patient_data | Histology, IHC, molecular classification (POLEmut/MMRd/NSMP/p53abn) |
 | Radiology | radiology_extractor, patient_data | CT/MRI/PET/US findings, RECIST tracking |
-| PatientStatus | tumor_markers, pretumor_board_checklist | Step 0: pre-meeting procedure pass; FIGO staging, platinum sensitivity |
+| PatientStatus | tumor_markers, pretumor_board_checklist, patient_data | Step 0: pre-meeting procedure pass; FIGO staging, platinum sensitivity |
 | ClinicalGuidelines | nccn_guidelines | NCCN-based GYN recommendations from loaded PDF guidelines |
 | ClinicalTrials | clinical_trials, clinical_trials_nci | Trial search + eligibility matching (NCI + AACT) |
 | MedicalResearch | medical_research | PubMed/EuropePMC/S2 search with RISEN synthesis + citation validation |
-| ReportCreation | content_export, presentation_export | Landscape 4-column Word doc + 3-slide PPTX generation |
+| ReportCreation | content_export, presentation_export | Landscape 5-column Word doc + 5-slide PPTX generation |
 
 ## Tech Stack
 
 - Python 3.12+, Semantic Kernel (Microsoft), Azure OpenAI (GPT-4o/4.1 + o3-mini)
 - FastAPI + Starlette, aiohttp
-- docxtpl (Word), python-pptx (PowerPoint), matplotlib (charts)
+- docxtpl (Word), PptxGenJS via Node.js (PowerPoint), matplotlib (charts)
 - Epic Caboodle CSV/Parquet file accessor for clinical data
-- MCP protocol for clinical trials server
+- FastMCP protocol for clinical trials server + Copilot Studio integration
 
 ## Local Development
 

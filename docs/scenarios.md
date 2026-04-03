@@ -23,11 +23,11 @@ The default scenario orchestrates a complete tumor board case review with these 
 | OncologicHistory | `oncologic_history_extractor`, `patient_data` | Extracts structured prior oncologic history — diagnosis, treatments, recurrences, referral reason |
 | Pathology | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel, molecular markers, FIGO grade, endometrial molecular classification |
 | Radiology | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM (no deep learning model) |
-| PatientStatus | `tumor_markers`, `pretumor_board_checklist` | Step 0: pre-meeting procedure pass; then FIGO staging, molecular profile, platinum sensitivity |
+| PatientStatus | `tumor_markers`, `pretumor_board_checklist`, `patient_data` | Step 0: pre-meeting procedure pass; then FIGO staging, molecular profile, platinum sensitivity |
 | ClinicalGuidelines | `nccn_guidelines` | NCCN-based GYN treatment recommendations using loaded NCCN PDFs (endometrial, cervical, vaginal, vulvar, ovarian) |
 | ClinicalTrials | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness |
 | MedicalResearch | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search with RISEN synthesis and citation validation |
-| ReportCreation | `content_export`, `presentation_export` | Generates landscape 4-column Word doc + 3-slide PPTX with CA-125 trend chart |
+| ReportCreation | `content_export`, `presentation_export` | Generates landscape 5-column Word doc + 5-slide PPTX with CA-125 trend chart |
 
 ### Tumor Board Flow
 
@@ -76,13 +76,19 @@ If any item is ✗ MISSING or ⚠ STALE, the checklist output is surfaced to the
 
 ### Output Formats
 
-**Word Document**: Landscape 4-column table matching Rush tumor board format:
-- Column 1: Diagnosis & Pertinent History
+**Word Document**: Landscape 5-column table matching Rush tumor board format:
+- Column 0: Patient metadata (case #, MRN, attending, RTC, location, path date)
+- Column 1: Diagnosis & Pertinent History (staging/genetics in red)
 - Column 2: Previous Tx or Operative Findings, Tumor Markers
 - Column 3: Imaging
-- Column 4: Discussion (with action items in red)
+- Column 4: Discussion (action items in red)
 
-**PowerPoint**: 3-slide summary (Overview, Findings with CA-125 chart, Treatment Plan & Trials)
+**PowerPoint**: 5-slide summary (one slide per tumor board column):
+1. Patient — case logistics (case #, attending, RTC, location, path date)
+2. Diagnosis — narrative + staging/genetics in red
+3. Previous Tx — treatment history with native CA-125 trend chart
+4. Imaging — dated imaging studies (CT/MRI/PET)
+5. Discussion — review types, trial eligibility, plan
 
 ### Clinical Shorthand
 All agents use clinical shorthand style:

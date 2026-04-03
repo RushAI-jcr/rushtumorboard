@@ -126,10 +126,10 @@ class TBFactMetric(AgentReferenceBasedLLMasJudge):
         agent_name: str,
         reference_dir_path: str,
         context_window: int = 5,
-        fact_categories: List[str] = None,
+        fact_categories: List[str] | None = None,
         fact_extraction_prompt_template: str = FACT_EXTRACTION_PROMPT_TEMPLATE,
         entailment_evaluation_prompt_template: str = ENTAILMENT_EVALUATION_PROMPT_TEMPLATE,
-        reference_facts: Dict[str, List[Dict[str, str]]] = None
+        reference_facts: Dict[str, List[Dict[str, str]]] | None = None
     ):
         """
         Initialize the factuality evaluator.
@@ -238,7 +238,7 @@ class TBFactMetric(AgentReferenceBasedLLMasJudge):
             logging.error(f"Error saving reference facts to {filepath}: {e}")
             return False
 
-    def process_rating(self, content: str) -> float:
+    def process_rating(self, content: str) -> int:
         # Not used directly in this implementation as we calculate our own F1 score
         raise NotImplementedError("This method is not implemented in TBFactMetric.")
 
@@ -370,7 +370,7 @@ class TBFactMetric(AgentReferenceBasedLLMasJudge):
             settings=AzureChatPromptExecutionSettings()
         )
 
-        content = response.content
+        content = response.content if response is not None else ""
 
         try:
             # Look for JSON pattern in the response
@@ -413,7 +413,7 @@ class TBFactMetric(AgentReferenceBasedLLMasJudge):
             settings=AzureChatPromptExecutionSettings()
         )
 
-        content = response.content
+        content = response.content if response is not None else ""
 
         try:
             # Look for JSON pattern in the response
@@ -481,7 +481,7 @@ class TBFactMetric(AgentReferenceBasedLLMasJudge):
 
         # Add numerical entailment values
         df["entailment_value"] = df["entailment"].map(
-            {"Yes": 1.0, "Partial": 0.5, "No": 0.0}
+            {"Yes": 1.0, "Partial": 0.5, "No": 0.0}  # type: ignore[arg-type]
         )
 
         # Initialize results dictionary

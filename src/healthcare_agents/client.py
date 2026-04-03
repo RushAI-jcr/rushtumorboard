@@ -72,9 +72,9 @@ class HealthcareAgentServiceClient:
         self.keyvault: SecretClient = keyvault_client
         self.url = url
         self.directline_secret_key = directline_secret_key
-        self.token = None
-        self.stream_url = None
-        self._conversation_id = None
+        self.token: str | None = None
+        self.stream_url: str | None = None
+        self._conversation_id: str | None = None
         self._ws_task = None
         self._latest_agent_response = None
         self._latest_agent_response_raw = None
@@ -111,7 +111,7 @@ class HealthcareAgentServiceClient:
                 )
                 await asyncio.sleep(delay)
 
-        raise last_exception
+        raise last_exception or RuntimeError("Operation failed after all retries")
 
     async def _listen_to_ws(self):
         """WebSocket listener with reconnection logic."""
@@ -142,7 +142,9 @@ class HealthcareAgentServiceClient:
 
                             # Process the message
                             if message:
-                                await self._process_ws_message(message)
+                                await self._process_ws_message(
+                                    message if isinstance(message, str) else message.decode("utf-8")
+                                )
 
                         except asyncio.TimeoutError:
                             # Send ping to keep connection alive
@@ -233,7 +235,7 @@ class HealthcareAgentServiceClient:
                     self._latest_agent_response = " ".join(text_blocks)
                     self._latest_agent_response_raw = attachment
 
-    async def send_message(self, message: str, attachments: list[dict] = None) -> dict:
+    async def send_message(self, message: str, attachments: list[dict] | None = None) -> dict:
         """Send a message to the healthcare agent service with retry logic."""
         async def _send():
             if not self._conversation_id:
@@ -296,7 +298,7 @@ class HealthcareAgentServiceClient:
             raise ValueError(f"Secret {directline_secret_key} is empty.")
         return secret.value
 
-    async def start_conversation(self) -> str:
+    async def start_conversation(self) -> str | None:
         """
         Starts a new conversation with the healthcare agent service.
 
@@ -511,11 +513,11 @@ class HealthcareAgentServiceClient:
             f"conversation {self._conversation_id}"
         )
 
-    def get_conversation_id(self) -> str:
+    def get_conversation_id(self) -> str | None:
         """Get the conversation ID."""
         return self._conversation_id
 
-    def set_conversation_id(self, conversation_id: str) -> None:
+    def set_conversation_id(self, conversation_id: str | None) -> None:
         """Set the conversation ID."""
         self._conversation_id = conversation_id
         if self.name not in self.chat_ctx.healthcare_agents:

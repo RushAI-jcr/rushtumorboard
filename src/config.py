@@ -32,7 +32,7 @@ def setup_app_insights_logging(credential, log_level=logging.DEBUG) -> None:
             connection_string=os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"),
         )
         span_processor = BatchSpanProcessor(exporter)
-        tracer_provider.add_span_processor(span_processor)
+        tracer_provider.add_span_processor(span_processor)  # type: ignore[attr-defined]
 
     # Instrument FastAPI
     FastAPIInstrumentor().instrument()
