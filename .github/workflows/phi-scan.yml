@@ -1,0 +1,47 @@
+name: PHI GUID Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  phi-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for known patient GUIDs
+        run: |
+          # Load GUID patterns from the pre-commit hook
+          GUID_PATTERNS_FILE="scripts/git-hooks/pre-commit"
+          if [ ! -f "$GUID_PATTERNS_FILE" ]; then
+            echo "Pre-commit hook not found at $GUID_PATTERNS_FILE — skipping scan"
+            exit 0
+          fi
+
+          # Extract GUID patterns (lines containing UUID-like patterns)
+          GUIDS=$(grep -oP '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$GUID_PATTERNS_FILE" || true)
+          if [ -z "$GUIDS" ]; then
+            echo "No GUID patterns found in pre-commit hook"
+            exit 0
+          fi
+
+          FOUND=0
+          while IFS= read -r guid; do
+            # Search all tracked files (excluding the hook itself and this workflow)
+            MATCHES=$(git grep -l "$guid" -- ':!scripts/git-hooks/pre-commit' ':!.github/workflows/phi-scan.yml' || true)
+            if [ -n "$MATCHES" ]; then
+              echo "::error::Patient GUID $guid found in: $MATCHES"
+              FOUND=1
+            fi
+          done <<< "$GUIDS"
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo "::error::Real patient GUIDs detected in committed files. Remove them before merging."
+            exit 1
+          fi
+          echo "No patient GUIDs found — scan passed."

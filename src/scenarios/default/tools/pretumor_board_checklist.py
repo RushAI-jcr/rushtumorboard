@@ -151,7 +151,7 @@ def _match_any(value: str, patterns: list[str]) -> bool:
 # Plugin
 # ---------------------------------------------------------------------------
 
-def create_plugin(plugin_config: PluginConfiguration):
+def create_plugin(plugin_config: PluginConfiguration) -> "PreTumorBoardChecklistPlugin":
     return PreTumorBoardChecklistPlugin(
         data_access=plugin_config.data_access,
         chat_ctx=plugin_config.chat_ctx,

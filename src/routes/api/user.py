@@ -3,6 +3,7 @@
 
 import logging
 import json
+import uuid
 from typing import Dict, Optional, List
 import base64
 
@@ -25,7 +26,7 @@ def get_user_info_from_headers(request: Request) -> Dict:
     
     When a user is authenticated via Azure App Service, it adds headers with user info.
     """
-    logger.info(f"Got request headers: {request.headers}")
+    logger.debug("Request: content-type=%s", request.headers.get("content-type", ""))
     
     # Headers from App Service Auth
     user_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID", "")
@@ -41,7 +42,7 @@ def get_user_info_from_headers(request: Request) -> Dict:
         try:
             decoded = base64.b64decode(principal_header).decode('utf-8')
             user_details = json.loads(decoded)
-            logger.info(f"Decoded user details: {user_details}")
+            logger.debug("Decoded user principal: id_provider=%s", user_details.get("auth_typ", "unknown"))
             
             # Process claims using ClaimsIdentity if we have claims data
             if 'claims' in user_details and isinstance(user_details['claims'], list):
@@ -123,9 +124,10 @@ def user_routes():
             )
             
         except Exception as e:
-            logger.exception(f"Error getting user info: {e}")
+            ref = uuid.uuid4().hex[:8]
+            logger.exception("Error getting user info [ref=%s]", ref)
             return JSONResponse(
-                content={"error": str(e)},
+                content={"error": f"An internal error occurred. Reference: {ref}"},
                 status_code=500
             )
     

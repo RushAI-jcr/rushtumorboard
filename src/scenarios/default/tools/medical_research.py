@@ -1,6 +1,6 @@
 # Multi-Source Medical Research Plugin
 # Searches PubMed (primary), Europe PMC, and Semantic Scholar.
-# Synthesizes with GPT-5.4 using RISEN prompt. Post-validates all citations.
+# Synthesizes using RISEN prompt. Post-validates all citations.
 # Returns evidence-graded literature review with verified PMID citations.
 
 import asyncio
@@ -14,7 +14,6 @@ from azure.core.exceptions import ResourceNotFoundError
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
     AzureChatPromptExecutionSettings,
 )
-from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import AzureChatCompletion
 from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.functions import kernel_function
 
@@ -22,6 +21,7 @@ from data_models.chat_artifact import ChatArtifact, ChatArtifactFilename, ChatAr
 from data_models.chat_context import ChatContext
 from data_models.data_access import DataAccess
 from data_models.plugin_configuration import PluginConfiguration
+from utils.model_utils import model_supports_temperature
 
 logger = logging.getLogger(__name__)
 
@@ -122,38 +122,20 @@ landmark trial, if it is not in the provided papers, do NOT mention it.
 9. Do NOT provide treatment recommendations. You summarize evidence; the tumor board decides."""
 
 
-def create_plugin(plugin_config: PluginConfiguration):
+def create_plugin(plugin_config: PluginConfiguration) -> "MedicalResearchPlugin":
     return MedicalResearchPlugin(
         chat_ctx=plugin_config.chat_ctx,
         data_access=plugin_config.data_access,
         app_ctx=plugin_config.app_ctx,
+        kernel=plugin_config.kernel,
     )
 
 
 class MedicalResearchPlugin:
-    def __init__(self, chat_ctx: ChatContext, data_access: DataAccess, app_ctx=None):
+    def __init__(self, chat_ctx: ChatContext, data_access: DataAccess, app_ctx=None, kernel=None):
         self.chat_ctx = chat_ctx
         self.data_access = data_access
-
-        # Use reasoning model (gpt-5.4) for synthesis
-        reasoning_kwargs = {
-            "service_id": "research-synthesis",
-            "deployment_name": os.environ.get(
-                "AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL",
-                os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4.1"),
-            ),
-            "api_version": "2025-04-01-preview",
-            "endpoint": os.environ.get(
-                "AZURE_OPENAI_REASONING_MODEL_ENDPOINT",
-                os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
-            ),
-        }
-        api_key = os.environ.get("AZURE_OPENAI_API_KEY")
-        if api_key:
-            reasoning_kwargs["api_key"] = api_key
-        elif app_ctx and app_ctx.cognitive_services_token_provider:
-            reasoning_kwargs["ad_token_provider"] = app_ctx.cognitive_services_token_provider
-        self.chat_completion_service = AzureChatCompletion(**reasoning_kwargs)
+        self.kernel = kernel
 
     # =====================================================================
     # Main entry point
@@ -506,7 +488,7 @@ class MedicalResearchPlugin:
 
     @staticmethod
     def _infer_evidence_level(abstract: str) -> str:
-        """Heuristic evidence level from abstract keywords. Refined by GPT-5.4 during synthesis."""
+        """Heuristic evidence level from abstract keywords. Refined during synthesis."""
         text = abstract.lower()
         for kw in _LEVEL_I_KEYWORDS:
             if kw in text:
@@ -523,7 +505,7 @@ class MedicalResearchPlugin:
         return "V"
 
     # =====================================================================
-    # GPT-5.4 synthesis (RISEN prompt)
+    # LLM synthesis (RISEN prompt)
     # =====================================================================
 
     async def _synthesize(self, query: str, papers: list[dict]) -> str:
@@ -570,8 +552,13 @@ class MedicalResearchPlugin:
             f"**Retrieved Literature ({len(papers)} papers):**\n\n{context}"
         )
 
-        settings = AzureChatPromptExecutionSettings(temperature=0)
-        response = await self.chat_completion_service.get_chat_message_content(
+        if model_supports_temperature():
+            settings = AzureChatPromptExecutionSettings(temperature=0.0)
+        else:
+            settings = AzureChatPromptExecutionSettings()
+
+        chat_service = self.kernel.get_service(service_id="default")
+        response = await chat_service.get_chat_message_content(
             chat_history=chat_history, settings=settings
         )
         return str(response)

@@ -1,7 +1,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+from __future__ import annotations
+
 import os
+
+from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
+    AzureChatPromptExecutionSettings,
+)
 
 
 def model_supports_temperature() -> bool:
@@ -26,3 +32,15 @@ def model_supports_temperature() -> bool:
             return False
 
     return True
+
+
+def make_structured_settings(response_format=None, **kwargs) -> AzureChatPromptExecutionSettings:
+    """Create AzureChatPromptExecutionSettings with temperature guard.
+
+    If the model supports temperature, sets temperature=0.0.
+    Otherwise, omits temperature (for reasoning models).
+    """
+    settings = AzureChatPromptExecutionSettings(response_format=response_format, **kwargs)
+    if model_supports_temperature():
+        settings.temperature = 0.0
+    return settings

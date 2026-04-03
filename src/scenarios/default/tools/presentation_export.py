@@ -18,6 +18,7 @@ import html as _html
 import json
 import logging
 import os
+import random
 import tempfile
 
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
@@ -33,7 +34,7 @@ from data_models.data_access import DataAccess
 from data_models.plugin_configuration import PluginConfiguration
 from data_models.tumor_board_summary import SlideContent
 from routes.patient_data.patient_data_routes import get_chat_artifacts_url
-from utils.model_utils import model_supports_temperature
+from utils.model_utils import make_structured_settings, model_supports_temperature
 
 logger = logging.getLogger(__name__)
 
@@ -282,13 +283,18 @@ class PresentationExportPlugin:
             try:
                 await self.data_access.chat_artifact_accessor.write(artifact)
                 break
+            except (PermissionError, ValueError) as exc:
+                # Permanent errors — do not retry
+                logger.error("Blob upload permanently failed (conv=%s): %s", conversation_id, type(exc).__name__)
+                return "ERROR_TYPE: STORAGE_FAILED\nPPTX upload failed (permanent error). Please contact support."
             except Exception as exc:
                 if _attempt == 1:
                     logger.error(
-                        "Blob upload failed (conv=%s): %s", conversation_id, type(exc).__name__
+                        "Blob upload failed after retries (conv=%s): %s", conversation_id, type(exc).__name__
                     )
                     return "ERROR_TYPE: STORAGE_FAILED\nPPTX was generated but could not be saved. Please try again."
-                await asyncio.sleep(1.0)
+                delay = random.uniform(0.5, 1.5) * (2 ** _attempt)
+                await asyncio.sleep(delay)
 
         safe_url = _html.escape(output_url, quote=True)
         return (
@@ -341,12 +347,7 @@ class PresentationExportPlugin:
             "Agent outputs for slide generation:\n" + json.dumps(all_data, indent=2, default=str)
         )
 
-        if model_supports_temperature():
-            settings = AzureChatPromptExecutionSettings(
-                temperature=0.0, response_format=SlideContent
-            )
-        else:
-            settings = AzureChatPromptExecutionSettings(response_format=SlideContent)
+        settings = make_structured_settings(response_format=SlideContent)
 
         llm_timeout = _LLM_TIMEOUT_SECS_REASONING if not model_supports_temperature() else _LLM_TIMEOUT_SECS_STANDARD
         chat_service = self.kernel.get_service(service_id="default")
@@ -368,9 +369,8 @@ class PresentationExportPlugin:
                 type(exc).__name__,
             )
 
-        pid = all_data.get("patient_id", "Unknown")
         return SlideContent(
-            patient_title=f"Case — {pid}",
+            patient_title="Case — [VERIFY — LLM UNAVAILABLE]",
             patient_bullets=[
                 "[FALLBACK — VERIFY ALL FIELDS]",
                 f"Age: {all_data.get('patient_age', 'N/A')}",

@@ -103,9 +103,10 @@ def chats_routes(app_context: AppContext):
                 content={"agents": agent_names, "error": None}
             )
         except Exception as e:
-            logger.exception(f"Error getting available agents: {e}")
+            ref = uuid.uuid4().hex[:8]
+            logger.exception("Error getting available agents [ref=%s]", ref)
             return JSONResponse(
-                content={"agents": [], "error": str(e)},
+                content={"agents": [], "error": f"An internal error occurred. Reference: {ref}"},
                 status_code=500
             )
 
@@ -122,7 +123,7 @@ def chats_routes(app_context: AppContext):
 
             # Wait for the first message from the client
             client_message = await websocket.receive_json()
-            logger.info(f"Received message over WebSocket: {client_message}")
+            logger.debug("Received WebSocket message: sender=%s, mention_count=%d", client_message.get("sender", ""), len(client_message.get("mentions", []) or []))
 
             # Extract message content, sender and mentions
             content = client_message.get("content", "")
@@ -194,10 +195,10 @@ def chats_routes(app_context: AppContext):
         except WebSocketDisconnect:
             logger.info(f"WebSocket client disconnected from chat: {chat_id}")
         except Exception as e:
-            logger.exception(f"Error in WebSocket chat: {e}")
+            ref = uuid.uuid4().hex[:8]
+            logger.exception("Error in WebSocket chat [ref=%s]", ref)
             try:
-                # Try to send error message to client
-                await websocket.send_json({"error": str(e)})
+                await websocket.send_json({"error": f"An internal error occurred. Reference: {ref}"})
                 await websocket.send_json({"type": "done"})
             except:
                 pass

@@ -19,11 +19,10 @@ import html
 import json
 import logging
 import os
+import random
 from io import BytesIO
 
-from azure.core.exceptions import ResourceNotFoundError
-from docx.shared import Inches
-from docxtpl import DocxTemplate, InlineImage, RichText
+from docxtpl import DocxTemplate, RichText
 
 # RichText.add() size parameter expects half-points (not Pt objects).
 # 9pt = 18, 10pt = 20, 11pt = 22, 12pt = 24
@@ -36,12 +35,11 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.functions import kernel_function
 from semantic_kernel.kernel import Kernel
 
-from data_models.chat_artifact import ChatArtifact, ChatArtifactFilename, ChatArtifactIdentifier
+from data_models.chat_artifact import ChatArtifact, ChatArtifactIdentifier
 from data_models.chat_context import ChatContext
 from data_models.data_access import DataAccess
-from data_models.patient_data import PatientTimeline
 from data_models.plugin_configuration import PluginConfiguration
-from data_models.tumor_board_summary import ClinicalTrial, TumorBoardDocContent
+from data_models.tumor_board_summary import TumorBoardDocContent
 from routes.patient_data.patient_data_routes import get_chat_artifacts_url
 from utils.model_utils import model_supports_temperature
 
@@ -65,6 +63,8 @@ _MAX_MEDICAL_HISTORY_CHARS = 2000
 _MAX_BOARD_DISCUSSION_CHARS = 3000
 _MAX_CT_FINDINGS_CHARS = 3000      # per element in list
 _MAX_ACTION_ITEM_CHARS = 200       # per action item in Col 4
+_MAX_IMAGING_ITEMS = 10            # max imaging studies per list
+_MAX_TUMOR_MARKERS_CHARS = 2000    # tumor markers string cap
 
 # Prompt for LLM summarization into 5-column clinical shorthand
 TUMOR_BOARD_DOC_PROMPT = """\
@@ -125,7 +125,7 @@ review_types vocabulary (use only these terms as applicable):
 """
 
 
-def create_plugin(plugin_config: PluginConfiguration):
+def create_plugin(plugin_config: PluginConfiguration) -> "ContentExportPlugin":
     return ContentExportPlugin(
         kernel=plugin_config.kernel,
         chat_ctx=plugin_config.chat_ctx,
@@ -229,7 +229,7 @@ class ContentExportPlugin:
         doc_template_path = os.path.join(self.root_dir, "templates", TEMPLATE_DOC_FILENAME)
         if not os.path.exists(doc_template_path):
             logger.error(f"Template not found: {doc_template_path}")
-            return f"Error: Word template not found at {doc_template_path}"
+            return f"ERROR_TYPE: RENDER_FAILED\nWord template not found at {doc_template_path}"
         doc = DocxTemplate(doc_template_path)
 
         doc_data = {
@@ -260,24 +260,37 @@ class ContentExportPlugin:
             try:
                 await self.data_access.chat_artifact_accessor.write(artifact)
                 break
+            except (PermissionError, ValueError) as exc:
+                # Permanent errors — do not retry
+                logger.error("Blob upload permanently failed (conv=%s): %s", conversation_id, type(exc).__name__)
+                return "ERROR_TYPE: STORAGE_FAILED\nDocument upload failed (permanent error). Please contact support."
             except Exception as exc:
                 if _attempt == 1:
                     logger.error(
-                        "Word doc upload failed (conv=%s): %s",
-                        self.chat_ctx.conversation_id,
+                        "Blob upload failed after retries (conv=%s): %s",
+                        conversation_id,
                         type(exc).__name__,
                     )
                     return "ERROR_TYPE: STORAGE_FAILED\nWord document was generated but could not be saved. Please try again."
-                await asyncio.sleep(1.0)
+                delay = random.uniform(0.5, 1.5) * (2 ** _attempt)
+                await asyncio.sleep(delay)
 
         safe_url = html.escape(doc_output_url, quote=True)
+        used_fallback = any("[FALLBACK]" in item for item in doc_content.action_items)
+        if used_fallback:
+            return (
+                f"ERROR_TYPE: RENDER_DEGRADED\n"
+                f"Word document created with FALLBACK content (LLM summarization failed).\n"
+                f"Download URL: {safe_url}\n\n"
+                f'<a href="{safe_url}">Download Tumor Board Handout [FALLBACK]</a>'
+            )
         return (
             f"Word document created successfully.\n"
             f"Download URL: {safe_url}\n\n"
             f'<a href="{safe_url}">Download Tumor Board Handout</a>'
         )
 
-    # ── Column RichText builders ──
+    # -- Column RichText builders --
 
     @staticmethod
     def _build_col0_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
@@ -368,7 +381,7 @@ class ContentExportPlugin:
     def _build_col4_richtext(doc: DocxTemplate, c: TumorBoardDocContent) -> RichText:
         """Column 4: Discussion.
         Matches real Rush tumor board format:
-          Review types → "Eligible for trial?" → plan/action items (in RED)
+          Review types -> "Eligible for trial?" -> plan/action items (in RED)
         """
         rt = RichText()
 
@@ -393,17 +406,20 @@ class ContentExportPlugin:
 
         return rt
 
-    # ── LLM Summarization ──
+    # -- LLM Summarization --
 
     async def _summarize_for_tumor_board_doc(self, all_data: dict) -> TumorBoardDocContent:
         """Summarize all agent data into 5-column tumor board format via LLM."""
         # Apply per-field token budget to cap the highest-cost LLM call
-        all_data = dict(all_data)  # shallow copy — don't mutate caller's dict
+        all_data = dict(all_data)  # shallow copy -- don't mutate caller's dict
         all_data["oncologic_history"] = str(all_data.get("oncologic_history") or "")[:_MAX_ONCOLOGIC_HISTORY_CHARS]
         all_data["medical_history"] = str(all_data.get("medical_history") or "")[:_MAX_MEDICAL_HISTORY_CHARS]
         all_data["board_discussion"] = str(all_data.get("board_discussion") or "")[:_MAX_BOARD_DISCUSSION_CHARS]
         ct = all_data.get("ct_scan_findings") or []
-        all_data["ct_scan_findings"] = [str(f)[:_MAX_CT_FINDINGS_CHARS] for f in ct]
+        all_data["ct_scan_findings"] = [str(f)[:_MAX_CT_FINDINGS_CHARS] for f in ct[:_MAX_IMAGING_ITEMS]]
+        xr = all_data.get("x_ray_findings") or []
+        all_data["x_ray_findings"] = [str(f)[:_MAX_CT_FINDINGS_CHARS] for f in xr[:_MAX_IMAGING_ITEMS]]
+        all_data["tumor_markers"] = str(all_data.get("tumor_markers") or "")[:_MAX_TUMOR_MARKERS_CHARS]
 
         chat_history = ChatHistory()
         chat_history.add_system_message(TUMOR_BOARD_DOC_PROMPT)
@@ -451,16 +467,16 @@ class ContentExportPlugin:
 
     @staticmethod
     def _fallback_doc_content(data: dict) -> TumorBoardDocContent:
-        """Fallback if LLM summarization fails — use raw data truncated."""
+        """Fallback if LLM summarization fails -- use raw data truncated."""
         pid = data.get("patient_id", "")
         logger.warning(
             "LLM summarization failed for patient %s; using raw fallback. "
             "Col 0 fields (patient_last_name, mrn, attending_initials, rtc, "
-            "main_location, path_date) will be blank — verify before printing.",
+            "main_location, path_date) will be blank -- verify before printing.",
             (pid[:8] if pid else "unknown"),
         )
         return TumorBoardDocContent(
-            patient_last_name=str(pid),
+            patient_last_name="[VERIFY -- LLM UNAVAILABLE]",
             ca125_trend_in_col0=str(data.get("tumor_markers", ""))[:200],
             diagnosis_narrative=(
                 f"{data.get('patient_age', '?')} yo {data.get('patient_gender', '')} "
@@ -471,7 +487,7 @@ class ContentExportPlugin:
             stage=data.get("figo_stage", "Unknown"),
             germline_genetics=data.get("molecular_profile", "Not reported")[:100],
             somatic_genetics="See pathology findings",
-            cancer_history=str(data.get("oncologic_history", ""))[:500],
+            cancer_history=str(data.get("oncologic_history", ""))[:200],
             operative_findings=str(data.get("surgical_findings", ""))[:300],
             pathology_findings="\n".join(
                 str(f)[:100] for f in data.get("pathology_findings", [])
@@ -484,61 +500,5 @@ class ContentExportPlugin:
                 f"Tx Plan: {str(data.get('treatment_plan', ''))[:200]}\n\n"
                 f"{str(data.get('board_discussion', ''))[:200]}"
             ),
-            action_items=["[FALLBACK] Export used LLM fallback — review all fields before printing."],
+            action_items=["[FALLBACK] Export used LLM fallback -- review all fields before printing."],
         )
-
-    # ── Legacy helpers (kept for backward compatibility) ──
-
-    async def _get_patient_images(
-        self, doc: DocxTemplate, image_types: set[str], image_height: float = 1.7
-    ) -> list[InlineImage]:
-        patient_id = self.chat_ctx.patient_id
-        inline_images = []
-
-        for img in self.chat_ctx.patient_data:
-            if img["type"] in image_types:
-                img_stream = await self.data_access.image_accessor.read(patient_id, img["filename"])
-                inline_images.append(InlineImage(doc, img_stream, height=Inches(image_height)))
-        for img in self.chat_ctx.output_data:
-            if img["type"] in image_types:
-                artifact_id = ChatArtifactIdentifier(
-                    self.chat_ctx.conversation_id, patient_id, filename=img["filename"]
-                )
-                artifact = await self.data_access.chat_artifact_accessor.read(artifact_id)
-                inline_images.append(InlineImage(doc, BytesIO(artifact.data), height=Inches(image_height)))
-
-        return inline_images
-
-    async def _load_patient_timeline(self) -> PatientTimeline:
-        artifact_id = ChatArtifactIdentifier(
-            conversation_id=self.chat_ctx.conversation_id,
-            patient_id=self.chat_ctx.patient_id,
-            filename=ChatArtifactFilename.PATIENT_TIMELINE,
-        )
-        artifact = await self.data_access.chat_artifact_accessor.read(artifact_id)
-        return PatientTimeline.model_validate_json(artifact.data.decode("utf-8"))
-
-    async def _load_research_papers(self) -> dict:
-        artifact_id = ChatArtifactIdentifier(
-            conversation_id=self.chat_ctx.conversation_id,
-            patient_id=self.chat_ctx.patient_id,
-            filename=ChatArtifactFilename.RESEARCH_PAPERS,
-        )
-        try:
-            artifact = await self.data_access.chat_artifact_accessor.read(artifact_id)
-            return json.loads(artifact.data.decode("utf-8"))
-        except ResourceNotFoundError:
-            return {}
-
-    @staticmethod
-    def _get_clinical_trials(doc: DocxTemplate, clinical_trials: list[ClinicalTrial]) -> list[dict]:
-        return [
-            {
-                "title": RichText(
-                    trial.title, color="0000ee", underline=True,
-                    url_id=doc.build_url_id(trial.url),
-                ),
-                "summary": trial.summary,
-            }
-            for trial in clinical_trials
-        ]

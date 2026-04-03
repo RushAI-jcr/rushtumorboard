@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 
 import aiohttp
 from mcp.server.fastmcp import FastMCP
@@ -130,8 +131,9 @@ async def nci_search(
                 })
             data = await resp.json()
     except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-        logger.error(f"NCI API connection error: {e}")
-        return json.dumps({"error": str(e), "total": 0, "trials": []})
+        ref = uuid.uuid4().hex[:8]
+        logger.error("NCI API connection error [ref=%s]: %s", ref, e)
+        return json.dumps({"error": f"NCI API connection error. Reference: {ref}", "total": 0, "trials": []})
 
     if not isinstance(data, dict):
         return json.dumps({"error": "Unexpected API response format", "total": 0, "trials": []})
@@ -208,8 +210,9 @@ async def gog_nrg_search(
                 })
             data = await resp.json()
     except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-        logger.error(f"ClinicalTrials.gov API connection error: {e}")
-        return json.dumps({"error": str(e), "total": 0, "trials": []})
+        ref = uuid.uuid4().hex[:8]
+        logger.error("ClinicalTrials.gov API connection error [ref=%s]: %s", ref, e)
+        return json.dumps({"error": f"ClinicalTrials.gov API connection error. Reference: {ref}", "total": 0, "trials": []})
 
     trials = []
     for study in data.get("studies", []):
@@ -438,9 +441,10 @@ async def aact_search(
         return json.dumps(result, indent=2)
 
     except Exception as e:
-        logger.error(f"AACT query error: {e}")
+        ref = uuid.uuid4().hex[:8]
+        logger.error("AACT query error [ref=%s]: %s", ref, e)
         return json.dumps({
-            "error": f"AACT database error: {str(e)}",
+            "error": f"AACT database error. Reference: {ref}",
             "total": 0,
             "trials": [],
         })

@@ -11,7 +11,9 @@ import json
 import logging
 import os
 import re
+import threading
 from pathlib import Path
+from typing import ClassVar
 
 from semantic_kernel.functions import kernel_function
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 MAX_RESPONSE_CHARS = 30_000  # Cap responses to manage context window
 
 
-def create_plugin(plugin_config: PluginConfiguration):
+def create_plugin(plugin_config: PluginConfiguration) -> "NCCNGuidelinesPlugin":
     return NCCNGuidelinesPlugin(plugin_config)
 
 
@@ -34,49 +36,53 @@ class NCCNGuidelinesPlugin:
     """
 
     # Class-level cache — shared across all conversations, loaded once
-    _loaded: bool = False
-    _pages: dict[str, dict] = {}          # page_code → page data
-    _disease_index: dict[str, list] = {}  # disease → [page_codes]
-    _type_index: dict[str, list] = {}     # content_type → [page_codes]
-    _keyword_index: dict[str, set] = {}   # keyword → {page_codes}
-    _guidelines: list[dict] = []          # metadata per guideline
+    _loaded: ClassVar[bool] = False
+    _pages: ClassVar[dict[str, dict]] = {}          # page_code → page data
+    _disease_index: ClassVar[dict[str, list]] = {}  # disease → [page_codes]
+    _type_index: ClassVar[dict[str, list]] = {}     # content_type → [page_codes]
+    _keyword_index: ClassVar[dict[str, set]] = {}   # keyword → {page_codes}
+    _guidelines: ClassVar[list[dict]] = []           # metadata per guideline
+    _load_lock: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(self, config: PluginConfiguration):
         self._ensure_loaded()
 
     @classmethod
     def _ensure_loaded(cls):
-        """Lazy-load all guideline JSON files into memory."""
+        """Lazy-load all guideline JSON files into memory (thread-safe, double-checked locking)."""
         if cls._loaded:
             return
+        with cls._load_lock:
+            if cls._loaded:
+                return
 
-        data_dir = cls._find_data_dir()
-        if not data_dir:
-            logger.warning("NCCN guidelines data directory not found — plugin will return empty results")
+            data_dir = cls._find_data_dir()
+            if not data_dir:
+                logger.warning("NCCN guidelines data directory not found — plugin will return empty results")
+                cls._loaded = True
+                return
+
+            manifest_path = data_dir / "manifest.json"
+            if manifest_path.exists():
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                json_files = [data_dir / g["json_file"] for g in manifest.get("guidelines", [])]
+            else:
+                # Fallback: load all JSON files in directory
+                json_files = sorted(data_dir.glob("*.json"))
+                json_files = [f for f in json_files if f.name != "manifest.json"]
+
+            for json_path in json_files:
+                if not json_path.exists():
+                    logger.warning("Guideline file not found: %s", json_path)
+                    continue
+                cls._load_guideline(json_path)
+
+            logger.info(
+                "NCCN guidelines loaded: %d guidelines, %d pages, %d unique page codes",
+                len(cls._guidelines), sum(len(v) for v in cls._disease_index.values()), len(cls._pages),
+            )
             cls._loaded = True
-            return
-
-        manifest_path = data_dir / "manifest.json"
-        if manifest_path.exists():
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-            json_files = [data_dir / g["json_file"] for g in manifest.get("guidelines", [])]
-        else:
-            # Fallback: load all JSON files in directory
-            json_files = sorted(data_dir.glob("*.json"))
-            json_files = [f for f in json_files if f.name != "manifest.json"]
-
-        for json_path in json_files:
-            if not json_path.exists():
-                logger.warning("Guideline file not found: %s", json_path)
-                continue
-            cls._load_guideline(json_path)
-
-        logger.info(
-            "NCCN guidelines loaded: %d guidelines, %d pages, %d unique page codes",
-            len(cls._guidelines), sum(len(v) for v in cls._disease_index.values()), len(cls._pages),
-        )
-        cls._loaded = True
 
     @classmethod
     def _find_data_dir(cls) -> Path | None:

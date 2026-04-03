@@ -8,6 +8,7 @@
 # Subclasses provide: report_type, accessor_method, system_prompt, error_key,
 # and the layer2/layer3 note types and keywords.
 
+import asyncio
 import json
 import logging
 import re
@@ -20,10 +21,12 @@ from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import
 from semantic_kernel.contents.chat_history import ChatHistory
 
 from data_models.plugin_configuration import PluginConfiguration
+from utils.model_utils import model_supports_temperature
 
 logger = logging.getLogger(__name__)
 
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+_LLM_TIMEOUT_SECS = 90.0
 
 
 def _report_date_key(r: dict) -> str:
@@ -167,10 +170,28 @@ class MedicalReportExtractorBase:
         chat_history.add_system_message(textwrap.dedent(self.system_prompt).strip())
         chat_history.add_user_message(f"{user_preamble}\n\n{combined_text}")
 
-        settings = AzureChatPromptExecutionSettings(seed=42)
-        chat_resp = await chat_completion_service.get_chat_message_content(
-            chat_history=chat_history, settings=settings
-        )
+        if model_supports_temperature():
+            settings = AzureChatPromptExecutionSettings(temperature=0.0, seed=42)
+        else:
+            settings = AzureChatPromptExecutionSettings()
+
+        try:
+            chat_resp = await asyncio.wait_for(
+                chat_completion_service.get_chat_message_content(
+                    chat_history=chat_history, settings=settings
+                ),
+                timeout=_LLM_TIMEOUT_SECS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "LLM %s extraction timed out after %.0fs for patient %s",
+                self.report_type, _LLM_TIMEOUT_SECS, patient_id,
+            )
+            return json.dumps({
+                "patient_id": patient_id,
+                "error": f"LLM {self.report_type} extraction timed out.",
+                self.error_key: []
+            })
 
         response_text = (chat_resp.content or "") if chat_resp is not None else ""
         if not response_text:

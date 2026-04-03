@@ -119,11 +119,12 @@ def create_group_chat(
         agent for agent in participant_configs if agent.get("name") != "magentic"
     ]
 
-    def _create_kernel_with_chat_completion() -> Kernel:
+    def _create_kernel_with_chat_completion(deployment_override: str | None = None) -> Kernel:
         kernel = Kernel()
+        deployment = deployment_override or os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"]
         service_kwargs = {
             "service_id": "default",
-            "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+            "deployment_name": deployment,
             "api_version": "2025-04-01-preview",
         }
         api_key = os.environ.get("AZURE_OPENAI_API_KEY")
@@ -306,12 +307,14 @@ def create_group_chat(
         rule = ChatRule.model_validate_json(str(result.value[0]))
         return rule.verdict if rule.verdict in [agent["name"] for agent in all_agents_config] else facilitator
 
+    selection_deployment = os.environ.get("AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME")
+
     chat = AgentGroupChat(
         agents=agents,
         chat_history=chat_ctx.chat_history,
         selection_strategy=KernelFunctionSelectionStrategy(
             function=selection_function,
-            kernel=_create_kernel_with_chat_completion(),
+            kernel=_create_kernel_with_chat_completion(selection_deployment),
             result_parser=evaluate_selection,
             agent_variable_name="agents",
             history_variable_name="history",
@@ -321,7 +324,7 @@ def create_group_chat(
                 agent for agent in agents if agent.name == facilitator
             ],  # Only facilitator decides if the conversation ends
             function=termination_function,
-            kernel=_create_kernel_with_chat_completion(),
+            kernel=_create_kernel_with_chat_completion(selection_deployment),
             result_parser=evaluate_termination,
             agent_variable_name="agents",
             history_variable_name="history",

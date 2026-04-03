@@ -6,7 +6,7 @@ import os
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.blob.aio import BlobServiceClient
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 
 from data_models import mime_type
 
@@ -16,8 +16,13 @@ logger = logging.getLogger(__name__)
 def patient_data_routes(blob_service_client: BlobServiceClient):
     router = APIRouter()
 
-    async def get_blob(blob_path: str, container_name: str) -> Response:
+    async def get_blob(request: Request, blob_path: str, container_name: str) -> Response:
         ''' Get a file generated from an Azure AI Agent '''
+
+        # Auth guard – require Azure App Service authentication header
+        principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+        if not principal_id:
+            return Response(status_code=401, content="Authentication required")
 
         filename = os.path.basename(blob_path)
         logger.info("Serving blob request (container=%s)", container_name)
@@ -40,12 +45,12 @@ def patient_data_routes(blob_service_client: BlobServiceClient):
             return Response(status_code=404, content="Requested resource not found")
 
     @router.get("/chat_artifacts/{blob_path:path}")
-    async def get_chat_artifact(blob_path: str):
-        return await get_blob(blob_path, container_name="chat-artifacts")
+    async def get_chat_artifact(request: Request, blob_path: str):
+        return await get_blob(request, blob_path, container_name="chat-artifacts")
 
     @router.get("/patient_data/{blob_path:path}")
-    async def get_patient_data(blob_path: str):
-        return await get_blob(blob_path, container_name="patient-data")
+    async def get_patient_data(request: Request, blob_path: str):
+        return await get_blob(request, blob_path, container_name="patient-data")
 
     return router
 

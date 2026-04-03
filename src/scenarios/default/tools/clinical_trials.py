@@ -58,7 +58,7 @@ Given the patient's attributes, generate a search query following the example ab
 """
 
 
-def create_plugin(plugin_config: PluginConfiguration) -> Kernel:
+def create_plugin(plugin_config: PluginConfiguration) -> "ClinicalTrialsPlugin":
     return ClinicalTrialsPlugin(
         plugin_config.kernel,
         chat_ctx=plugin_config.chat_ctx,

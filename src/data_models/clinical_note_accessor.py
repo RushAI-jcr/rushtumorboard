@@ -9,12 +9,13 @@ from time import time
 
 from azure.storage.blob.aio import BlobServiceClient
 
+from data_models.accessor_stub_mixin import ClinicalNoteAccessorStubMixin
 from utils.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
 
 logger = logging.getLogger(__name__)
 
 
-class BlobClinicalNoteAccessor:
+class BlobClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
     _CACHE_MAX_PATIENTS: int = 5
 
     def __init__(
@@ -106,38 +107,6 @@ class BlobClinicalNoteAccessor:
             filter_notes_by_type(await self.read_all(patient_id), note_types),
             keywords,
         )
-
-    async def get_lab_results(
-        self, patient_id: str, component_name: str | None = None
-    ) -> list[dict]:
-        """Structured lab results are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_tumor_markers(self, patient_id: str) -> list[dict]:
-        """Structured tumor markers are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_pathology_reports(self, patient_id: str) -> list[dict]:
-        """Dedicated pathology reports are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_radiology_reports(self, patient_id: str) -> list[dict]:
-        """Dedicated radiology reports are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_cancer_staging(self, patient_id: str) -> list[dict]:
-        """Structured cancer staging is not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_medications(
-        self, patient_id: str, order_class: str | None = None
-    ) -> list[dict]:
-        """Structured medications are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_diagnoses(self, patient_id: str) -> list[dict]:
-        """Structured diagnoses are not available via this accessor. Returns empty list."""
-        return []
 
     async def _read_blob(self, blob_name: str) -> str:
         blob = await self.container_client.download_blob(blob_name)

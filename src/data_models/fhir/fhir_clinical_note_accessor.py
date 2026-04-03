@@ -13,12 +13,13 @@ import aiohttp
 from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import get_bearer_token_provider
 
+from data_models.accessor_stub_mixin import ClinicalNoteAccessorStubMixin
 from utils.clinical_note_filter_utils import filter_notes_by_type, filter_notes_by_keywords
 
 logger = logging.getLogger(__name__)
 
 
-class FhirClinicalNoteAccessor:
+class FhirClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
     _CACHE_MAX_PATIENTS: int = 5
 
     @staticmethod
@@ -299,34 +300,3 @@ class FhirClinicalNoteAccessor:
             keywords,
         )
 
-    async def get_lab_results(
-        self, patient_id: str, component_name: str | None = None
-    ) -> list[dict]:
-        """Structured lab results are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_tumor_markers(self, patient_id: str) -> list[dict]:
-        """Structured tumor markers are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_pathology_reports(self, patient_id: str) -> list[dict]:
-        """Dedicated pathology reports are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_radiology_reports(self, patient_id: str) -> list[dict]:
-        """Dedicated radiology reports are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_cancer_staging(self, patient_id: str) -> list[dict]:
-        """Structured cancer staging is not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_medications(
-        self, patient_id: str, order_class: str | None = None
-    ) -> list[dict]:
-        """Structured medications are not available via this accessor. Returns empty list."""
-        return []
-
-    async def get_diagnoses(self, patient_id: str) -> list[dict]:
-        """Structured diagnoses are not available via this accessor. Returns empty list."""
-        return []
