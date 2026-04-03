@@ -63,12 +63,43 @@ def create_auth_callback(chat_ctx: ChatContext) -> Callable[..., Awaitable[Any]]
 
 
 class CustomHistoryChannel(ChatHistoryChannel):
+    """ChatHistoryChannel with automatic history truncation.
+
+    Prevents context window overflow in multi-agent chats with rich clinical data
+    by truncating the agent thread's history after each receive cycle. Uses safe
+    truncation that preserves function call/result pairs.
+    """
+
+    # Max messages an agent thread retains. Tool results from patient_data,
+    # pathology_extractor, etc. can be 10-20K tokens each, so even 14 messages
+    # can approach 128K tokens.  Keep only the most recent agent turns.
+    _MAX_THREAD_MESSAGES: int = 14
+
     @override
     async def receive(self, history: list[ChatMessageContent],) -> None:
         await super().receive(history)
 
         for message in history[:-1]:
             await self.thread.on_new_message(message)
+
+        # Truncate the agent thread's chat history to prevent context overflow.
+        # This is the key fix: each agent channel accumulates ALL messages from
+        # the group chat, but the LLM only needs recent context to respond.
+        if hasattr(self.thread, '_chat_history'):
+            from semantic_kernel.contents.history_reducer.chat_history_reducer_utils import (
+                locate_safe_reduction_index, extract_range,
+            )
+            msgs = self.thread._chat_history.messages
+            if len(msgs) > self._MAX_THREAD_MESSAGES + 4:
+                idx = locate_safe_reduction_index(
+                    msgs, self._MAX_THREAD_MESSAGES, threshold_count=4
+                )
+                if idx is not None:
+                    self.thread._chat_history.messages = extract_range(msgs, start=idx)
+                    logger.debug(
+                        "Truncated agent thread history from %d to %d messages",
+                        len(msgs), len(self.thread._chat_history.messages),
+                    )
 
 
 async def create_channel(
@@ -314,9 +345,22 @@ def create_group_chat(
 
     selection_deployment = os.environ.get("AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME")
 
+    # Use a truncation reducer for the shared agent chat history to prevent context
+    # window overflow in multi-agent chats with rich clinical data. target_count=14
+    # keeps ~3 agent turns (each turn ≈ user msg + tool calls + agent response).
+    # Must be aggressive because tool results (clinical notes, pathology) are very
+    # large. The reducer safely preserves function call/result pairs when truncating.
+    agent_history = ChatHistoryTruncationReducer(
+        target_count=14, threshold_count=4, auto_reduce=True
+    )
+    # Copy any existing messages from the chat context
+    for msg in chat_ctx.chat_history.messages:
+        agent_history.add_message(msg)
+    chat_ctx.chat_history = agent_history
+
     chat = AgentGroupChat(
         agents=agents,
-        chat_history=chat_ctx.chat_history,
+        chat_history=agent_history,
         selection_strategy=KernelFunctionSelectionStrategy(
             function=selection_function,
             kernel=_create_kernel_with_chat_completion(selection_deployment),
