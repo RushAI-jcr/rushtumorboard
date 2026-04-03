@@ -65,6 +65,8 @@ class FhirClinicalNoteAccessor:
         self._read_locks: dict[str, asyncio.Lock] = {}
         self._patient_id_map_cache: dict[str, str] | None = None
         self._patient_id_map_lock: asyncio.Lock = asyncio.Lock()
+        self._session: aiohttp.ClientSession | None = None
+        self._session_lock: asyncio.Lock = asyncio.Lock()
 
     async def get_headers(self) -> dict[str, str]:
         """
@@ -84,6 +86,13 @@ class FhirClinicalNoteAccessor:
                 return link["url"].split("?", 1)[-1]
         return None
 
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Return shared aiohttp.ClientSession, creating it once under a lock."""
+        async with self._session_lock:
+            if self._session is None or self._session.closed:
+                self._session = aiohttp.ClientSession()
+        return self._session
+
     async def fetch_all_entries(
         self,
         base_url: str,
@@ -102,24 +111,37 @@ class FhirClinicalNoteAccessor:
         entries = []
         url = base_url
         parsed_url = urllib.parse.urlparse(url)
-        async with aiohttp.ClientSession() as session:
-            while url and len(entries) < result_count_limit:
-                logger.debug(f"Fetching from URL: {url}")
-                async with session.get(url, headers=await self.get_headers()) as response:
-                    response.raise_for_status()
-                    response_json = await response.json()
+        session = await self._get_session()
+        while url and len(entries) < result_count_limit:
+            logger.debug(f"Fetching from URL: {url}")
+            async with session.get(url, headers=await self.get_headers()) as response:
+                response.raise_for_status()
+                response_json = await response.json()
 
-                new_entries = extract_entries(response_json)
-                entries.extend(new_entries)
-                if len(entries) >= result_count_limit:
-                    break
-                token = extract_continuation_token(response_json)
-                if token:
-                    # Append or replace query string with continuation token
-                    url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}?{token}"
-                else:
-                    url = None
+            new_entries = extract_entries(response_json)
+            entries.extend(new_entries)
+            if len(entries) >= result_count_limit:
+                break
+            token = extract_continuation_token(response_json)
+            if token:
+                # Append or replace query string with continuation token
+                url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}?{token}"
+            else:
+                url = None
         return entries[:result_count_limit]
+
+    @staticmethod
+    def _extract_patient_name(resource: dict) -> str | None:
+        """Safely extract a display name from a FHIR Patient resource dict."""
+        names = resource.get("name")
+        if not names:
+            return None
+        first_name_obj = names[0] if isinstance(names, list) else {}
+        given = first_name_obj.get("given") or []
+        family = first_name_obj.get("family", "")
+        given_str = given[0] if given else ""
+        full = f"{given_str} {family}".strip()
+        return full or None
 
     async def get_patients(self) -> list[str]:
         """
@@ -131,7 +153,18 @@ class FhirClinicalNoteAccessor:
             base_url=f"{self.fhir_url}/Patient",
             result_count_limit=100
         )
-        return [entry["resource"]['name'][0]['given'][0] for entry in entries]
+        result = []
+        for entry in entries:
+            resource = entry.get("resource", {})
+            name = self._extract_patient_name(resource)
+            if name is None:
+                logger.warning(
+                    "get_patients: skipping entry with missing/malformed name: id=%s",
+                    resource.get("id"),
+                )
+                continue
+            result.append(name)
+        return result
 
     async def get_patient_id_map(self) -> dict[str, str]:
         """
@@ -148,10 +181,19 @@ class FhirClinicalNoteAccessor:
                 base_url=f"{self.fhir_url}/Patient",
                 result_count_limit=100
             )
-            self._patient_id_map_cache = {
-                entry["resource"]['name'][0]['given'][0]: entry["resource"]['id']
-                for entry in entries
-            }
+            mapping: dict[str, str] = {}
+            for entry in entries:
+                resource = entry.get("resource", {})
+                patient_id = resource.get("id")
+                name = self._extract_patient_name(resource)
+                if not patient_id or name is None:
+                    logger.warning(
+                        "get_patient_id_map: skipping malformed entry: id=%s",
+                        resource.get("id"),
+                    )
+                    continue
+                mapping[name] = patient_id
+            self._patient_id_map_cache = mapping
         return self._patient_id_map_cache
 
     async def get_metadata_list(self, patient_id: str) -> list[dict[str, str]]:
@@ -208,8 +250,8 @@ class FhirClinicalNoteAccessor:
 
     async def read(self, patient_id: str, note_id: str) -> str:
         """Retrieves the content of a clinical note for a given patient ID and note ID."""
-        async with aiohttp.ClientSession() as session:
-            return await self._read_note(note_id, session)
+        session = await self._get_session()
+        return await self._read_note(note_id, session)
 
     async def read_all(self, patient_id: str) -> list[str]:
         """Retrieves all clinical notes for a given patient ID (cached per-patient, FIFO eviction)."""

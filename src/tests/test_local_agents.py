@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import os
+import pathlib
 import sys
 
 import pytest
@@ -658,23 +659,14 @@ Please provide NCCN-based treatment recommendations for this patient.
 # H. Input Validation & Data Completeness for Real Patients
 # ---------------------------------------------------------------------------
 
-REAL_GUIDS = [
-    "REDACTED-PATIENT-001",
-    "REDACTED-PATIENT-002",
-    "REDACTED-PATIENT-003",
-    "REDACTED-PATIENT-004",
-    "REDACTED-PATIENT-005",
-    "REDACTED-PATIENT-006",
-    "REDACTED-PATIENT-007",
-    "REDACTED-PATIENT-008",
-    "REDACTED-PATIENT-009",
-    "REDACTED-PATIENT-010",
-    "REDACTED-PATIENT-011",
-    "REDACTED-PATIENT-012",
-    "REDACTED-PATIENT-013",
-    "REDACTED-PATIENT-014",
-    "REDACTED-PATIENT-015",
-]
+# Real patient GUIDs are loaded from a gitignored fixture file or env var.
+# Do NOT hardcode UUIDs in source — they are patient identifiers.
+_REAL_GUIDS_FIXTURE = pathlib.Path(__file__).parent / "local_patient_ids.json"
+REAL_GUIDS: list[str] = (
+    json.loads(_REAL_GUIDS_FIXTURE.read_text())
+    if _REAL_GUIDS_FIXTURE.exists()
+    else [g for g in os.environ.get("TEST_PATIENT_GUIDS", "").split(",") if g.strip()]
+)
 
 REAL_DATA_DIR = os.path.join(SRC_DIR, "..", "infra", "patient_data")
 

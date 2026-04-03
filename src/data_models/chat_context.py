@@ -10,7 +10,7 @@ class ChatContext:
     def __init__(self, conversation_id: str):
         self.conversation_id = conversation_id
         self.chat_history = ChatHistory()
-        self.patient_id = None
+        self._patient_id: str | None = None
         self.patient_data = []
         self.display_blob_urls = []
         self.display_image_urls = []
@@ -18,3 +18,17 @@ class ChatContext:
         self.output_data = []
         self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.healthcare_agents = {}
+
+    @property
+    def patient_id(self) -> str | None:
+        return self._patient_id
+
+    @patient_id.setter
+    def patient_id(self, value: str) -> None:
+        if self._patient_id is not None and self._patient_id != value:
+            raise ValueError(
+                f"ChatContext: patient_id already set to {self._patient_id!r}; "
+                f"refusing to overwrite with {value!r}. Each conversation must "
+                f"be scoped to a single patient."
+            )
+        self._patient_id = value

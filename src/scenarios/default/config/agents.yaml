@@ -303,6 +303,7 @@
   tools:
     - name: tumor_markers
     - name: pretumor_board_checklist
+    - name: patient_data
   description: |
     A PatientStatus agent for GYN tumor board. **You provide**: comprehensive current status including FIGO staging, molecular profile, treatment history, and platinum sensitivity. **You need**: data from PatientHistory and Pathology.
 

@@ -1,0 +1,167 @@
+{
+  "patient_id": "patient_gyn_002",
+  "entries": [
+    {
+      "date": "2025-06-01",
+      "title": "Symptom Onset",
+      "description": "Patient, a 55-year-old postmenopausal female (G3P3), began experiencing intermittent postmenopausal bleeding.",
+      "sources": [
+        {
+          "note_id": "CN-2001",
+          "sentences": [
+            "Patient presented to her PCP with intermittent postmenopausal bleeding starting June 2025."
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-07-20",
+      "title": "Initial Imaging",
+      "description": "Transvaginal ultrasound showed thickened endometrial stripe at 14mm.",
+      "sources": [
+        {
+          "note_id": "CN-2001",
+          "sentences": [
+            "She underwent transvaginal ultrasound on 2025-07-20 showing thickened endometrial stripe at 14mm."
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-08-01",
+      "title": "Diagnostic Biopsy",
+      "description": "Office endometrial biopsy revealed Grade 3 endometrioid adenocarcinoma.",
+      "sources": [
+        {
+          "note_id": "CN-2001",
+          "sentences": [
+            "Office endometrial biopsy performed 2025-08-01 revealed Grade 3 endometrioid adenocarcinoma of the endometrium."
+          ]
+        },
+        {
+          "note_id": "CN-2002",
+          "sentences": [
+            "Reviewed pathology from office endometrial biopsy (2025-08-01): Grade 3 endometrioid adenocarcinoma"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-09-15",
+      "title": "Initial Oncology Consultation",
+      "description": "Patient referred to GYN oncology for surgical management. Strong family history of colon and endometrial cancer, raising suspicion for Lynch syndrome. Workup ordered: MMR IHC, CT imaging (chest/abdomen/pelvis), genetic referral, labs (CBC, CMP, CA-125, HE4). Planned for robotic-assisted hysterectomy, BSO, sentinel lymph node mapping.",
+      "sources": [
+        {
+          "note_id": "CN-2001",
+          "sentences": [
+            "Family history concerning for Lynch syndrome.",
+            "Recommend preoperative workup including MMR IHC, CT chest/abdomen/pelvis for staging, and genetic counseling referral.",
+            "Plan: Schedule for robotic-assisted total laparoscopic hysterectomy, bilateral salpingo-oophorectomy, sentinel lymph node mapping, and possible pelvic/para-aortic lymphadenectomy"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-09-20",
+      "title": "Molecular Tumor Testing – Office Biopsy",
+      "description": "MMR IHC on endometrial biopsy revealed loss of MLH1 and PMS2, intact MSH2/MSH6. ER: 40% positive, PR: 10% positive. MLH1/PMS2 loss pattern—potential Lynch or MLH1 methylation (testing pending). POLE mutation test pending. p53 wild-type.",
+      "sources": [
+        {
+          "note_id": "CN-2002",
+          "sentences": [
+            "IHC performed at outside facility: ER 40% positive, PR 10% positive",
+            "MMR IHC ordered and resulted today: MLH1: LOSS of expression, PMS2: LOSS of expression, MSH2: Intact expression, MSH6: Intact expression",
+            "POLE mutation testing pending",
+            "p53 IHC: wild-type pattern (normal staining)"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-10-01",
+      "title": "Genetic Counseling and Testing Initiated",
+      "description": "Genetic counseling: Amsterdam II and Bethesda criteria met. MLH1 promoter methylation testing: Negative. Comprehensive germline panel sent.",
+      "sources": [
+        {
+          "note_id": "CN-2003",
+          "sentences": [
+            "Patient seen for genetic counseling regarding concern for Lynch syndrome.",
+            "Amsterdam II criteria: MET (3 relatives with Lynch-associated cancers, 2 successive generations, 1 diagnosed <50)",
+            "Bethesda guidelines: MET (endometrial cancer <60 with MMR deficiency)",
+            "Tumor Testing Results: MLH1/PMS2 loss by IHC; MLH1 promoter methylation: NEGATIVE (not hypermethylated)",
+            "Germline Testing: Comprehensive Lynch syndrome panel sent (Invitae)"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-10-15",
+      "title": "Lynch Syndrome Confirmed",
+      "description": "Pathogenic MLH1 variant (c.350C>T, p.Thr117Met) identified on germline testing. Diagnosis: Lynch syndrome. Implications discussed including risk-reducing BSO, colonoscopy, and family cascade testing.",
+      "sources": [
+        {
+          "note_id": "CN-2003",
+          "sentences": [
+            "Results (2025-10-15): PATHOGENIC VARIANT detected in MLH1 gene - MLH1 c.350C>T (p.Thr117Met) - Known pathogenic variant",
+            "Diagnosis: Lynch Syndrome (MLH1 pathogenic variant)",
+            "Implications for cancer management: Endometrial cancer is Lynch-associated"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-10-25",
+      "title": "Definitive Surgery",
+      "description": "Robotic-assisted total laparoscopic hysterectomy, bilateral salpingo-oophorectomy, sentinel lymph node mapping and biopsy, peritoneal washings performed. Uterus 10-week size, no gross metastatic disease, successful mapping and removal of sentinel lymph nodes. No surgical complications.",
+      "sources": [
+        {
+          "note_id": "CN-2005",
+          "sentences": [
+            "Robotic-assisted total laparoscopic hysterectomy, bilateral salpingo-oophorectomy, bilateral sentinel lymph node mapping and biopsy, pelvic washings.",
+            "Findings: Uterus enlarged to approximately 10-week size; Bilateral ovaries and fallopian tubes grossly normal; No evidence of peritoneal carcinomatosis or omental disease.",
+            "Sentinel lymph nodes identified (2 left pelvic, 1 right pelvic) – sent for ultrastaging.",
+            "Complications: None."
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-11-05",
+      "title": "Final Surgical Pathology",
+      "description": "Pathology confirms Grade 3 endometrioid adenocarcinoma. Deep myometrial invasion (60%), extensive LVSI, no cervical stromal invasion. Pelvic and para-aortic sentinel lymph nodes (3) negative (including immunostaining), peritoneal washings negative, ovaries/tubes negative. FIGO 2023: Stage IB; High-intermediate risk; Molecular: MMRd (Lynch syndrome, germline MLH1). Board to discuss adjuvant therapy.",
+      "sources": [
+        {
+          "note_id": "CN-2006",
+          "sentences": [
+            "- Grade 3 endometrioid adenocarcinoma",
+            "- Myometrial invasion: 60% (>50% - deep invasion)",
+            "- LVSI: Present (extensive)",
+            "- Cervical stromal invasion: Absent",
+            "- All 3 sentinel lymph nodes: NEGATIVE",
+            "- Peritoneal washings: Negative",
+            "- Both ovaries and tubes: No tumor",
+            "FIGO 2023 Stage: IB (deep myometrial invasion, no cervical/nodal/distant disease)",
+            "With molecular classification: Stage IBm-MMRd",
+            "High-intermediate risk: Grade 3, Deep invasion, LVSI, MMRd"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2025-11-12",
+      "title": "Multidisciplinary Tumor Board Discussion",
+      "description": "Tumor board consensus: Adjuvant vaginal cuff brachytherapy (3 fractions), consider carboplatin/paclitaxel x4 cycles given high-intermediate risk features (Grade 3, deep invasion, LVSI), discuss clinical trial options for adjuvant immunotherapy. Continue Lynch syndrome-directed cancer surveillance; follow-up every 3 months for 2 years.",
+      "sources": [
+        {
+          "note_id": "CN-2007",
+          "sentences": [
+            "Case presented: 55yo with FIGO Stage IBm-MMRd endometrioid adenocarcinoma.",
+            "Treatment Discussion: Standard care for high-intermediate risk: Vaginal cuff brachytherapy, consider chemotherapy, immunotherapy in trial setting.",
+            "Board Consensus: Adjuvant vaginal cuff brachytherapy (3 fractions); Consider adjuvant chemotherapy (carboplatin/paclitaxel x 4 cycles) given high-intermediate risk features; Discuss clinical trial eligibility for adjuvant immunotherapy trials; Continue Lynch syndrome surveillance.",
+            "Follow-up plan: Every 3 months x 2 years with exam and CA-125; Colonoscopy per Lynch protocol."
+          ]
+        }
+      ]
+    }
+  ]
+}

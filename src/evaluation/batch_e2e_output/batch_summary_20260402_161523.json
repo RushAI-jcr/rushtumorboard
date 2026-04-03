@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-04-02T16:15:23.184869",
+  "total_patients": 1,
+  "passed": 0,
+  "failed": 0,
+  "timed_out": 1,
+  "results": [
+    {
+      "patient_id": "patient_gyn_002",
+      "status": "TIMEOUT",
+      "duration_secs": 121.6,
+      "agents_responded": [],
+      "agents_total": 10,
+      "docx_ok": false,
+      "pptx_ok": false,
+      "nccn_codes_cited": [],
+      "nccn_applicable": true,
+      "disease_site": "uterine",
+      "error": "Exceeded 120s timeout"
+    }
+  ]
+}

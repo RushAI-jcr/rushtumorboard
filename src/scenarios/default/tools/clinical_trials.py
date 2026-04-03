@@ -76,11 +76,23 @@ class ClinicalTrialsPlugin:
         self.app_ctx = app_ctx
 
         # Clinical trial matching works better with a reasoning model (gpt-5.4 or o3)
+        _reasoning_deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL")
+        _reasoning_endpoint = os.environ.get("AZURE_OPENAI_REASONING_MODEL_ENDPOINT")
+        if not _reasoning_deployment:
+            raise ValueError(
+                "ClinicalTrialsPlugin requires AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL. "
+                "Set it to the Azure OpenAI reasoning model deployment name (e.g. 'o3-mini')."
+            )
+        if not _reasoning_endpoint:
+            raise ValueError(
+                "ClinicalTrialsPlugin requires AZURE_OPENAI_REASONING_MODEL_ENDPOINT. "
+                "Set it to the Azure OpenAI reasoning model endpoint URL."
+            )
         reasoning_kwargs = {
             "service_id": "reasoning-model",
-            "deployment_name": os.environ["AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL"],
+            "deployment_name": _reasoning_deployment,
             "api_version": "2025-04-01-preview",
-            "endpoint": os.environ["AZURE_OPENAI_REASONING_MODEL_ENDPOINT"],
+            "endpoint": _reasoning_endpoint,
         }
         api_key = os.environ.get("AZURE_OPENAI_API_KEY")
         if api_key:
@@ -89,7 +101,12 @@ class ClinicalTrialsPlugin:
             reasoning_kwargs["ad_token_provider"] = self.app_ctx.cognitive_services_token_provider
         self.chat_completion_service = AzureChatCompletion(**reasoning_kwargs)
 
-    @kernel_function()
+    @kernel_function(
+        description=(
+            "Generate a structured free-text search query for ClinicalTrials.gov based on the patient's "
+            "biomarkers, histology, and staging. Call this before search_clinical_trials."
+        )
+    )
     async def generate_clinical_trial_search_criteria(self, biomarkers: list[str], histology: str, staging: str):
         """
         Generates a search query that can be used to call the clinical trial API on https://clinicaltrials.gov.
@@ -113,7 +130,13 @@ class ClinicalTrialsPlugin:
         logger.info(f"Generated search query: {chat_completion_response}")
         return str(chat_completion_response)
 
-    @kernel_function()
+    @kernel_function(
+        description=(
+            "Search ClinicalTrials.gov for recruiting trials matching the patient's eligibility criteria. "
+            "Evaluates each trial against patient data and returns Yes/No eligibility with explanation. "
+            "Call generate_clinical_trial_search_criteria first to get the query string."
+        )
+    )
     async def search_clinical_trials(self, clinical_trials_query: str, age: str, biomarkers: list[str], histology: str, staging: str, ecog_performance_status: str, first_line_treatment: str, second_line_treatment: str) -> str:
         """
         Asynchronously searches for clinical trials based on patient data and returns a response for each trial, indicating Yes/No if the patient meets all eligibility criteria. Additionally provides an exaplanation as to why.
@@ -143,7 +166,7 @@ class ClinicalTrialsPlugin:
 
         params = {
             "query.term": clinical_trials_query,
-            "pageSize": 50,
+            "pageSize": 15,
             "filter.overallStatus": "RECRUITING",
             "fields": "ConditionsModule|EligibilityModule|IdentificationModule"
         }
@@ -152,36 +175,63 @@ class ClinicalTrialsPlugin:
                 resp.raise_for_status()
                 result = await resp.json()
 
-        logger.info(f"Clinical trials found: {len(result["studies"])}")
+        study_count = len(result["studies"])
+        logger.info(f"Clinical trials found: {study_count}")
 
-        chat_completion_responses = []
-        for trial in result["studies"]:
-            chat_history = ChatHistory()
-            chat_history.add_system_message(PROMPT)
-            chat_history.add_system_message("Structured Patient Attributes: \ndata= " +
-                                            json.dumps(structured_patient_data, indent=4))
-            chat_history.add_system_message("Clinical Trial Eligibility Criteria:\n" +
-                                            json.dumps(trial, indent=4))
+        _sem = asyncio.Semaphore(5)
+        _trial_timeout = 45.0
 
-            settings = AzureChatPromptExecutionSettings(temperature=0)
-            chat_completion_response = await self.chat_completion_service.get_chat_message_content(
-                chat_history=chat_history, settings=settings)
-            chat_completion_responses.append(chat_completion_response)
+        async def _evaluate_one(trial: dict) -> object | None:
+            async with _sem:
+                ch = ChatHistory()
+                ch.add_system_message(PROMPT)
+                ch.add_user_message(
+                    "Structured Patient Attributes: \ndata= "
+                    + json.dumps(structured_patient_data, indent=4)
+                )
+                ch.add_user_message(
+                    "Clinical Trial Eligibility Criteria:\n" + json.dumps(trial, indent=4)
+                )
+                try:
+                    return await asyncio.wait_for(
+                        self.chat_completion_service.get_chat_message_content(
+                            chat_history=ch,
+                            settings=AzureChatPromptExecutionSettings(temperature=0),
+                        ),
+                        timeout=_trial_timeout,
+                    )
+                except (asyncio.TimeoutError, Exception) as exc:
+                    nct = (
+                        trial.get("protocolSection", {})
+                        .get("identificationModule", {})
+                        .get("nctId", "unknown")
+                    )
+                    logger.warning("Trial evaluation failed for %s: %s", nct, type(exc).__name__)
+                    return None
 
-        response_results = chat_completion_responses
+        chat_completion_responses = await asyncio.gather(
+            *[_evaluate_one(t) for t in result["studies"]],
+            return_exceptions=True,
+        )
 
-        trial_dict_results = {
-            trial["protocolSection"]["identificationModule"]["nctId"]:
-            {
+        trial_dict_results = {}
+        for trial, response_result in zip(result["studies"], chat_completion_responses):
+            if response_result is None or isinstance(response_result, BaseException):
+                continue
+            nct_id = trial["protocolSection"]["identificationModule"]["nctId"]
+            trial_dict_results[nct_id] = {
                 "eligibility": str(response_result),
-                "title": trial["protocolSection"]["identificationModule"]["briefTitle"]
+                "title": trial["protocolSection"]["identificationModule"]["briefTitle"],
             }
-            for trial, response_result in zip(result["studies"], response_results)
-        }
 
         return json.dumps(trial_dict_results, indent=4)
 
-    @kernel_function()
+    @kernel_function(
+        description=(
+            "Retrieve and summarize detailed eligibility criteria and protocol information for a specific "
+            "clinical trial by NCT ID (e.g., 'NCT12345678'). Use after search_clinical_trials identifies a trial of interest."
+        )
+    )
     async def display_more_information_about_a_trial(self, trial: str) -> str:
         """
         Fetches and displays more information about a specific clinical trial.
@@ -199,8 +249,10 @@ class ClinicalTrialsPlugin:
                 result = await resp.json()
 
         chat_history = ChatHistory()
-        chat_history.add_system_message("Summarize the clinical trial information. Focus on relevant information for a oncologist or patient:\n" +
-                                        json.dumps(result, indent=4))
+        chat_history.add_system_message("You are a clinical trial summarizer. Summarize the provided trial information, focusing on what is relevant for an oncologist or patient.")
+        chat_history.add_user_message(
+            "Summarize the following clinical trial:\n" + json.dumps(result, indent=4)
+        )
 
         settings = AzureChatPromptExecutionSettings(temperature=0)
         chat_completion_response = await self.chat_completion_service.get_chat_message_content(

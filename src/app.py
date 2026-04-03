@@ -76,8 +76,9 @@ def create_app(
     app.include_router(chats_routes(app_context))
     app.include_router(user_routes())
     app.include_router(patient_data_routes(app_context.blob_service_client))
-    app.include_router(patient_data_answer_source_routes(app_context.data_access))
-    app.include_router(patient_timeline_entry_source_routes(app_context.data_access))
+    if os.getenv("DEMO_ROUTES_ENABLED", "false").lower() == "true":
+        app.include_router(patient_data_answer_source_routes(app_context.data_access))
+        app.include_router(patient_timeline_entry_source_routes(app_context.data_access))
     app.include_router(time_routes())
 
     # Serve static files from the React build directory

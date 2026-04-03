@@ -141,10 +141,15 @@ class ContentExportPlugin:
         self.kernel = kernel
 
     @kernel_function(
-        description="Generate a landscape 5-column Word document for the GYN tumor board. "
-        "Produces the standard tumor board one-page summary: Patient metadata (Col 0), "
-        "Diagnosis & History (Col 1), Previous Tx/Operative Findings (Col 2), "
-        "Imaging (Col 3), and Discussion (Col 4)."
+        description=(
+            "Generate a landscape 5-column Word document for the GYN tumor board. "
+            "Produces the standard tumor board one-page summary: Patient metadata (Col 0), "
+            "Diagnosis & History (Col 1), Previous Tx/Operative Findings (Col 2), "
+            "Imaging (Col 3), and Discussion (Col 4). "
+            "Word-only fields not in export_to_pptx: medical_history, social_history, "
+            "ct_scan_findings, x_ray_findings. "
+            "Pass pathology_findings and clinical_trials as plain strings."
+        )
     )
     async def export_to_word_doc(
         self,
@@ -155,9 +160,9 @@ class ContentExportPlugin:
         cancer_type: str,
         ct_scan_findings: list[str],
         x_ray_findings: list[str],
-        pathology_findings: list[str],
+        pathology_findings: str,
         treatment_plan: str,
-        clinical_trials: list[ClinicalTrial],
+        clinical_trials: str,
         figo_stage: str = "",
         molecular_profile: str = "",
         tumor_markers: str = "",
@@ -211,10 +216,7 @@ class ContentExportPlugin:
             "tumor_markers": tumor_markers,
             "surgical_findings": surgical_findings,
             "treatment_plan": treatment_plan,
-            "clinical_trials": [
-                {"title": t.title, "summary": t.summary, "url": t.url}
-                for t in clinical_trials
-            ] if clinical_trials else [],
+            "clinical_trials": clinical_trials or "",
             "board_discussion": board_discussion,
             "oncologic_history": oncologic_history,
         }

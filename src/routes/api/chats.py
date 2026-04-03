@@ -113,6 +113,10 @@ def chats_routes(app_context: AppContext):
     async def websocket_chat_endpoint(websocket: WebSocket, chat_id: str):
         """WebSocket endpoint for streaming chat messages"""
         try:
+            principal_id = websocket.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+            if not principal_id:
+                await websocket.close(code=1008)
+                return
             await websocket.accept()
             logger.info(f"WebSocket connection established for chat: {chat_id}")
 
@@ -124,7 +128,7 @@ def chats_routes(app_context: AppContext):
             content = client_message.get("content", "")
             sender = client_message.get("sender", "User")
             mentions = client_message.get("mentions", [])
-            logger.info(f"Message content: {content}, sender: {sender}, mentions: {mentions}")
+            logger.debug(f"Message content: sender={sender}, mention_count={len(mentions or [])}")
             # Try to read existing chat context or create a new one if it doesn't exist
             try:
                 chat_context = await data_access.chat_context_accessor.read(chat_id)

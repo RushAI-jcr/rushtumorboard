@@ -159,7 +159,13 @@ class MedicalResearchPlugin:
     # Main entry point
     # =====================================================================
 
-    @kernel_function()
+    @kernel_function(
+        description=(
+            "Search PubMed, Europe PMC, and Semantic Scholar for GYN oncology literature relevant to a clinical "
+            "research query, then synthesize a cited evidence summary using the RISEN framework. "
+            "Returns text, sources, and search metadata."
+        )
+    )
     async def process_prompt(self, prompt: str) -> dict:
         """
         Search PubMed, Europe PMC, and Semantic Scholar for GYN oncology literature,
@@ -183,16 +189,20 @@ class MedicalResearchPlugin:
             )
 
         # Handle failures gracefully — log and continue with whatever succeeded
-        source_counts = {}
-        for name, result in [("pubmed", pubmed_results), ("europepmc", europepmc_results), ("semantic_scholar", semantic_results)]:
-            if isinstance(result, Exception):
-                logger.warning(f"{name} search failed: {result}")
-                source_counts[name] = 0
-            else:
-                source_counts[name] = len(result)
-        pubmed_results = pubmed_results if not isinstance(pubmed_results, Exception) else []
-        europepmc_results = europepmc_results if not isinstance(europepmc_results, Exception) else []
-        semantic_results = semantic_results if not isinstance(semantic_results, Exception) else []
+        if isinstance(pubmed_results, BaseException):
+            logger.info(f"pubmed search failed: {pubmed_results}")
+            pubmed_results = []
+        if isinstance(europepmc_results, BaseException):
+            logger.info(f"europepmc search failed: {europepmc_results}")
+            europepmc_results = []
+        if isinstance(semantic_results, BaseException):
+            logger.info(f"semantic_scholar search failed: {semantic_results}")
+            semantic_results = []
+        source_counts = {
+            "pubmed": len(pubmed_results),
+            "europepmc": len(europepmc_results),
+            "semantic_scholar": len(semantic_results),
+        }
 
         logger.info(f"Search results — PubMed: {source_counts.get('pubmed', 0)}, "
                      f"EuropePMC: {source_counts.get('europepmc', 0)}, "
@@ -294,12 +304,17 @@ class MedicalResearchPlugin:
             fetch_params["api_key"] = api_key
             summary_params["api_key"] = api_key
 
-        async with session.get(PUBMED_EFETCH, params=fetch_params) as resp:
-            resp.raise_for_status()
-            xml_text = await resp.text()
-        async with session.get(PUBMED_ESUMMARY, params=summary_params) as resp:
-            resp.raise_for_status()
-            summary_data = await resp.json()
+        async def _fetch_efetch() -> str:
+            async with session.get(PUBMED_EFETCH, params=fetch_params) as resp:
+                resp.raise_for_status()
+                return await resp.text()
+
+        async def _fetch_esummary() -> dict:
+            async with session.get(PUBMED_ESUMMARY, params=summary_params) as resp:
+                resp.raise_for_status()
+                return await resp.json()
+
+        xml_text, summary_data = await asyncio.gather(_fetch_efetch(), _fetch_esummary())
 
         results = []
         for pmid in pmids:
@@ -665,9 +680,20 @@ class MedicalResearchPlugin:
             artifact = await self.data_access.chat_artifact_accessor.read(artifact_id)
             research_papers = json.loads(artifact.data.decode("utf-8"))
             research_papers.update(papers)
-        except (ResourceNotFoundError, Exception):
+        except ResourceNotFoundError:
             research_papers = papers
+        except json.JSONDecodeError as exc:
+            logger.warning("_save_research_papers: corrupt blob content, resetting: %s", exc)
+            research_papers = papers
+        except Exception:
+            logger.exception("_save_research_papers: unexpected error reading blob; re-raising")
+            raise
 
-        await self.data_access.chat_artifact_accessor.write(
-            ChatArtifact(artifact_id=artifact_id, data=json.dumps(research_papers).encode("utf-8"))
-        )
+        try:
+            await self.data_access.chat_artifact_accessor.write(
+                ChatArtifact(artifact_id=artifact_id, data=json.dumps(research_papers).encode("utf-8"))
+            )
+        except Exception:
+            logger.warning(
+                "_save_research_papers: failed to persist research papers to blob", exc_info=True
+            )
