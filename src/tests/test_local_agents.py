@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 DATA_DIR = os.path.join(SRC_DIR, "..", "infra", "patient_data")
 PATIENT_ID = "patient_gyn_001"
 PATIENT_ID_2 = "patient_gyn_002"
+PATIENT_ID_3 = "patient_gyn_cerv_001"
+PATIENT_ID_4 = "patient_gyn_gtn_001"
 OUTPUT_DIR = os.path.join(SRC_DIR, "tests", "output")
 
 CSV_FILE_TYPES = [
@@ -79,13 +81,13 @@ def data_access(data_dir):
 class TestSyntheticData:
     """Verify that all 7 CSV types exist and are readable for both patients."""
 
-    @pytest.mark.parametrize("patient_id", [PATIENT_ID, PATIENT_ID_2])
+    @pytest.mark.parametrize("patient_id", [PATIENT_ID, PATIENT_ID_2, PATIENT_ID_3, PATIENT_ID_4])
     @pytest.mark.parametrize("file_type", CSV_FILE_TYPES)
     def test_csv_exists(self, data_dir, patient_id, file_type):
         csv_path = os.path.join(data_dir, patient_id, f"{file_type}.csv")
         assert os.path.exists(csv_path), f"Missing: {csv_path}"
 
-    @pytest.mark.parametrize("patient_id", [PATIENT_ID, PATIENT_ID_2])
+    @pytest.mark.parametrize("patient_id", [PATIENT_ID, PATIENT_ID_2, PATIENT_ID_3, PATIENT_ID_4])
     @pytest.mark.asyncio
     async def test_caboodle_reads_all_file_types(self, caboodle, patient_id):
         """CaboodleFileAccessor can read every CSV type without errors."""
@@ -99,6 +101,8 @@ class TestSyntheticData:
         patients = await caboodle.get_patients()
         assert PATIENT_ID in patients
         assert PATIENT_ID_2 in patients
+        assert PATIENT_ID_3 in patients
+        assert PATIENT_ID_4 in patients
 
     @pytest.mark.asyncio
     async def test_get_metadata_list(self, caboodle):
@@ -444,10 +448,13 @@ class TestNCCNGuidelines:
         logger.info("Loaded %d guidelines, %d unique page codes", len(plugin._guidelines), len(plugin._pages))
 
     def test_disease_index_populated(self, plugin):
-        """Disease index has endometrial, vaginal, and vulvar entries."""
+        """Disease index has endometrial, vaginal, vulvar, cervical, and GTN entries."""
         assert "endometrial_carcinoma" in plugin._disease_index
         assert "vaginal_cancer" in plugin._disease_index
         assert "vulvar_cancer" in plugin._disease_index
+        assert "cervical_cancer" in plugin._disease_index
+        assert "gestational_trophoblastic_neoplasia" in plugin._disease_index
+        assert "hydatidiform_mole" in plugin._disease_index
 
     @pytest.mark.asyncio
     async def test_lookup_endo1(self, plugin):
@@ -473,6 +480,21 @@ class TestNCCNGuidelines:
         result = await plugin.lookup_nccn_page("VULVA-1")
         data = json.loads(result)
         assert data["page_code"] == "VULVA-1"
+
+    @pytest.mark.asyncio
+    async def test_lookup_cerv1(self, plugin):
+        """CERV-1 returns cervical cancer algorithm page."""
+        result = await plugin.lookup_nccn_page("CERV-1")
+        data = json.loads(result)
+        assert data["page_code"] == "CERV-1"
+        assert "cervical" in data.get("disease", "").lower() or "cervical" in data.get("guideline", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_lookup_gtn1(self, plugin):
+        """GTN-1 returns gestational trophoblastic neoplasia algorithm page."""
+        result = await plugin.lookup_nccn_page("GTN-1")
+        data = json.loads(result)
+        assert data["page_code"] == "GTN-1"
 
     @pytest.mark.asyncio
     async def test_lookup_not_found(self, plugin):

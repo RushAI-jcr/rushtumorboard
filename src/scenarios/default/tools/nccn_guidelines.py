@@ -82,6 +82,23 @@ class NCCNGuidelinesPlugin:
         "molar pregnancy": "hydatidiform_mole",
     }
 
+    # Broad terms that match most pages — down-weighted during scoring.
+    # Defined here (not inside search_nccn_guidelines) so they are not
+    # reconstructed into a new set object on every tool invocation.
+    _BROAD_TERMS: ClassVar[frozenset[str]] = frozenset({
+        "carcinoma", "adenocarcinoma", "surgery", "chemotherapy",
+        "radiation", "stage i", "stage ii", "stage iii", "stage iv",
+    })
+
+    # Page code prefixes for systemic therapy appendix pages.
+    # Defined here (not inside get_nccn_systemic_therapy) so the tuple
+    # is not rebuilt on every tool invocation.
+    _SYSTEMIC_PREFIXES: ClassVar[tuple[str, ...]] = (
+        "ENDO-D", "VAG-D", "VULVA-E", "UTSARC-C",
+        "OV-D", "LCOC-A", "LCOC-5A", "LCOC-5B",
+        "CERV-F", "GTN-D",
+    )
+
     def __init__(self, config: PluginConfiguration):
         self._ensure_loaded()
 
@@ -379,8 +396,11 @@ class NCCNGuidelinesPlugin:
 
     @kernel_function(
         description="Search NCCN guidelines for a specific clinical scenario. "
-        "Provide the cancer type (endometrial, vaginal, vulvar, uterine sarcoma, ovarian, cervical, GTN) "
-        "and a clinical question describing the patient's situation "
+        "cancer_type accepts aliases: endometrial/uterine, vaginal/vagina, vulvar, "
+        "uterine sarcoma/leiomyosarcoma, ovarian/fallopian tube/peritoneal, "
+        "cervical/cervix, gtn/gestational trophoblastic/choriocarcinoma, "
+        "or hydatidiform mole/molar pregnancy. "
+        "Provide a clinical question describing the patient's situation "
         "(e.g., 'Stage IIIC endometrial carcinoma adjuvant treatment', "
         "'recurrent vulvar cancer therapy options', "
         "'Stage IIIC ovarian cancer primary treatment', "
@@ -407,9 +427,6 @@ class NCCNGuidelinesPlugin:
                 all_terms.add(kw_set)
         query_keywords.update(all_terms)
 
-        # Down-weight overly broad terms that match most pages
-        _BROAD_TERMS = {"carcinoma", "adenocarcinoma", "surgery", "chemotherapy", "radiation", "stage i", "stage ii", "stage iii", "stage iv"}
-
         # Score pages by keyword overlap
         page_scores: dict[str, float] = {}
         for kw in query_keywords:
@@ -430,7 +447,7 @@ class NCCNGuidelinesPlugin:
                     weight = 1.5
                 elif page["content_type"] == "discussion":
                     weight = 0.5
-                if kw in _BROAD_TERMS:
+                if kw in self._BROAD_TERMS:
                     weight *= 0.3
                 page_scores[code] = page_scores.get(code, 0) + weight
 
@@ -481,7 +498,10 @@ class NCCNGuidelinesPlugin:
         description="Get NCCN systemic therapy regimen options for a specific cancer type and setting. "
         "Returns preferred, other recommended, and biomarker-directed therapy options "
         "with NCCN evidence categories. "
-        "cancer_type: endometrial, vaginal, vulvar, uterine_sarcoma, ovarian, cervical, or gtn. "
+        "cancer_type accepts aliases: endometrial/uterine, vaginal/vagina, vulvar, "
+        "uterine_sarcoma/leiomyosarcoma, ovarian/fallopian tube/peritoneal, "
+        "cervical/cervix, gtn/gestational trophoblastic/choriocarcinoma, "
+        "or hydatidiform mole/molar pregnancy. "
         "setting: primary, adjuvant, recurrent, or maintenance. "
         "biomarkers: optional comma-separated biomarker status (e.g., 'dMMR,MSI-H' or 'HER2+' or 'BRCA+' or 'HRD+')."
     )
@@ -492,14 +512,13 @@ class NCCNGuidelinesPlugin:
         # Find systemic therapy pages (typically *-D or *-E suffix)
         therapy_codes = []
         disease_key = self._map_cancer_type(cancer_type)
-        _SYSTEMIC_PREFIXES = ("ENDO-D", "VAG-D", "VULVA-E", "UTSARC-C", "OV-D", "LCOC-A", "LCOC-5A", "LCOC-5B", "CERV-F", "GTN-D")
 
         for code in self._disease_index.get(disease_key, []):
             page = self._pages.get(code)
             if not page:
                 continue
             # Systemic therapy pages have specific suffixes
-            if any(code.startswith(pfx) for pfx in _SYSTEMIC_PREFIXES):
+            if any(code.startswith(pfx) for pfx in self._SYSTEMIC_PREFIXES):
                 therapy_codes.append(code)
             # Also match by title keywords
             title = page.get("title", "").lower()
@@ -508,6 +527,19 @@ class NCCNGuidelinesPlugin:
                     therapy_codes.append(code)
 
         if not therapy_codes:
+            if disease_key == "hydatidiform_mole":
+                return json.dumps({
+                    "cancer_type": cancer_type,
+                    "setting": setting,
+                    "note": (
+                        "Hydatidiform moles are managed with uterine evacuation, not systemic chemotherapy. "
+                        "hCG surveillance follows until normalization. "
+                        "If hCG fails to normalize or rises, the patient has progressed to post-molar GTN "
+                        "— use cancer_type='gtn' to retrieve EMA-CO, EMA-EP, and other GTN regimens (GTN-D). "
+                        "See HM-1 and HM-2 for the full management algorithm."
+                    ),
+                    "relevant_pages": ["HM-1", "HM-2"],
+                })
             return json.dumps({
                 "cancer_type": cancer_type,
                 "setting": setting,
