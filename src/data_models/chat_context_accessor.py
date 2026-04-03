@@ -52,7 +52,7 @@ class ChatContextAccessor:
             blob_str = await blob.readall()
             decoded_str = blob_str.decode("utf-8")
             return self.deserialize(decoded_str)
-        except:
+        except Exception:
             return ChatContext(conversation_id)
         finally:
             logger.info(f"Read ChatContext for {conversation_id}. Duration: {time() - start}s")

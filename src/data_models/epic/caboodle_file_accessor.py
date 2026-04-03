@@ -15,7 +15,7 @@ from collections.abc import Sequence
 logger = logging.getLogger(__name__)
 
 # Optional parquet support — check availability without binding pd at module level
-import importlib.util as _importlib_util
+import importlib.util as _importlib_util  # noqa: E402
 HAS_PANDAS: bool = _importlib_util.find_spec("pandas") is not None
 del _importlib_util  # keep namespace clean
 

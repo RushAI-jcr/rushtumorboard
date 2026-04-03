@@ -23,11 +23,6 @@ import random
 from io import BytesIO
 
 from docxtpl import DocxTemplate, RichText
-
-# RichText.add() size parameter expects half-points (not Pt objects).
-# 9pt = 18, 10pt = 20, 11pt = 22, 12pt = 24
-HP_9 = 18   # 9pt in half-points
-HP_10 = 20  # 10pt in half-points
 from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
     AzureChatPromptExecutionSettings,
 )
@@ -43,6 +38,11 @@ from data_models.tumor_board_summary import TumorBoardDocContent
 from routes.patient_data.patient_data_routes import get_chat_artifacts_url
 from utils.model_utils import model_supports_temperature
 
+# RichText.add() size parameter expects half-points (not Pt objects).
+# 9pt = 18, 10pt = 20, 11pt = 22, 12pt = 24
+HP_9 = 18   # 9pt in half-points
+HP_10 = 20  # 10pt in half-points
+
 OUTPUT_DOC_FILENAME = "tumor_board_review-{}.docx"
 TEMPLATE_DOC_FILENAME = "tumor_board_template.docx"
 
@@ -53,7 +53,7 @@ RED = "FF0000"
 DARK_TEXT = "333333"
 GRAY = "666666"
 
-_LLM_TIMEOUT_SECS_STANDARD  = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
+_LLM_TIMEOUT_SECS_STANDARD = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
 _LLM_TIMEOUT_SECS_REASONING = 150.0  # max wait for reasoning models (o3-mini, o3)
 
 # Character caps for high-variability fields before LLM summarization.

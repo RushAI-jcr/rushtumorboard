@@ -3,8 +3,6 @@
 Prevents silent schema drift where a field is added to the Pydantic model
 but the corresponding LLM prose prompt is not updated (or vice versa).
 """
-import pytest
-
 from data_models.tumor_board_summary import TumorBoardDocContent, SlideContent
 
 

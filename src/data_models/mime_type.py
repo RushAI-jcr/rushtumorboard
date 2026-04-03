@@ -22,7 +22,6 @@ types = {
     "php": "text/x-php",
     "png": "image/png",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "py": "text/x-python",
     "py": "text/x-script.python",
     "rb": "text/x-ruby",
     "sh": "application/x-sh",

@@ -21,9 +21,6 @@ import os
 import random
 import tempfile
 
-from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
-    AzureChatPromptExecutionSettings,
-)
 from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.functions import kernel_function
 from semantic_kernel.kernel import Kernel
@@ -40,16 +37,16 @@ logger = logging.getLogger(__name__)
 
 OUTPUT_PPTX_FILENAME = "tumor_board_slides-{}.pptx"
 
-_LLM_TIMEOUT_SECS_STANDARD  = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
+_LLM_TIMEOUT_SECS_STANDARD = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
 _LLM_TIMEOUT_SECS_REASONING = 150.0  # max wait for reasoning models (o3-mini, o3)
 _NODE_TIMEOUT_SECS = 60.0            # max wait for PptxGenJS subprocess
 
 # Per-field character caps applied before LLM serialization (mirrors content_export.py)
-_MAX_PATHOLOGY_CHARS      = 3000
-_MAX_RADIOLOGY_CHARS      = 2000
+_MAX_PATHOLOGY_CHARS = 3000
+_MAX_RADIOLOGY_CHARS = 2000
 _MAX_TREATMENT_PLAN_CHARS = 2000
 _MAX_ONCOLOGIC_HIST_CHARS = 3000
-_MAX_BOARD_DISC_CHARS     = 2000
+_MAX_BOARD_DISC_CHARS = 2000
 _MAX_CLINICAL_TRIALS_CHARS = 2000
 
 # Concurrency limit for Node.js subprocess spawning (CPU-bound; one per core)
@@ -198,12 +195,12 @@ class PresentationExportPlugin:
             "oncologic_history": oncologic_history,
         }
         # Apply per-field token budget caps before LLM serialization
-        all_data["pathology_findings"]  = str(all_data.get("pathology_findings") or "")[:_MAX_PATHOLOGY_CHARS]
-        all_data["radiology_findings"]  = str(all_data.get("radiology_findings") or "")[:_MAX_RADIOLOGY_CHARS]
-        all_data["treatment_plan"]      = str(all_data.get("treatment_plan") or "")[:_MAX_TREATMENT_PLAN_CHARS]
-        all_data["oncologic_history"]   = str(all_data.get("oncologic_history") or "")[:_MAX_ONCOLOGIC_HIST_CHARS]
-        all_data["board_discussion"]    = str(all_data.get("board_discussion") or "")[:_MAX_BOARD_DISC_CHARS]
-        all_data["clinical_trials"]     = str(all_data.get("clinical_trials") or "")[:_MAX_CLINICAL_TRIALS_CHARS]
+        all_data["pathology_findings"] = str(all_data.get("pathology_findings") or "")[:_MAX_PATHOLOGY_CHARS]
+        all_data["radiology_findings"] = str(all_data.get("radiology_findings") or "")[:_MAX_RADIOLOGY_CHARS]
+        all_data["treatment_plan"] = str(all_data.get("treatment_plan") or "")[:_MAX_TREATMENT_PLAN_CHARS]
+        all_data["oncologic_history"] = str(all_data.get("oncologic_history") or "")[:_MAX_ONCOLOGIC_HIST_CHARS]
+        all_data["board_discussion"] = str(all_data.get("board_discussion") or "")[:_MAX_BOARD_DISC_CHARS]
+        all_data["clinical_trials"] = str(all_data.get("clinical_trials") or "")[:_MAX_CLINICAL_TRIALS_CHARS]
         slide_content = await self._summarize_for_slides(all_data)
 
         # 2. Parse raw tumor marker data for native PptxGenJS chart

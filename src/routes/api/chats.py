@@ -5,7 +5,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -101,7 +101,7 @@ def chats_routes(app_context: AppContext):
             return JSONResponse(
                 content={"agents": agent_names, "error": None}
             )
-        except Exception as e:
+        except Exception:
             ref = uuid.uuid4().hex[:8]
             logger.exception("Error getting available agents [ref=%s]", ref)
             return JSONResponse(
@@ -157,8 +157,6 @@ def chats_routes(app_context: AppContext):
             if target_agent.name == facilitator:
                 target_agent = None  # Force facilitator mode when target is the facilitator
 
-            response_sent = False
-
             # Get responses from the target agent
             async for response in chat.invoke(agent=target_agent):
                 # Skip responses with no content
@@ -189,13 +187,13 @@ def chats_routes(app_context: AppContext):
 
         except WebSocketDisconnect:
             logger.info("WebSocket client disconnected from chat: %s", chat_id)
-        except Exception as e:
+        except Exception:
             ref = uuid.uuid4().hex[:8]
             logger.exception("Error in WebSocket chat [ref=%s]", ref)
             try:
                 await websocket.send_json({"error": f"An internal error occurred. Reference: {ref}"})
                 await websocket.send_json({"type": "done"})
-            except:
+            except Exception:
                 pass
 
     return router

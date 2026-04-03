@@ -167,7 +167,7 @@ class Evaluator:
                             score = result["result"]["score"]
                         elif "result" in result["result"] and "score" in result["result"]["result"]:
                             score = result["result"]["result"]["score"]
-                
+
                 # Add valid positive scores
                 if score is not None and score > 0:
                     valid_scores.append(score)
@@ -179,7 +179,7 @@ class Evaluator:
             num_errors = num_total - num_valid
 
             logging.info(f"Metric {metric_name}: {num_valid} valid scores out of {num_total} total evaluations")
-            
+
             summary["metrics"][metric_name] = {
                 "average_score": avg_score,
                 "num_evaluations": num_valid,

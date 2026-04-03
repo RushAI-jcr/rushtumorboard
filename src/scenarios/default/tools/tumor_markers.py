@@ -144,7 +144,7 @@ class TumorMarkerPlugin:
         labs = labs_result or [
             m for m in all_markers_result
             if marker.lower().replace("-", "") in
-               m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
+            m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
         ]
 
         if not labs:

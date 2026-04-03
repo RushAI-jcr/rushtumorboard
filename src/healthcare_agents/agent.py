@@ -127,8 +127,10 @@ class HealthcareAgent(Agent):
     @override
     async def get_response(self, message: str) -> ChatMessageContent:  # type: ignore[override]
         logger.debug("Getting response for message: %s", message)
+        client = self.client
+        assert client is not None
         attachments = await self.get_attachments()
-        response_dict = await self.client.process(message, attachments)
+        response_dict = await client.process(message, attachments)
         return ChatMessageContent(
             role=AuthorRole.ASSISTANT,
             name=self.name,

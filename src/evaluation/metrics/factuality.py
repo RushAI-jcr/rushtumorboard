@@ -18,7 +18,7 @@ FACT_EXTRACTION_PROMPT_TEMPLATE = """
 Organize the following free-text patient summary into a list of facts. This list will be
 later be used to evaluate the accuracy of each fact in the summary.
 
-- Each fact should be a single sentence. 
+- Each fact should be a single sentence.
 - Each fact should be categorized into one of the following categories:
     {fact_list}
 - Include all factual statements from the summary. Do not omit any facts.
@@ -144,7 +144,7 @@ class TBFactMetric(AgentReferenceBasedLLMasJudge):
                 By default, we format the prompt with `fact_list` and `summary`.
             entailment_evaluation_prompt_template: Template for entailment evaluation prompt.
                 By default, we format the prompt with `facts` and `reference_text`.
-            reference_facts: Optional pre-extracted reference facts as a dictionary 
+            reference_facts: Optional pre-extracted reference facts as a dictionary
                 mapping patient IDs to lists of fact dictionaries.
         """
         super().__init__(evaluation_llm_service, agent_name, reference_dir_path, context_window)

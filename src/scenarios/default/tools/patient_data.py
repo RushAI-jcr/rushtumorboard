@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 #   - Radiology layer 3: Progress Notes/Consults + imaging keywords
 #   - TumorMarkers fallback: Progress Notes/Consults + marker keywords
 # ---------------------------------------------------------------------------
-from .note_type_constants import ALL_CLINICAL_TYPES, PATHOLOGY_REPORT_TYPES
+from .note_type_constants import ALL_CLINICAL_TYPES, PATHOLOGY_REPORT_TYPES  # noqa: E402
 
 TIMELINE_NOTE_TYPES: tuple[str, ...] = (
     ALL_CLINICAL_TYPES + PATHOLOGY_REPORT_TYPES + ("pathology report", "radiology report")
@@ -214,16 +214,16 @@ class PatientDataPlugin:
         )
     )
     async def process_prompt(self, patient_id: str, prompt: str) -> str:
-        """  
-        Processes the given prompt using the large text corpus and generates a response.  
-        The prompt is passed to a LLM as a system prompt. 
+        """
+        Processes the given prompt using the large text corpus and generates a response.
+        The prompt is passed to a LLM as a system prompt.
 
-        Args:  
+        Args:
             prompt (str): The prompt to be processed as the system prompt.
             patient_id (str): The patient ID to be used.
 
-        Returns:  
-            str: The generated response based on the large text and the given prompt.  
+        Returns:
+            str: The generated response based on the large text and the given prompt.
         """
         if not validate_patient_id(patient_id):
             return json.dumps({"error": "Invalid patient ID."})

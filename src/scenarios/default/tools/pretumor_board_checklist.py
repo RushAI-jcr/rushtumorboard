@@ -77,31 +77,31 @@ _CMP_PATTERNS = [
     "bilirubin", "albumin", "total protein", "calcium", "cmp",
 ]
 _CA125_PATTERNS = ["ca-125", "ca125", "ca 125"]
-_HCG_PATTERNS   = ["hcg", "beta-hcg", "bhcg", "beta hcg", "human chorionic"]
-_CEA_PATTERNS   = ["cea", "carcinoembryonic"]
+_HCG_PATTERNS = ["hcg", "beta-hcg", "bhcg", "beta hcg", "human chorionic"]
+_CEA_PATTERNS = ["cea", "carcinoembryonic"]
 _CA199_PATTERNS = ["ca19-9", "ca 19-9", "ca-19-9", "ca199"]
-_HE4_PATTERNS   = ["he4", "he-4", "human epididymis"]
+_HE4_PATTERNS = ["he4", "he-4", "human epididymis"]
 
 # Pathology / molecular markers in lab results
-_NGS_PATTERNS   = ["ngs", "next generation", "genomic panel", "myriad", "foundation", "tempus",
-                   "brca", "brca1", "brca2", "pole", "msi", "microsatellite"]
+_NGS_PATTERNS = ["ngs", "next generation", "genomic panel", "myriad", "foundation", "tempus",
+                 "brca", "brca1", "brca2", "pole", "msi", "microsatellite"]
 
 # Imaging procedure name patterns
-_CT_CAP_PATTERNS  = ["ct chest, abdomen and pelvis", "ct chest abdomen pelvis",
-                     "ct chest abdomen & pelvis", "ct a/p", "ct cap",
-                     "ct chest/abdomen/pelvis"]
+_CT_CAP_PATTERNS = ["ct chest, abdomen and pelvis", "ct chest abdomen pelvis",
+                    "ct chest abdomen & pelvis", "ct a/p", "ct cap",
+                    "ct chest/abdomen/pelvis"]
 _MRI_PEL_PATTERNS = ["mri pelvis", "mr pelvis", "mri of the pelvis"]
-_PET_PATTERNS     = ["pet", "pet-ct", "pet/ct", "pet scan"]
-_CXR_PATTERNS     = ["chest x-ray", "cxr", "chest radiograph", "pa chest",
-                     "ct chest"]  # CT chest counts as chest imaging fallback
+_PET_PATTERNS = ["pet", "pet-ct", "pet/ct", "pet scan"]
+_CXR_PATTERNS = ["chest x-ray", "cxr", "chest radiograph", "pa chest",
+                 "ct chest"]  # CT chest counts as chest imaging fallback
 
 # Consult note type keywords (NoteType = "Consults" / "Consult Note" / note text)
 _GYN_ONC_PATTERNS = ["gynecol", "gyn onc", "gynecologic oncol"]
 _MED_ONC_PATTERNS = ["medical oncol", "hematol", "hematol/oncol", "hem/onc"]
 _RAD_ONC_PATTERNS = ["radiation oncol", "rad onc", "radio oncol"]
-_GENETICS_PATTERNS= ["genetic", "genetics", "risc", "lynch", "brca", "hereditary"]
-_FERTILITY_PATTERNS=["fertility", "reproductive", "infertil"]
-_PALLIATIVE_PATTERNS=["palliative", "hospice", "comfort care"]
+_GENETICS_PATTERNS = ["genetic", "genetics", "risc", "lynch", "brca", "hereditary"]
+_FERTILITY_PATTERNS = ["fertility", "reproductive", "infertil"]
+_PALLIATIVE_PATTERNS = ["palliative", "hospice", "comfort care"]
 
 
 # ---------------------------------------------------------------------------
@@ -456,7 +456,7 @@ class PreTumorBoardChecklistPlugin:
             return (n.get("NoteText") or n.get("text") or n.get("note_text") or "").lower()
 
         def _check_consult(label: str, patterns: list[str],
-                            order_code: str, conditional: bool = False) -> dict:
+                           order_code: str, conditional: bool = False) -> dict:
             present = any(_match_any(_note_text(n), patterns) for n in notes)
             return {
                 "section": "Consults",
@@ -503,7 +503,7 @@ class PreTumorBoardChecklistPlugin:
         ctype: str,
     ) -> str:
         lines = [
-            f"## Pre-Tumor Board Procedure Pass",
+            "## Pre-Tumor Board Procedure Pass",
             f"**Patient:** {patient_id}",
             f"**Cancer type:** {ctype}",
             f"**As of:** {as_of.strftime('%m/%d/%Y')}",

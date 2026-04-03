@@ -27,12 +27,12 @@ SRC_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(os.path.join(SRC_DIR, ".env"))
 
-from data_models.epic.caboodle_file_accessor import CaboodleFileAccessor
-from tests.local_accessors import create_local_data_access
+from data_models.epic.caboodle_file_accessor import CaboodleFileAccessor  # noqa: E402
+from tests.local_accessors import create_local_data_access  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

@@ -411,7 +411,7 @@ class MedicalResearchPlugin:
         """Merge with PubMed as canonical source. Enrich with Europe PMC + Semantic Scholar."""
         canonical: dict[str, dict] = {}  # keyed by PMID
         doi_index: dict[str, str] = {}   # DOI → PMID
-        title_index: dict[str, str] = {} # normalized title → PMID
+        title_index: dict[str, str] = {}  # normalized title → PMID
 
         def _norm_title(t: str) -> str:
             return t.lower().strip()[:80] if t else ""

@@ -201,9 +201,9 @@ class NCCNGuidelinesPlugin:
 
         # Stage terms
         for stage in ["stage i", "stage ii", "stage iii", "stage iv",
-                       "stage ia", "stage ib", "stage ic",
-                       "stage iia", "stage iib", "stage iiia", "stage iiib", "stage iiic",
-                       "stage iva", "stage ivb"]:
+                      "stage ia", "stage ib", "stage ic",
+                      "stage iia", "stage iib", "stage iiia", "stage iiib", "stage iiic",
+                      "stage iva", "stage ivb"]:
             if stage in text:
                 keywords.add(stage)
 

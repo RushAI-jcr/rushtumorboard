@@ -123,7 +123,6 @@ Your response must begin with "Rating: X" where X is your score (1-5), followed 
         messages = [msg for msg in chat_history.messages if msg.content]
 
         current_segment = ChatHistory()
-        current_trigger = None
         current_orchestrator = None
         last_agent = None
 
@@ -133,7 +132,6 @@ Your response must begin with "Rating: X" where X is your score (1-5), followed 
                 if current_segment.messages:
                     segments.append(current_segment)
                 current_segment = ChatHistory()
-                current_trigger = msg
                 current_segment.add_message(msg)
                 current_orchestrator = None
 

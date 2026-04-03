@@ -4,7 +4,7 @@
 import contextlib
 import logging
 import os
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import Callable
 from secrets import token_hex
 from typing import Any
 
@@ -57,7 +57,6 @@ def create_fast_mcp_app(
         logger.info("Creating multi MCP app...")
 
         async def process_chat(agent_name: str, message: str) -> list[dict[str, str]]:
-            nonlocal session_id
             logger.info(f"Processing chat with question: {message}, agent: {agent_name}")
 
             chat_ctx = await data_access.chat_context_accessor.read(session_id)
@@ -102,7 +101,6 @@ def create_fast_mcp_app(
 
         @app.tool(description="Reset the conversation state")
         async def reset_conversation() -> str:
-            nonlocal session_id
             chat_ctx = await data_access.chat_context_accessor.read(session_id)
 
             await data_access.chat_context_accessor.archive(chat_ctx)
@@ -113,8 +111,6 @@ def create_fast_mcp_app(
         return app
 
     async def handle_streamable_http(scope, receive, send):
-        nonlocal task_group
-
         logger.info("Handling handle_multi_streamable_http HTTP request")
         request = Request(scope, receive)
         logger.info(f"Request headers: {request.headers}")
@@ -168,8 +164,6 @@ def create_fast_mcp_app(
 
     async def handle_clinical_trials_http(scope, receive, send):
         """Handle requests for the clinical trials MCP server."""
-        nonlocal task_group
-
         logger.info("Handling clinical trials MCP HTTP request")
         request = Request(scope, receive)
         request_mcp_session_id = request.headers.get(MCP_SESSION_ID_HEADER)

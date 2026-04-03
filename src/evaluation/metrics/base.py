@@ -13,8 +13,6 @@ from semantic_kernel.connectors.ai.open_ai.services.azure_chat_completion import
 from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.contents.utils.author_role import AuthorRole
 
-from evaluation.utils import chat_history_to_readable_text
-
 
 class EvaluationMetric(ABC):
     """Base class for all evaluation metrics."""
@@ -101,6 +99,7 @@ class EvaluationMetric(ABC):
             A dictionary containing at least 'score' and 'explanation' keys
         """
         raise NotImplementedError
+
 
 class AgentEvaluationMetric(EvaluationMetric):
     """

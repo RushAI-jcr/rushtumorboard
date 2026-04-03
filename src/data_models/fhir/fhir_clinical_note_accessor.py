@@ -302,4 +302,3 @@ class FhirClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
             filter_notes_by_type(await self.read_all(patient_id), note_types),
             keywords,
         )
-

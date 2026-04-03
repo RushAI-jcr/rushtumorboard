@@ -82,9 +82,9 @@ class MedicalReportExtractorBase:
     def _is_osh_stub(cls, report: dict) -> bool:
         """Return True if a report is an OSH disclaimer stub with no clinical findings."""
         text = report.get(
-            "ReportText", report.get("report_text",
-            report.get("NoteText", report.get("note_text",
-            report.get("text", ""))))
+            "ReportText", report.get("report_text",  # noqa: E128
+            report.get("NoteText", report.get("note_text",  # noqa: E128
+            report.get("text", ""))))  # noqa: E128
         ).strip().lower()
         return any(pattern in text for pattern in cls._OSH_DISCLAIMER_PATTERNS)
 

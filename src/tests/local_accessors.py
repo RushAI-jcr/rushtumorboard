@@ -1,10 +1,8 @@
 # Local replacements for Azure Blob Storage-dependent accessors.
 # Enables testing agents without Azure Blob Storage or Bot Framework.
 
-import json
 import logging
 import os
-from dataclasses import dataclass
 from io import BytesIO
 
 from data_models.chat_artifact import ChatArtifact, ChatArtifactIdentifier

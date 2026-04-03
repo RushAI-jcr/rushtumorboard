@@ -59,7 +59,7 @@ class ImageAccessor:
             # Download the blob content as a stream
             stream = BytesIO()
             blob = await blob_client.download_blob()
-            bytes_read = await blob.readinto(stream)
+            await blob.readinto(stream)
 
             # Seek to the beginning of the stream
             stream.seek(0)

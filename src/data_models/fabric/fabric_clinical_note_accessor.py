@@ -18,6 +18,7 @@ from utils.clinical_note_filter_utils import filter_notes_by_type, filter_notes_
 
 logger = logging.getLogger(__name__)
 
+
 class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
     _CACHE_MAX_PATIENTS: int = 5
 
@@ -202,4 +203,3 @@ class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
             filter_notes_by_type(await self.read_all(patient_id), note_types),
             keywords,
         )
-

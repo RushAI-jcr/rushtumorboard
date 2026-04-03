@@ -87,6 +87,6 @@ class SlideContent(BaseModel):
     discussion_title: str         # e.g. "Discussion"
     review_types: list[str]       # e.g. ["Path Review", "Imaging Review", "Tx Disc"]
     trial_eligible_note: str      # free text after "Eligible for trial?" prompt
-    discussion_bullets: list[str] # max 6: open clinical questions / agenda items
+    discussion_bullets: list[str]  # max 6: open clinical questions / agenda items
     trial_entries: list[str]      # max 3: "NCT# — Brief title (Phase X)" from ClinicalTrials MCP
     references: list[str] = []    # max 4: PubMed citations "PMID:XXXXXXXX — Author et al. Journal YYYY"

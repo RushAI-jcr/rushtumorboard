@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 import asyncio
-import json
 import logging
 from collections.abc import Sequence
 from time import time

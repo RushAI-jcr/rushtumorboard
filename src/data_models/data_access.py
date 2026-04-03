@@ -21,6 +21,7 @@ from data_models.image_accessor import ImageAccessor
 
 logger = logging.getLogger(__name__)
 
+
 class UserDelegationKeyDelegate:
     def __init__(self, blob_service_client: BlobServiceClient):
         self.blob_service_client = blob_service_client
