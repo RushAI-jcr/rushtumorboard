@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "144"
 tags: [code-review, reliability, javascript]

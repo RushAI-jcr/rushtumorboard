@@ -2,7 +2,7 @@
 name: pathology-report-types-excluded-from-all-clinical-types
 description: PATHOLOGY_REPORT_TYPES is silently excluded from ALL_CLINICAL_TYPES despite the name implying exhaustive coverage
 type: code-review
-status: pending
+status: complete
 priority: p3
 issue_id: 055
 tags: [code-review, documentation, note-types, constants]

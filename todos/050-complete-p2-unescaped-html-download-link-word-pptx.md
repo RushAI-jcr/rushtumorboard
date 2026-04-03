@@ -2,7 +2,7 @@
 name: unescaped-html-download-link-word-pptx
 description: Download link HTML in content_export.py and presentation_export.py is built without html.escape(), creating a latent XSS vector if validation is ever loosened
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 050
 tags: [code-review, security, xss]

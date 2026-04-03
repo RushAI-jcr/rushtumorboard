@@ -4,7 +4,9 @@
 import contextlib
 import logging
 import os
+from collections.abc import AsyncGenerator, Callable
 from secrets import token_hex
+from typing import Any
 
 import anyio
 from mcp.server.fastmcp import FastMCP
@@ -21,7 +23,9 @@ from mcp_servers.clinical_trials_mcp import create_clinical_trials_mcp
 logger = logging.getLogger(__name__)
 
 
-def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
+def create_fast_mcp_app(
+    app_ctx: AppContext,
+) -> tuple[Starlette, Callable[[Any], contextlib.AbstractAsyncContextManager[None]]]:
     agent_config = app_ctx.all_agent_configs
     data_access = app_ctx.data_access
     task_group = None
@@ -52,7 +56,7 @@ def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
         app = FastMCP("mcp-streamable-http-demo")
         logger.info("Creating multi MCP app...")
 
-        async def process_chat(agent_name: str, message: str) -> dict[str, str]:
+        async def process_chat(agent_name: str, message: str) -> list[dict[str, str]]:
             nonlocal session_id
             logger.info(f"Processing chat with question: {message}, agent: {agent_name}")
 
@@ -86,7 +90,7 @@ def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
             logger.info(f"Adding tool for agent: {agent['name']}")
 
             def generate_tool_function(agent_name: str):
-                async def inner_process_chat(message: str) -> dict[str, str]:
+                async def inner_process_chat(message: str) -> list[dict[str, str]]:
                     return await process_chat(agent_name, message)
                 return inner_process_chat
 
@@ -97,7 +101,7 @@ def create_fast_mcp_app(app_ctx: AppContext) -> Starlette:
             )
 
         @app.tool(description="Reset the conversation state")
-        async def reset_conversation() -> dict[str, str]:
+        async def reset_conversation() -> str:
             nonlocal session_id
             chat_ctx = await data_access.chat_context_accessor.read(session_id)
 

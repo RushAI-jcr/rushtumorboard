@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "080"
 tags: [code-review, naming, architecture, blob-accessor]

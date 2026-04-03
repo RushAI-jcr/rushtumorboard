@@ -2,7 +2,7 @@
 name: 3slide-5slide-docstring-agents-yaml-coherence
 description: Stale "3-slide" references in presentation_export.py docstring and agents.yaml conflict with the correct 5-slide schema
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 044
 tags: [code-review, documentation, agents-yaml, coherence]

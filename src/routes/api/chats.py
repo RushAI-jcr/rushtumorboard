@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
+    def default(self, o: object) -> object:
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
 
 # Pydantic models for request/response
 
@@ -74,7 +74,6 @@ def create_json_response(content, headers=None):
     return JSONResponse(
         content=content,
         headers=headers or {},
-        encoder=DateTimeEncoder
     )
 
 
@@ -130,12 +129,8 @@ def chats_routes(app_context: AppContext):
             sender = client_message.get("sender", "User")
             mentions = client_message.get("mentions", [])
             logger.debug(f"Message content: sender={sender}, mention_count={len(mentions or [])}")
-            # Try to read existing chat context or create a new one if it doesn't exist
-            try:
-                chat_context = await data_access.chat_context_accessor.read(chat_id)
-            except:
-                # If the chat doesn't exist, create a new one
-                chat_context = await data_access.chat_context_accessor.create_new(chat_id)
+            # Read existing chat context; read() returns a fresh ChatContext if none exists
+            chat_context = await data_access.chat_context_accessor.read(chat_id)
 
             # Add user message to history
             chat_context.chat_history.add_user_message(content)
@@ -174,7 +169,7 @@ def chats_routes(app_context: AppContext):
                 bot_message = Message(
                     id=str(uuid.uuid4()),
                     content=response.content,
-                    sender=response.name,
+                    sender=response.name or "assistant",
                     timestamp=datetime.now(timezone.utc),
                     isBot=True,
                     mentions=[]

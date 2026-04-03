@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 def create_plugin(plugin_config: PluginConfiguration):
     return GraphRagPlugin(
-        graph_rag_url=plugin_config.agent_config.get("graph_rag_url"),
-        subscription_key=os.environ.get("GRAPH_RAG_SUBSCRIPTION_KEY"),
-        index_name=plugin_config.agent_config.get("graph_rag_index_name"),
+        graph_rag_url=plugin_config.agent_config.get("graph_rag_url") or "",
+        subscription_key=os.environ.get("GRAPH_RAG_SUBSCRIPTION_KEY") or "",
+        index_name=plugin_config.agent_config.get("graph_rag_index_name") or "",
         chat_ctx=plugin_config.chat_ctx,
         data_access=plugin_config.data_access,
     )
@@ -37,7 +37,7 @@ class GraphRagPlugin:
         self.data_access = data_access
 
     @kernel_function()
-    async def process_prompt(self, prompt: str) -> tuple[str, dict]:
+    async def process_prompt(self, prompt: str) -> dict:
         """
         Processes a prompt using the Graph RAG API and returns the text and sources in a dictionary.
         The text will contain text with references such as  [Data: Sources (78721, 78722)]. or [Data: Sources (78721, 78722); Entities (178146, 11551)]
@@ -94,7 +94,7 @@ class GraphRagPlugin:
     async def _save_research_papers(self, papers: dict) -> None:
         artifact_id = ChatArtifactIdentifier(
             conversation_id=self.chat_ctx.conversation_id,
-            patient_id=self.chat_ctx.patient_id,
+            patient_id=self.chat_ctx.patient_id or "",
             filename=ChatArtifactFilename.RESEARCH_PAPERS,
         )
 

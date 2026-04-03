@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import uuid
+from typing import Any
 
 import aiohttp
 from mcp.server.fastmcp import FastMCP
@@ -267,14 +268,14 @@ async def trial_details_combined(nct_id: str) -> str:
     if not nct_id.startswith("NCT"):
         nct_id = f"NCT{nct_id}"
 
-    combined = {
+    combined: dict[str, Any] = {
         "nct_id": nct_id,
         "url": f"https://clinicaltrials.gov/study/{nct_id}",
     }
 
     session = await _get_session()
 
-    async def fetch_ctg():
+    async def fetch_ctg() -> Any:
         try:
             async with session.get(f"{CTG_API_BASE}/{nct_id}") as resp:
                 if resp.status == 200:
@@ -283,7 +284,7 @@ async def trial_details_combined(nct_id: str) -> str:
         except aiohttp.ClientError as e:
             return {"_error": str(e)}
 
-    async def fetch_nci():
+    async def fetch_nci() -> Any:
         try:
             async with session.get(f"{NCI_API_BASE}/trials/{nct_id}", headers=_get_nci_headers()) as resp:
                 if resp.status == 200:
@@ -349,6 +350,107 @@ async def trial_details_combined(nct_id: str) -> str:
     return json.dumps(combined, indent=2, default=str)
 
 
+async def study_statistics(condition: str) -> str:
+    """Get trial count statistics for a condition from ClinicalTrials.gov."""
+    session = await _get_session()
+
+    status_buckets = ["RECRUITING", "ACTIVE_NOT_RECRUITING", "COMPLETED", "NOT_YET_RECRUITING"]
+    results: dict[str, int] = {}
+
+    async def fetch_count(status: str) -> tuple[str, int]:
+        params = {
+            "query.cond": condition,
+            "filter.overallStatus": status,
+            "pageSize": 1,
+            "countTotal": "true",
+        }
+        try:
+            async with session.get(CTG_API_BASE, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return status, data.get("totalCount", 0)
+                return status, 0
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            return status, 0
+
+    counts = await asyncio.gather(*[fetch_count(s) for s in status_buckets])
+    for status, count in counts:
+        results[status.lower()] = count
+
+    total = sum(results.values())
+    result = {
+        "condition": condition,
+        "source": "ClinicalTrials.gov API v2",
+        "total_in_snapshot": total,
+        "by_status": results,
+    }
+    logger.info("Study statistics for '%s': %d total", condition, total)
+    return json.dumps(result, indent=2)
+
+
+async def keyword_search(
+    keyword: str,
+    status: str = "RECRUITING",
+    page_size: int = 20,
+) -> str:
+    """General free-text keyword search against ClinicalTrials.gov v2 API."""
+    page_size = min(max(page_size, 1), 50)
+
+    params = {
+        "query.term": keyword,
+        "filter.overallStatus": status,
+        "pageSize": page_size,
+        "fields": "IdentificationModule|ConditionsModule|DesignModule|"
+                  "SponsorCollaboratorsModule|StatusModule|DescriptionModule",
+        "countTotal": "true",
+    }
+
+    try:
+        session = await _get_session()
+        async with session.get(CTG_API_BASE, params=params) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                logger.error("CTG keyword search error %d: %s", resp.status, error_text)
+                return json.dumps({"error": f"ClinicalTrials.gov API returned status {resp.status}", "total": 0, "trials": []})
+            data = await resp.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        ref = uuid.uuid4().hex[:8]
+        logger.error("CTG keyword search connection error [ref=%s]: %s", ref, e)
+        return json.dumps({"error": f"ClinicalTrials.gov API connection error. Reference: {ref}", "total": 0, "trials": []})
+
+    trials = []
+    for study in data.get("studies", []):
+        protocol = study.get("protocolSection", {})
+        id_mod = protocol.get("identificationModule", {})
+        conditions_mod = protocol.get("conditionsModule", {})
+        design_mod = protocol.get("designModule", {})
+        status_mod = protocol.get("statusModule", {})
+        desc_mod = protocol.get("descriptionModule", {})
+        sponsors = protocol.get("sponsorCollaboratorsModule", {})
+
+        trials.append({
+            "nct_id": id_mod.get("nctId", ""),
+            "title": id_mod.get("briefTitle", ""),
+            "conditions": conditions_mod.get("conditions", []),
+            "phase": design_mod.get("phases", []),
+            "status": status_mod.get("overallStatus", ""),
+            "lead_sponsor": sponsors.get("leadSponsor", {}).get("name", ""),
+            "brief_summary": desc_mod.get("briefSummary", "")[:500],
+            "url": f"https://clinicaltrials.gov/study/{id_mod.get('nctId', '')}",
+        })
+
+    result = {
+        "total": data.get("totalCount", len(trials)),
+        "returned": len(trials),
+        "source": "ClinicalTrials.gov API v2",
+        "keyword": keyword,
+        "status_filter": status,
+        "trials": trials,
+    }
+    logger.info("Keyword search '%s' returned %d/%d trials", keyword, len(trials), result["total"])
+    return json.dumps(result, indent=2)
+
+
 async def aact_search(
     condition: str,
     eligibility_keywords: str = "",
@@ -399,7 +501,7 @@ async def aact_search(
             WHERE s.overall_status = $1
               AND c.name ILIKE $2
         """
-        params = [status, f"%{condition}%"]
+        params: list[str | int] = [status, f"%{condition}%"]
         param_idx = 3
 
         if eligibility_keywords:
@@ -512,6 +614,26 @@ def create_clinical_trials_mcp() -> FastMCP:
         limit: int = 20,
     ) -> str:
         return await aact_search(condition, eligibility_keywords, intervention, status, limit)
+
+    @mcp.tool(
+        description="Get clinical trial count statistics for a condition from ClinicalTrials.gov. "
+        "Returns total trial counts broken down by status (recruiting, active, completed, not-yet-recruiting). "
+        "Useful for understanding the trial landscape for a given disease or condition."
+    )
+    async def get_study_statistics(condition: str) -> str:
+        return await study_statistics(condition)
+
+    @mcp.tool(
+        description="General free-text keyword search against ClinicalTrials.gov v2 API. "
+        "Unlike the GYN-specific NCI search, this accepts any keyword(s) and returns matching trials across all diseases. "
+        "Use for unusual diagnoses, combination queries (e.g. 'BRCA ovarian pembrolizumab'), or non-GYN conditions."
+    )
+    async def search_trials_by_keyword(
+        keyword: str,
+        status: str = "RECRUITING",
+        page_size: int = 20,
+    ) -> str:
+        return await keyword_search(keyword, status, page_size)
 
     @mcp.tool(description="Shutdown hook to close the shared HTTP session.")
     async def cleanup():

@@ -2,7 +2,7 @@
 name: patient-id-in-404-response-bodies
 description: 404 error responses include patient_id and other PHI identifiers in response bodies; IndexError produces 500s on out-of-range path parameters
 type: code-review
-status: pending
+status: complete
 priority: p3
 issue_id: 059
 tags: [code-review, security, phi, hipaa, error-handling]

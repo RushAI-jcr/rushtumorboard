@@ -205,6 +205,7 @@ def create_timeline_images_by_height(
         image_path = os.path.join(output_path, f"{filename_prefix}{len(image_paths)}.png")
         create_timeline_image(entries, output_path=image_path)
         image_paths.append(image_path)
+        return image_path
 
     is_first = True
     entries = []

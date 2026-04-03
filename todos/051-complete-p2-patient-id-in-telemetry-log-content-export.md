@@ -2,7 +2,7 @@
 name: patient-id-in-telemetry-log-content-export
 description: Full patient_id (PHI) is logged at INFO level in content_export.py and presentation_export.py, shipping it to Azure Application Insights on every export
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 051
 tags: [code-review, phi, security, hipaa, logging]

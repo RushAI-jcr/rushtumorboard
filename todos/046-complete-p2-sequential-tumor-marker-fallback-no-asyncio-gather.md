@@ -2,7 +2,7 @@
 name: sequential-tumor-marker-fallback-no-asyncio-gather
 description: Tumor marker retrieval awaits two data sources sequentially instead of using asyncio.gather, wasting round-trip latency when stubs are replaced with real API calls
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 046
 tags: [code-review, performance, async, asyncio]

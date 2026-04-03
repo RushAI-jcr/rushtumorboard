@@ -2,7 +2,7 @@
 name: no-note-cache-fallback-accessors-read-all-every-call
 description: Fallback accessors call read_all() on every invocation with no cache — 7.5MB+ redundant network egress per session
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 037
 tags: [code-review, performance, caching]

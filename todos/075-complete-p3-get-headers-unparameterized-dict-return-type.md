@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "075"
 tags: [code-review, typing, python, annotations]

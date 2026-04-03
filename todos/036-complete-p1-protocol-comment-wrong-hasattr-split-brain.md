@@ -2,7 +2,7 @@
 name: protocol-comment-wrong-hasattr-split-brain
 description: Stale protocol comment and inconsistent hasattr guards create split-brain calling convention across agents
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 036
 tags: [code-review, architecture, protocol]

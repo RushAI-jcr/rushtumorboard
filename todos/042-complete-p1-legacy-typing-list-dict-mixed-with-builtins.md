@@ -2,7 +2,7 @@
 name: legacy-typing-list-dict-mixed-with-builtins
 description: Legacy typing.List/Dict/Optional/Tuple mixed with Python 3.9+ built-in generics — type checker flags protocol mismatches
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 042
 tags: [code-review, typing, python312]

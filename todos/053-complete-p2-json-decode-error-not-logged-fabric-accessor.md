@@ -2,7 +2,7 @@
 name: json-decode-error-not-logged-fabric-accessor
 description: JSONDecodeError is caught but never logged in fabric_clinical_note_accessor.py, causing silent data loss for notes with non-JSON content in production
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 053
 tags: [code-review, reliability, logging, data-quality]

@@ -37,12 +37,14 @@ class UserDelegationKeyDelegate:
                 key_expiry_time=key_expiry_time
             )
 
+        if self.user_delegation_key is None:
+            raise RuntimeError("user_delegation_key is None after refresh — get_user_delegation_key failed")
         return self.user_delegation_key
 
     def is_expired(self) -> bool:
         if self.user_delegation_key is None:
             return True
-        expiry_utc = datetime.datetime.strptime(self.user_delegation_key.signed_expiry, "%Y-%m-%dT%H:%M:%SZ")
+        expiry_utc = datetime.datetime.strptime(self.user_delegation_key.signed_expiry or "", "%Y-%m-%dT%H:%M:%SZ")
         now_utc = datetime.datetime.now(datetime.UTC)
         return now_utc.timestamp() >= expiry_utc.timestamp()
 
@@ -63,7 +65,7 @@ class BlobSasDelegate(UserDelegationKeyDelegate):
         # Assumed URL format: https://<account_name>.blob.core.windows.net/<container_name>/<blob_name>
         container_name = url.split('/')[3]
         user_delegation_key = await self.get_user_delegation_key()
-        account_name = self.blob_service_client.account_name
+        account_name = self.blob_service_client.account_name or ""
         blob_name = url[len(f"https://{account_name}.blob.core.windows.net/{container_name}/"):]
         expiry_time = datetime.datetime.now(datetime.UTC) + expiry_delta
         logger.info(f"url: {url}, blob_name: {blob_name}")
@@ -101,12 +103,12 @@ def create_data_access(
     if clinical_notes_source == "fhir":
         # Note: You can change FhirClinicalNoteAccessor instantiation to use different authentication methods
         clinical_note_accessor = FhirClinicalNoteAccessor.from_credential(
-            fhir_url=os.getenv("FHIR_SERVICE_ENDPOINT"),
+            fhir_url=os.getenv("FHIR_SERVICE_ENDPOINT") or "",
             credential=credential,
         )
     elif clinical_notes_source == "fabric":
         clinical_note_accessor = FabricClinicalNoteAccessor.from_credential(
-            fabric_user_data_function_endpoint=os.getenv("FABRIC_USER_DATA_FUNCTION_ENDPOINT"),
+            fabric_user_data_function_endpoint=os.getenv("FABRIC_USER_DATA_FUNCTION_ENDPOINT") or "",
             credential=credential,
         )
     elif clinical_notes_source == "epic" or clinical_notes_source == "caboodle":

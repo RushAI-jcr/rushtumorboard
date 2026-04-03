@@ -2,7 +2,7 @@
 name: fallback-doc-content-silently-drops-col0-fields
 description: _fallback_doc_content in content_export.py builds TumorBoardDocContent without any of the 9 new Col 0 fields, silently producing blank name/MRN/attending in the rendered document
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 049
 tags: [code-review, reliability, logging, fallback]

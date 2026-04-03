@@ -2,7 +2,7 @@
 name: tumor-markers-imports-atomics-not-composite
 description: tumor_markers.py imports 5 atomic note-type constants instead of the composite GENERAL_CLINICAL_TYPES
 type: code-review
-status: pending
+status: complete
 priority: p3
 issue_id: 054
 tags: [code-review, dry, maintainability]

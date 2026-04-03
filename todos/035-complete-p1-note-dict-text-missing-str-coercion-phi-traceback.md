@@ -2,7 +2,7 @@
 name: note-dict-text-missing-str-coercion-phi-traceback
 description: note_dict["text"] used without str() coercion — TypeError traceback may expose PHI in Application Insights
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 035
 tags: [code-review, security, phi, xss]

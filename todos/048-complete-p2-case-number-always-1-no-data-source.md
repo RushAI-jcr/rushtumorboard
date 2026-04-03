@@ -2,7 +2,7 @@
 name: case-number-always-1-no-data-source
 description: TumorBoardDocContent.case_number is hardcoded to 1 in the LLM prompt with no data source or user input path, so all generated documents show "Case 1"
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 048
 tags: [code-review, agent-native, data-source, user-input]

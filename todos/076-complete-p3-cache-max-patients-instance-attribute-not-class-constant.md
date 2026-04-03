@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "076"
 tags: [code-review, style, python, class-design]

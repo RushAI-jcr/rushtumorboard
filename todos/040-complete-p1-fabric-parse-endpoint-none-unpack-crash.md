@@ -2,7 +2,7 @@
 name: fabric-parse-endpoint-none-unpack-crash
 description: __parse_fabric_endpoint returns None on bad URL and unconditional unpack at __init__ raises opaque TypeError
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 040
 tags: [code-review, reliability, error-handling]

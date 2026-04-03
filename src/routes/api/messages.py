@@ -33,8 +33,8 @@ def create_router(botName: str, bot: AssistantBot, adapter: CloudAdapter, router
         if not authentication_result or not authentication_result.claims_identity.is_authenticated:
             # Optionally could check the aud claim to make sure it matches the requested bot. Though I am fairly certain this is already done in the adapter.
             return Response(
-                status=HTTPStatus.UNAUTHORIZED,
-                text="Authentication failed",
+                content=b"Authentication failed",
+                status_code=HTTPStatus.UNAUTHORIZED,
             )
 
         response = await adapter.process_activity(
@@ -46,11 +46,13 @@ def create_router(botName: str, bot: AssistantBot, adapter: CloudAdapter, router
         return Response(status_code=HTTPStatus.OK)
 
 
-def messages_routes(adapters: dict[str, CloudAdapter], bots: dict[str, AssistantBot]):
+def messages_routes(adapters: dict[str, CloudAdapter] | None, bots: dict[str, AssistantBot]):
     router = APIRouter()
 
     # Listen for incoming requests on /api/{botname/messages.
     for botName, bot in bots.items():
-        create_router(botName, bot, adapters.get(botName), router)
+        adapter = (adapters or {}).get(botName)
+        if adapter is not None:
+            create_router(botName, bot, adapter, router)
 
     return router

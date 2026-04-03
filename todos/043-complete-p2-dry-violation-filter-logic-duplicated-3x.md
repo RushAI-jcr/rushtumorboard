@@ -2,7 +2,7 @@
 name: dry-violation-filter-logic-duplicated-3x
 description: get_clinical_notes_by_type and get_clinical_notes_by_keywords are byte-for-byte duplicated across three fallback accessor classes
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 043
 tags: [code-review, dry, architecture, maintainability]

@@ -2,7 +2,7 @@
 name: bare-except-swallows-parse-errors-export-tools
 description: Export tools catch all exceptions without logging the error object — schema drift failures are undebuggable in production
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 039
 tags: [code-review, reliability, logging, debugging]

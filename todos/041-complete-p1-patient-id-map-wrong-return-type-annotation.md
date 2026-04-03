@@ -2,7 +2,7 @@
 name: patient-id-map-wrong-return-type-annotation
 description: get_patient_id_map annotated as List[str] but returns a dict — lying type signature propagates incorrect expectations
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 041
 tags: [code-review, typing, correctness]

@@ -2,7 +2,7 @@
 name: 4column-5column-content-export-description
 description: Stale "4-column" references in content_export.py conflict with the current 5-column Word document schema
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 045
 tags: [code-review, documentation, coherence]

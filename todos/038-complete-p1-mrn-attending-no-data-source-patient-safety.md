@@ -2,7 +2,7 @@
 name: mrn-attending-no-data-source-patient-safety
 description: TumorBoardDocContent MRN and attending fields have no data source — LLM will hallucinate values on printed clinical handout
 type: code-review
-status: pending
+status: complete
 priority: p1
 issue_id: 038
 tags: [code-review, patient-safety, agent-native, data-source]

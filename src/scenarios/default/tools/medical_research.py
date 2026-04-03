@@ -560,6 +560,8 @@ class MedicalResearchPlugin:
         else:
             settings = AzureChatPromptExecutionSettings()
 
+        if self.kernel is None:
+            raise RuntimeError("MedicalResearchPlugin: kernel is required for synthesis but was not provided")
         chat_service = self.kernel.get_service(service_id="default")
         response = await chat_service.get_chat_message_content(
             chat_history=chat_history, settings=settings
@@ -663,7 +665,7 @@ class MedicalResearchPlugin:
         """Save research papers to chat artifacts for Word doc generation."""
         artifact_id = ChatArtifactIdentifier(
             conversation_id=self.chat_ctx.conversation_id,
-            patient_id=self.chat_ctx.patient_id,
+            patient_id=self.chat_ctx.patient_id or "",
             filename=ChatArtifactFilename.RESEARCH_PAPERS,
         )
         try:

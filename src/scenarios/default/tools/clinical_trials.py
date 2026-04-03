@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Any
 
 import aiohttp
 from semantic_kernel import Kernel
@@ -19,16 +20,38 @@ from data_models.chat_context import ChatContext
 from data_models.plugin_configuration import PluginConfiguration
 
 logger = logging.getLogger(__name__)
-PROMPT = """Analyze the structured patient data and compare it against the clinical trial eligibility criteria. First, respond with “Yes” if the patient meets all eligibility criteria or “No” if they do not.
+PROMPT = “””You are a gynecologic oncology clinical trial eligibility specialist. Analyze the structured patient data against the clinical trial eligibility criteria.
 
-Then, provide a clear and concise explanation outlining all the factors that contribute to this determination. Consider relevant aspects such as age, medical history, past and current treatments, histology, staging, biomarkers, comorbidities, and any other critical eligibility parameters provided in the structured data.
+Respond with **”Yes”** if the patient likely meets eligibility, **”No”** if clearly ineligible, or **”Maybe — requires verification”** if borderline or data is missing.
 
-Ensure the analysis accounts for complex scenarios with multiple variables, providing a logical and well-reasoned justification for the eligibility decision. The response should be informative, flexible, and comprehensive, allowing for nuanced considerations that might influence the patient’s eligibility.
+Then provide a structured explanation:
 
-The treatment mentioned in the structured patient attributes is complete and there are not other treatments given.
+**1. Key Inclusion Criteria — Match/Mismatch:**
+Evaluate each of these critical GYN oncology trial enrollment factors against the trial criteria:
+  - **Age**: Does the patient fall within the trial’s age range?
+  - **FIGO Stage / Disease Extent**: Does the patient’s staging match the required stage(s)?
+  - **Histology**: Does the trial require specific histologic types (e.g., serous only, endometrioid, clear cell, squamous)? Does the patient match?
+  - **Biomarker / Molecular Requirements**: Does the trial require specific biomarker status (BRCA+, HRD+, MMR-deficient, PD-L1 CPS ≥1, HER2+, FRα+, POLE-mutated)? Does the patient qualify?
+  - **Prior Lines of Therapy**: How many prior systemic regimens has the patient received? Does the trial specify a line (e.g., “1-3 prior lines”, “second-line or later”)?
+  - **Platinum Sensitivity**: Does the trial require platinum-sensitive, platinum-resistant, or platinum-refractory disease? What is the patient’s platinum-free interval?
+  - **ECOG Performance Status**: Does the patient’s ECOG (0, 1, 2) meet the trial requirement (most require 0-1)?
+  - **Prior Specific Agents**: Does the trial exclude patients with prior PARP inhibitor, prior immunotherapy, prior bevacizumab, or prior specific agents? Has the patient received any of these?
 
-The goal is to support healthcare professionals by delivering a detailed yet efficient assessment that aids in clinical decision-making regarding trial enrollment.
-"""
+**2. Key Exclusion Criteria — Flags:**
+  - CNS metastases (many trials exclude active brain mets)
+  - Organ function (renal, hepatic — if data available)
+  - Autoimmune disease (relevant for immunotherapy trials)
+  - Prior malignancy (second primary cancers within 3-5 years)
+  - Specific comorbidities mentioned in the trial criteria
+
+**3. Missing Data:**
+List any patient data fields that are needed for a definitive eligibility determination but are not provided. Be specific (e.g., “BRCA status not provided — trial requires BRCA1/2 mutation”).
+
+**4. Clinical Relevance:**
+Briefly note why this trial may or may not be a good fit for this patient’s clinical situation beyond strict eligibility (e.g., “Patient is platinum-resistant with BRCA1 mutation — this PARP inhibitor trial is highly relevant”).
+
+The treatment history provided in the structured patient attributes represents the patient’s complete treatment record. Do not assume additional treatments were given.
+“””
 
 CLINICAL_TRIALS_SEARCH_QUERY = """
 You are a helpful assistant designed to generate free text search queries for ClinicalTrials.gov based on patient attributes. When given specific patient information, you will construct a query that maximizes the chances of finding relevant clinical trials.
@@ -88,7 +111,7 @@ class ClinicalTrialsPlugin:
                 "ClinicalTrialsPlugin requires AZURE_OPENAI_REASONING_MODEL_ENDPOINT. "
                 "Set it to the Azure OpenAI reasoning model endpoint URL."
             )
-        reasoning_kwargs = {
+        reasoning_kwargs: dict[str, Any] = {
             "service_id": "reasoning-model",
             "deployment_name": _reasoning_deployment,
             "api_version": os.environ.get("AZURE_OPENAI_API_VERSION", "2025-04-01-preview"),

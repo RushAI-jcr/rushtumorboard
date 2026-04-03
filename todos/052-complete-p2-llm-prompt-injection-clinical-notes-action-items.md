@@ -2,7 +2,7 @@
 name: llm-prompt-injection-clinical-notes-action-items
 description: Raw clinical note text from Epic is JSON-serialized into the LLM user message in content_export.py, enabling indirect prompt injection into action_items with potential patient-safety impact
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 052
 tags: [code-review, security, prompt-injection, patient-safety]

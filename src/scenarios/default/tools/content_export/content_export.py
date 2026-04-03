@@ -198,7 +198,7 @@ class ContentExportPlugin:
             str: HTML link to download the generated Word file.
         """
         conversation_id = self.chat_ctx.conversation_id
-        patient_id = self.chat_ctx.patient_id
+        patient_id = self.chat_ctx.patient_id or ""
 
         # 1. Collect all agent data
         all_data = {

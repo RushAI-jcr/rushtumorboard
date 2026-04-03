@@ -2,7 +2,7 @@
 name: no-token-budget-all-data-serialization
 description: content_export.py serializes all_data to JSON with no per-field character caps before sending to GPT-4o
 type: code-review
-status: pending
+status: complete
 priority: p3
 issue_id: 056
 tags: [code-review, performance, cost, tokens]

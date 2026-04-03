@@ -36,6 +36,7 @@ class ChatArtifactAccessor:
                 await blob_client.delete_blob()
         finally:
             logger.info(f"Archive ran for {conversation_id}. Duration: {time() - start}s")
+        return conversation_id
 
     def get_blob_path(self, artifact_id: ChatArtifactIdentifier) -> str:
         """Get the blob path for a ChatArtifact object."""
@@ -52,8 +53,8 @@ class ChatArtifactAccessor:
     async def read(self, artifact_id: ChatArtifactIdentifier) -> ChatArtifact:
         """Read the chat artifact for a given query."""
         start = time()
+        blob_path = self.get_blob_path(artifact_id)
         try:
-            blob_path = self.get_blob_path(artifact_id)
             blob_client = self.container_client.get_blob_client(blob_path)
 
             # Download the blob content as a stream
@@ -67,8 +68,8 @@ class ChatArtifactAccessor:
     async def write(self, artifact: ChatArtifact) -> None:
         """Write the WordDocument object to blob storage."""
         start = time()
+        blob_path = self.get_blob_path(artifact.artifact_id)
         try:
-            blob_path = self.get_blob_path(artifact.artifact_id)
             blob_client = self.container_client.get_blob_client(blob_path)
             await blob_client.upload_blob(artifact.data, overwrite=True)
         finally:

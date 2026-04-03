@@ -2,7 +2,7 @@
 name: aiohttp-new-session-per-request-fhir-fabric
 description: FHIR and Fabric accessors create a new aiohttp.ClientSession per HTTP request, incurring TCP/TLS overhead for every note fetch in the read_all batch
 type: code-review
-status: pending
+status: complete
 priority: p2
 issue_id: 047
 tags: [code-review, performance, aiohttp, network]

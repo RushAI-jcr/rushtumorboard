@@ -4,7 +4,7 @@
 import logging
 import os
 
-from azure.identity import AzureCliCredential, ManagedIdentityCredential
+from azure.identity.aio import AzureCliCredential, ManagedIdentityCredential
 from azure.storage.blob.aio import BlobServiceClient
 from botbuilder.integration.aiohttp import CloudAdapter, ConfigurationBotFrameworkAuthentication
 from dotenv import load_dotenv
@@ -48,12 +48,12 @@ def create_app_context() -> AppContext:
     '''Create the application context for commonly used object used in application.'''
 
     # Load agent configuration
-    scenario = os.getenv("SCENARIO")
+    scenario = os.getenv("SCENARIO") or ""
     agent_config = load_agent_config(scenario)
 
     # Setup data access
     blob_service_client = BlobServiceClient(
-        account_url=os.getenv("APP_BLOB_STORAGE_ENDPOINT"),
+        account_url=os.getenv("APP_BLOB_STORAGE_ENDPOINT") or "",
         credential=credential,
     )
     data_access = create_data_access(blob_service_client, credential)
@@ -69,7 +69,7 @@ def create_app_context() -> AppContext:
 def create_app(
     bots: dict,
     app_context: AppContext,
-    adapters: dict = None,
+    adapters: dict | None = None,
 ) -> FastAPI:
     app = FastAPI()
     app.include_router(messages_routes(adapters, bots))

@@ -177,7 +177,7 @@ class PresentationExportPlugin:
         Returns:
             str: HTML link to download the generated PPTX file.
         """
-        patient_id = self.chat_ctx.patient_id
+        patient_id = self.chat_ctx.patient_id or ""
         conversation_id = self.chat_ctx.conversation_id
 
         # 1. Summarize all agent data into 5-column SlideContent via LLM

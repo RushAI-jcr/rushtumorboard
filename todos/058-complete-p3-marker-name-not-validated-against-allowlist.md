@@ -2,7 +2,7 @@
 name: marker-name-not-validated-against-allowlist
 description: LLM-supplied marker argument in get_tumor_marker_trend is used without validation against the GYN_MARKERS allowlist
 type: code-review
-status: pending
+status: complete
 priority: p3
 issue_id: 058
 tags: [code-review, security, input-validation]
