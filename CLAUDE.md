@@ -21,6 +21,7 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   ├── scenarios/default/
 │   │   ├── config/
 │   │   │   ├── agents.yaml      # 10 agent definitions (tools, instructions, prompts)
+│   │   │   ├── shared_agent_footer.md  # Shared security/date/yield rules (appended via addition_instructions)
 │   │   │   └── healthcare_agents.yaml  # Healthcare agent overrides (currently disabled)
 │   │   └── tools/               # Semantic Kernel plugins
 │   │       ├── patient_data.py                  # Load records, timeline (TIMELINE_NOTE_TYPES filter)
@@ -60,7 +61,7 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   │   ├── api/                 # chats, messages, user, time
 │   │   ├── patient_data/        # Patient CSV upload/access
 │   │   └── views/               # Demo routes (disabled by default): timeline, grounded notes
-│   ├── utils/                   # date_utils, model_utils, clinical_note_filter_utils, logging_http_client
+│   ├── utils/                   # date_utils, model_utils, clinical_note_filter_utils, logging_http_client, phi_scrubber, message_enrichment
 │   └── tests/                   # Local agent tests + schema alignment tests
 ├── docs/                        # Markdown documentation
 ├── infra/                       # Azure Bicep IaC + patient data
