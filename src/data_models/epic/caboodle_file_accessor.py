@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from collections.abc import Sequence
 
+from data_models.patient_demographics import PatientDemographics
+
 logger = logging.getLogger(__name__)
 
 # Optional parquet support — check availability without binding pd at module level
@@ -36,6 +38,9 @@ class CaboodleFileAccessor:
             diagnoses.csv (or .parquet)
 
     CSV column expectations (matching Caboodle naming conventions):
+
+    patient_demographics.csv (optional — populated from Epic PAT table or Excel import):
+        PatientID, MRN, PatientName, DOB, Sex
 
     clinical_notes.csv:
         NoteID, PatientID, NoteType, EntryDate, NoteText
@@ -65,6 +70,7 @@ class CaboodleFileAccessor:
     # Allowlist of valid file types for _read_file — prevents cross-patient PHI reads via
     # adversarial file_type values like "../../other_patient/lab_results".
     _VALID_FILE_TYPES: frozenset[str] = frozenset({
+        "patient_demographics",
         "clinical_notes",
         "pathology_reports",
         "radiology_reports",
@@ -106,6 +112,7 @@ class CaboodleFileAccessor:
         "cancer_staging": None,      # all
         "medications": None,         # all
         "diagnoses": None,           # all
+        "patient_demographics": None,  # no date filtering
     }
 
     def __init__(self, data_dir: str | None = None, reference_date: str | None = None):
@@ -263,6 +270,16 @@ class CaboodleFileAccessor:
     async def get_diagnoses(self, patient_id: str) -> list[dict]:
         """Get diagnosis list."""
         return await self._read_file(patient_id, "diagnoses")
+
+    async def get_patient_demographics(self, patient_id: str) -> PatientDemographics | None:
+        """Get patient demographics (MRN, name, DOB, sex) if available.
+
+        Returns the first matching row as a dict, or None if the file is missing.
+        The demographics CSV is optional — when absent, agents fall back to
+        extracting MRN/name from clinical note text.
+        """
+        rows = await self._read_file(patient_id, "patient_demographics")
+        return rows[0] if rows else None
 
     async def get_clinical_notes_by_type(
         self, patient_id: str, note_types: Sequence[str]

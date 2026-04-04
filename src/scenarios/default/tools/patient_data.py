@@ -23,7 +23,7 @@ from data_models.plugin_configuration import PluginConfiguration
 from routes.views.patient_data_answer_routes import get_patient_data_answer_source_url
 from routes.views.patient_timeline_routes import get_patient_timeline_entry_source_url
 
-from .validation import validate_patient_id
+from .validation import validate_demographics, validate_patient_id
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +110,20 @@ class PatientDataPlugin:
             image_metadatas = await self.data_access.image_accessor.get_metadata_list(patient_id)
             self.chat_ctx.patient_data = clinical_note_metadatas + image_metadatas
 
-            response = json.dumps({
+            # Load patient demographics (MRN, name, DOB, sex) if available
+            demographics = await self.data_access.clinical_note_accessor.get_patient_demographics(patient_id)
+            if demographics:
+                self.chat_ctx.patient_demographics = validate_demographics(demographics, logger)
+                logger.info("Loaded demographics for patient %s", patient_id)
+
+            response_data: dict = {
                 "clinical notes": clinical_note_metadatas,
-                "images": image_metadatas
-            })
+                "images": image_metadatas,
+            }
+            if demographics:
+                response_data["patient_demographics"] = demographics
+
+            response = json.dumps(response_data)
             logger.info("Loaded patient data for patient %s: %d items", patient_id, len(clinical_note_metadatas) + len(image_metadatas))
             return response
         except Exception:

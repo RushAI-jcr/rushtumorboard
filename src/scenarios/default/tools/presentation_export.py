@@ -68,8 +68,11 @@ Use clinical shorthand (yo, s/p, dx, bx, LN, mets, etc.) and M/D/YY dates.
 Stick to facts from the source data — do not invent or infer.
 
 Slide 1 — Patient logistics (Col 0):
-  patient_title: "Case {N} — {LastName}" (use patient_id if name unavailable)
-  patient_bullets: max 6 — MRN (ONLY if explicitly in records, else "[MRN - VERIFY]"),
+  patient_title: "Case {N} — {LastName}" — use patient_demographics.PatientName (extract last
+    name only) if available in the input data. Otherwise use patient_id.
+  patient_bullets: max 6 —
+    MRN: use patient_demographics.MRN if available. Otherwise ONLY if explicitly stated in
+      clinical notes. If not found, use "[MRN - VERIFY]". NEVER fabricate an MRN.
     Attending initials (ONLY if explicitly in records, else "[Attending - VERIFY]"),
     RTC date, Main location, Path date or "NO SLIDES", CA-125 trend only if actively monitored.
     NEVER fabricate an MRN or attending initials.
@@ -178,7 +181,7 @@ class PresentationExportPlugin:
         conversation_id = self.chat_ctx.conversation_id
 
         # 1. Summarize all agent data into 5-column SlideContent via LLM
-        all_data = {
+        all_data: dict = {
             "patient_id": patient_id,
             "patient_age": patient_age,
             "patient_gender": patient_gender,
@@ -194,6 +197,11 @@ class PresentationExportPlugin:
             "board_discussion": board_discussion,
             "oncologic_history": oncologic_history,
         }
+        # Inject patient demographics (MRN, name, DOB, sex) if available
+        demographics = self.chat_ctx.patient_demographics
+        if demographics:
+            all_data["patient_demographics"] = demographics
+
         # Apply per-field token budget caps before LLM serialization
         all_data["pathology_findings"] = str(all_data.get("pathology_findings") or "")[:_MAX_PATHOLOGY_CHARS]
         all_data["radiology_findings"] = str(all_data.get("radiology_findings") or "")[:_MAX_RADIOLOGY_CHARS]

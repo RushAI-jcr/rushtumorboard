@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from typing import Protocol
 
+from data_models.patient_demographics import PatientDemographics
+
 
 class ClinicalNoteAccessorProtocol(Protocol):
     # --- Base methods: implemented by all accessors (Caboodle, FHIR, Fabric) ---
@@ -36,3 +38,5 @@ class ClinicalNoteAccessorProtocol(Protocol):
     ) -> list[dict]: ...
 
     async def get_diagnoses(self, patient_id: str) -> list[dict]: ...
+
+    async def get_patient_demographics(self, patient_id: str) -> PatientDemographics | None: ...

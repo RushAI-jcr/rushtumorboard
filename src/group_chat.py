@@ -63,12 +63,16 @@ logger = logging.getLogger(__name__)
 
 # Guard against SK internal API changes. CustomHistoryChannel relies on
 # ChatHistoryAgentThread._chat_history for thread truncation.
+# Probe a real instance rather than inspecting source (works with .pyc).
 # Tested with semantic-kernel==1.37.0.
-assert hasattr(ChatHistoryAgentThread, '_chat_history'), (
-    "SK internal API changed: ChatHistoryAgentThread no longer has _chat_history. "
-    "Review CustomHistoryChannel truncation logic for SK version compatibility "
-    "(last tested: semantic-kernel==1.37.0)."
-)
+_probe = ChatHistoryAgentThread()
+if not hasattr(_probe, '_chat_history'):
+    raise ImportError(
+        "SK internal API changed: ChatHistoryAgentThread no longer has _chat_history. "
+        "Review CustomHistoryChannel truncation logic for SK version compatibility "
+        "(last tested: semantic-kernel==1.37.0)."
+    )
+del _probe
 
 
 class ChatRule(BaseModel):
@@ -137,15 +141,34 @@ class CustomHistoryChannel(ChatHistoryChannel):
                 continue
             await self.thread.on_new_message(message)
 
-        # Cap thread length. With no tool messages, any cut point is safe.
+        # Cap thread length. The agent's own tool_calls/tool_result pairs
+        # (from auto-function-invocation during invoke()) are in the thread.
+        # We must find a safe cut point that doesn't orphan a tool_result at
+        # the start — OpenAI requires every role='tool' message to follow
+        # an assistant message with tool_calls.
         if hasattr(self.thread, '_chat_history'):
             msgs = self.thread._chat_history.messages
             if len(msgs) > self._MAX_THREAD_MESSAGES:
                 old_len = len(msgs)
-                self.thread._chat_history.messages = msgs[-self._MAX_THREAD_MESSAGES:]
+                cut = len(msgs) - self._MAX_THREAD_MESSAGES
+                # Walk forward to a safe start: skip tool messages and
+                # assistant messages with orphaned tool_calls (handles
+                # interleaved multi-tool chains from auto-function-invocation).
+                while cut < len(msgs):
+                    if _is_tool_message(msgs[cut]):
+                        cut += 1
+                    elif (msgs[cut].role == AuthorRole.ASSISTANT
+                          and any(isinstance(item, FunctionCallContent)
+                                  for item in (msgs[cut].items or []))):
+                        cut += 1
+                    else:
+                        break
+                # Floor: keep at least 2 messages (system prompt + one content)
+                cut = min(cut, max(len(msgs) - 2, 0))
+                self.thread._chat_history.messages = msgs[cut:]
                 logger.debug(
-                    "Truncated agent thread history from %d to %d messages",
-                    old_len, self._MAX_THREAD_MESSAGES,
+                    "Truncated agent thread history from %d to %d messages (safe cut at %d)",
+                    old_len, len(msgs) - cut, cut,
                 )
 
         # Cap channel message list in lockstep to prevent unbounded memory growth.

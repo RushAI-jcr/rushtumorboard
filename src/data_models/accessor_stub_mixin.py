@@ -4,6 +4,8 @@ Consolidates identical stub methods previously duplicated across Blob, FHIR, and
 Fabric accessor classes. Subclasses override only the methods they actually support.
 """
 
+from data_models.patient_demographics import PatientDemographics
+
 
 class ClinicalNoteAccessorStubMixin:
     """Default stub implementations for accessor methods.
@@ -21,6 +23,7 @@ class ClinicalNoteAccessorStubMixin:
         "get_cancer_staging",
         "get_medications",
         "get_diagnoses",
+        "get_patient_demographics",
     })
 
     @classmethod
@@ -63,3 +66,7 @@ class ClinicalNoteAccessorStubMixin:
     async def get_diagnoses(self, patient_id: str) -> list[dict]:
         """Structured diagnoses are not available via this accessor."""
         return []
+
+    async def get_patient_demographics(self, patient_id: str) -> PatientDemographics | None:
+        """Patient demographics are not available via this accessor."""
+        return None

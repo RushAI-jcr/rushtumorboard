@@ -5,6 +5,8 @@ import os
 
 from semantic_kernel.contents.chat_history import ChatHistory
 
+from data_models.patient_demographics import PatientDemographics
+
 
 class ChatContext:
     def __init__(self, conversation_id: str, request_date: str | None = None):
@@ -13,6 +15,7 @@ class ChatContext:
         self._patient_id: str | None = None
         self.request_date = request_date  # ISO YYYY-MM-DD: date the report was requested
         self.patient_data = []
+        self.patient_demographics: PatientDemographics | None = None
         self.display_blob_urls = []
         self.display_image_urls = []
         self.display_clinical_trials = []

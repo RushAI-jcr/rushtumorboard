@@ -86,8 +86,8 @@ Style rules:
 Return valid JSON matching the TumorBoardDocContent schema:
 {
   "case_number": 1,
-  "patient_last_name": "Last name only from patient_id or records",
-  "mrn": "MRN number ONLY if explicitly stated in patient records. If not found, use '[MRN - VERIFY]'. NEVER fabricate an MRN.",
+  "patient_last_name": "Last name from patient_demographics.PatientName if available (extract last name only). Otherwise look in clinical notes. If not found, use empty string.",
+  "mrn": "MRN from patient_demographics.MRN if available. Otherwise ONLY if explicitly stated in clinical notes. If not found, use '[MRN - VERIFY]'. NEVER fabricate an MRN.",
   "attending_initials": "Attending physician initials ONLY if explicitly stated in records. If not found, use '[Attending - VERIFY]'. NEVER fabricate initials.",
   "is_inpatient": false,
   "rtc": "Return to clinic date and attending, e.g. '3/10 AL', or 'None'",
@@ -220,6 +220,10 @@ class ContentExportPlugin:
             "board_discussion": board_discussion,
             "oncologic_history": oncologic_history,
         }
+        # Inject patient demographics (MRN, name) if available from CSV
+        demographics = self.chat_ctx.patient_demographics
+        if demographics:
+            all_data["patient_demographics"] = demographics
         logger.info("Generating tumor board doc")
 
         # 2. Summarize into 5-column clinical shorthand via LLM
