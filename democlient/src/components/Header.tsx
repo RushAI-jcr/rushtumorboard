@@ -10,8 +10,10 @@ import {
     MenuItem,
     Avatar
 } from '@fluentui/react-components';
-import { Person24Regular, SignOut24Regular, Navigation24Regular } from '@fluentui/react-icons';
+import { Person24Regular, SignOut24Regular, Navigation24Regular, QuestionCircle24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useState } from 'react';
+import WorkflowGuide from './WorkflowGuide';
 
 // Add prop for toggling sidebar
 interface HeaderProps {
@@ -67,6 +69,7 @@ const useStyles = makeStyles({
 export default function Header({ toggleSidebar, isMobile }: HeaderProps) {
     const classes = useStyles();
     const { user, logout } = useAuth();
+    const [guideOpen, setGuideOpen] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -76,7 +79,7 @@ export default function Header({ toggleSidebar, isMobile }: HeaderProps) {
         <header className={classes.header}>
             <div className={classes.leftSection}>
                 {isMobile && toggleSidebar && (
-                    <Button 
+                    <Button
                         appearance="subtle"
                         icon={<Navigation24Regular />}
                         onClick={toggleSidebar}
@@ -84,7 +87,15 @@ export default function Header({ toggleSidebar, isMobile }: HeaderProps) {
                         aria-label="Toggle chat list"
                     />
                 )}
-                <Text className={classes.logo}>Healthcare Agent Orchestrator</Text>
+                <Text className={classes.logo}>GYN Tumor Board Assistant</Text>
+                <Button
+                    appearance="subtle"
+                    icon={<QuestionCircle24Regular />}
+                    onClick={() => setGuideOpen(true)}
+                >
+                    {!isMobile && 'How It Works'}
+                </Button>
+                <WorkflowGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
             </div>
             {user && (
                 <Menu>

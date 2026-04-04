@@ -94,6 +94,23 @@ class DataAccess:
     image_accessor: ImageAccessor
 
 
+def create_local_dev_data_access(reference_date: str | None = None) -> DataAccess:
+    """Create DataAccess with in-memory stubs for local development (no Azure Blob)."""
+    from data_models.local_dev_stubs import InMemoryChatContextAccessor, InMemoryChatArtifactAccessor, StubBlobSasDelegate, StubImageAccessor
+
+    clinical_note_accessor = CaboodleFileAccessor(
+        data_dir=os.getenv("CABOODLE_DATA_DIR"),
+        reference_date=reference_date,
+    )
+    return DataAccess(
+        blob_sas_delegate=StubBlobSasDelegate(),
+        chat_artifact_accessor=InMemoryChatArtifactAccessor(),
+        chat_context_accessor=InMemoryChatContextAccessor(),
+        clinical_note_accessor=clinical_note_accessor,
+        image_accessor=StubImageAccessor(),
+    )
+
+
 def create_data_access(
     blob_service_client: BlobServiceClient,
     credential: AsyncTokenCredential,

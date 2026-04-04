@@ -19,7 +19,7 @@ from bots.access_control_middleware import AccessControlMiddleware
 from bots.show_typing_middleware import ShowTypingMiddleware
 from config import DefaultConfig, load_agent_config, setup_app_insights_logging, setup_logging
 from data_models.app_context import AppContext
-from data_models.data_access import create_data_access
+from data_models.data_access import create_data_access, create_local_dev_data_access
 from mcp_app import create_fast_mcp_app
 from routes.api.chats import chats_routes
 from routes.api.messages import messages_routes
@@ -51,6 +51,18 @@ def create_app_context() -> AppContext:
     scenario = os.getenv("SCENARIO") or ""
     agent_config = load_agent_config(scenario)
 
+    is_local_dev = os.getenv("LOCAL_DEV", "").lower() == "true"
+
+    if is_local_dev:
+        # Local development: skip Azure Blob Storage, use in-memory stubs
+        data_access = create_local_dev_data_access()
+        return AppContext(
+            all_agent_configs=agent_config,
+            blob_service_client=None,
+            credential=credential,
+            data_access=data_access,
+        )
+
     # Setup data access
     blob_service_client = BlobServiceClient(
         account_url=os.getenv("APP_BLOB_STORAGE_ENDPOINT") or "",
@@ -75,7 +87,10 @@ def create_app(
     app.include_router(messages_routes(adapters, bots))
     app.include_router(chats_routes(app_context))
     app.include_router(user_routes())
-    app.include_router(patient_data_routes(app_context.blob_service_client))
+    app.include_router(patient_data_routes(
+        app_context.blob_service_client,
+        chat_artifact_accessor=app_context.data_access.chat_artifact_accessor,
+    ))
     if os.getenv("DEMO_ROUTES_ENABLED", "false").lower() == "true":
         app.include_router(patient_data_answer_source_routes(app_context.data_access))
         app.include_router(patient_timeline_entry_source_routes(app_context.data_access))
@@ -112,22 +127,29 @@ def create_app(
 
 app_context = create_app_context()
 
-# Create Teams specific objects
-adapters = {
-    agent["name"]: CloudAdapter(ConfigurationBotFrameworkAuthentication(
-        DefaultConfig(botId=agent["bot_id"]))).use(ShowTypingMiddleware()).use(AccessControlMiddleware())
-    for agent in app_context.all_agent_configs
-}
-bot_config = {
-    "adapters": adapters,
-    "app_context": app_context,
-    "turn_contexts": {}
-}
-bots = {
-    agent["name"]: AssistantBot(agent, **bot_config) if agent["name"] != "magentic"
-    else MagenticBot(agent, **bot_config)
-    for agent in app_context.all_agent_configs
-}
+is_local_dev = os.getenv("LOCAL_DEV", "").lower() == "true"
+
+if is_local_dev:
+    # Local dev: skip Teams bot adapters (no Bot Framework credentials needed)
+    adapters = {}
+    bots = {}
+else:
+    # Create Teams specific objects
+    adapters = {
+        agent["name"]: CloudAdapter(ConfigurationBotFrameworkAuthentication(
+            DefaultConfig(botId=agent["bot_id"]))).use(ShowTypingMiddleware()).use(AccessControlMiddleware())
+        for agent in app_context.all_agent_configs
+    }
+    bot_config = {
+        "adapters": adapters,
+        "app_context": app_context,
+        "turn_contexts": {}
+    }
+    bots = {
+        agent["name"]: AssistantBot(agent, **bot_config) if agent["name"] != "magentic"
+        else MagenticBot(agent, **bot_config)
+        for agent in app_context.all_agent_configs
+    }
 
 teams_app = create_app(bots, app_context, adapters)
 fast_mcp_app, lifespan = create_fast_mcp_app(app_context)

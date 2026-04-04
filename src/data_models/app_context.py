@@ -15,7 +15,7 @@ from data_models.data_access import DataAccess
 class AppContext:
     """ Application context for commonly used objects in the application. """
     all_agent_configs: list[dict]
-    blob_service_client: BlobServiceClient
+    blob_service_client: BlobServiceClient | None
     credential: AsyncTokenCredential
     data_access: DataAccess
 

@@ -4,6 +4,7 @@
 import base64
 import json
 import logging
+import os
 import uuid
 from typing import Dict, List, Optional
 
@@ -119,6 +120,13 @@ def user_routes():
 
             # If we don't have a user ID, authentication probably failed
             if not user_info["id"]:
+                if os.getenv("LOCAL_DEV", "").lower() == "true":
+                    return JSONResponse(content={
+                        "id": "local-dev",
+                        "name": "Dev User",
+                        "email": "dev@rushtumorboard.local",
+                        "roles": ["user"],
+                    })
                 raise HTTPException(status_code=401, detail="User not authenticated")
 
             return JSONResponse(

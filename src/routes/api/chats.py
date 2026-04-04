@@ -3,6 +3,7 @@
 
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -115,8 +116,11 @@ def chats_routes(app_context: AppContext):
         try:
             principal_id = websocket.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
             if not principal_id:
-                await websocket.close(code=1008)
-                return
+                if os.getenv("LOCAL_DEV", "").lower() == "true":
+                    principal_id = "local-dev-user"
+                else:
+                    await websocket.close(code=1008)
+                    return
             await websocket.accept()
             logger.info("WebSocket connection established for chat: %s", chat_id)
 

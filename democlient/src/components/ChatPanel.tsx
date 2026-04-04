@@ -13,6 +13,7 @@ import { addMessage, setLoading, addPendingResponse, removePendingResponse } fro
 import { api } from '../services/api';
 import MessageList from './MessageList';
 import MentionAutocomplete from './MentionAutocomplete';
+import { InlineWorkflowHint } from './WorkflowGuide';
 import { parseMentions, getTargetAgent } from '../utils/messageParsing';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../contexts/AuthContext';
@@ -403,7 +404,7 @@ export default function ChatPanel() {
     };
 
     if (!selectedChat) {
-        return <div style={{ color: tokens.colorNeutralForeground1, margin: '1rem' }}><Text>Select a chat to start messaging</Text></div>;
+        return <InlineWorkflowHint />;
     }
 
     return (
