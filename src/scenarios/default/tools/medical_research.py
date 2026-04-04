@@ -22,6 +22,7 @@ from data_models.chat_context import ChatContext
 from data_models.data_access import DataAccess
 from data_models.plugin_configuration import PluginConfiguration
 from utils.model_utils import model_supports_temperature
+from utils.phi_scrubber import scrub_phi
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,9 @@ class MedicalResearchPlugin:
             dict with keys: text, sources, search_metadata.
         """
         logger.info("MedicalResearch query received (len=%d)", len(prompt))
+
+        # Scrub potential PHI before sending to external APIs
+        prompt = scrub_phi(prompt)
 
         # 1. Search all three sources concurrently
         async with aiohttp.ClientSession() as session:

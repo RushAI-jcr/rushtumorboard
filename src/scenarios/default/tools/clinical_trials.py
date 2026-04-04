@@ -21,14 +21,10 @@ from data_models.app_context import AppContext
 from data_models.chat_context import ChatContext
 from data_models.gyn_patient_profile import GynPatientProfile
 from data_models.plugin_configuration import PluginConfiguration
+from utils.phi_scrubber import scrub_phi
 
 logger = logging.getLogger(__name__)
 
-# --- Constants for PHI safety ---
-_PHI_SCRUB_PATTERNS = [
-    re.compile(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b'),   # date patterns (M/D/YY, MM/DD/YYYY)
-    re.compile(r'\b\d{7,}\b'),                       # MRN-like long numbers
-]
 _TRIAL_EVAL_TIMEOUT = float(os.environ.get("CLINICAL_TRIAL_EVAL_TIMEOUT", "90"))
 
 
@@ -46,14 +42,6 @@ def _load_prompt(filename: str) -> str:
 # Prompts loaded at module import from external files (separates clinical knowledge from code)
 PROMPT = _load_prompt("clinical_trials_eligibility.txt")
 CLINICAL_TRIALS_SEARCH_QUERY = _load_prompt("clinical_trials_search_query.txt")
-
-
-def _scrub_phi(query: str) -> str:
-    """Remove potential PHI patterns from an LLM-generated search query before sending to external API."""
-    scrubbed = query
-    for pattern in _PHI_SCRUB_PATTERNS:
-        scrubbed = pattern.sub('', scrubbed)
-    return scrubbed.strip()
 
 
 def create_plugin(plugin_config: PluginConfiguration) -> "ClinicalTrialsPlugin":
@@ -171,7 +159,7 @@ class ClinicalTrialsPlugin:
         structured_patient_data = patient_profile.to_prompt_dict()
 
         # Scrub potential PHI from LLM-generated query before sending to external API
-        scrubbed_query = _scrub_phi(clinical_trials_query)
+        scrubbed_query = scrub_phi(clinical_trials_query)
 
         params = {
             "query.term": scrubbed_query,

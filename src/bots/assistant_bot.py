@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 import asyncio
-import html
 import logging
 import os
 
@@ -17,6 +16,7 @@ from data_models.app_context import AppContext
 from data_models.chat_context import ChatContext
 from errors import NotAuthorizedError
 from group_chat import create_group_chat
+from utils.message_enrichment import append_links, apply_sas_urls
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +143,8 @@ class AssistantBot(TeamsActivityHandler):
             if response.content.strip() == "":
                 continue
 
-            msgText = self._append_links_to_msg(response.content, chat_ctx)
-            msgText = await self.generate_sas_for_blob_urls(msgText, chat_ctx)
+            msgText = append_links(response.content, chat_ctx)
+            msgText = await apply_sas_urls(msgText, chat_ctx, self.data_access)
 
             activity = MessageFactory.text(msgText)
             activity.apply_conversation_reference(
@@ -157,39 +157,3 @@ class AssistantBot(TeamsActivityHandler):
             if chat.is_complete:
                 break
 
-    def _append_links_to_msg(self, msgText: str, chat_ctx: ChatContext) -> str:
-        # Add patient data links to response
-        try:
-            image_urls = chat_ctx.display_image_urls
-            clinical_trial_urls = chat_ctx.display_clinical_trials
-
-            # Display loaded images
-            if image_urls:
-                msgText += "<h2>Patient Images</h2>"
-                for url in image_urls:
-                    safe_url = html.escape(url, quote=True)
-                    filename = html.escape(url.split("/")[-1], quote=True)
-                    msgText += f'<img src="{safe_url}" alt="{filename}" height="300px"/>'
-
-            # Display clinical trials
-            if clinical_trial_urls:
-                msgText += "<h2>Clinical trials</h2>"
-                for url in clinical_trial_urls:
-                    safe_url = html.escape(url, quote=True)
-                    trial = html.escape(url.split("/")[-1])
-                    msgText += f'<li><a href="{safe_url}">{trial}</a></li>'
-
-            return msgText
-        finally:
-            chat_ctx.display_image_urls = []
-            chat_ctx.display_clinical_trials = []
-
-    async def generate_sas_for_blob_urls(self, msgText: str, chat_ctx: ChatContext) -> str:
-        try:
-            for blob_url in chat_ctx.display_blob_urls:
-                blob_sas_url = await self.data_access.blob_sas_delegate.get_blob_sas_url(blob_url)
-                msgText = msgText.replace(blob_url, blob_sas_url)
-
-            return msgText
-        finally:
-            chat_ctx.display_blob_urls = []

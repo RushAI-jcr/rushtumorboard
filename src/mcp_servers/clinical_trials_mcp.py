@@ -21,6 +21,8 @@ from typing import Any
 import aiohttp
 from mcp.server.fastmcp import FastMCP
 
+from utils.phi_scrubber import scrub_phi
+
 logger = logging.getLogger(__name__)
 
 # GYN cancer type mappings for NCI API
@@ -117,6 +119,7 @@ async def nci_search(
     status: str = "active",
 ) -> str:
     """Search NCI Cancer Clinical Trials API for GYN oncology trials."""
+    cancer_type = scrub_phi(cancer_type)
     disease = NCI_DISEASE_MAP.get(cancer_type.lower(), cancer_type)
 
     params = {
@@ -197,6 +200,7 @@ async def gog_nrg_search(
     status: str = "RECRUITING",
 ) -> str:
     """Search for GOG/NRG Oncology cooperative group trials."""
+    cancer_type = scrub_phi(cancer_type)
     condition = CTG_CONDITION_MAP.get(cancer_type.lower(), cancer_type)
 
     search_term = (
@@ -363,6 +367,7 @@ async def trial_details_combined(nct_id: str) -> str:
 
 async def study_statistics(condition: str) -> str:
     """Get trial count statistics for a condition from ClinicalTrials.gov."""
+    condition = scrub_phi(condition)
     session = await _get_session()
 
     status_buckets = ["RECRUITING", "ACTIVE_NOT_RECRUITING", "COMPLETED", "NOT_YET_RECRUITING"]
@@ -405,6 +410,7 @@ async def keyword_search(
     page_size: int = 20,
 ) -> str:
     """General free-text keyword search against ClinicalTrials.gov v2 API."""
+    keyword = scrub_phi(keyword)
     page_size = min(max(page_size, 1), 50)
 
     params = {
@@ -489,6 +495,13 @@ async def aact_search(
             "total": 0,
             "trials": [],
         })
+
+    # Scrub PHI from free-text fields before sending to external database
+    condition = scrub_phi(condition)
+    if eligibility_keywords:
+        eligibility_keywords = scrub_phi(eligibility_keywords)
+    if intervention:
+        intervention = scrub_phi(intervention)
 
     # Clamp limit to prevent abuse
     limit = min(max(limit, 1), 100)

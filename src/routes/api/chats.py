@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 import group_chat
 from data_models.app_context import AppContext
+from utils.message_enrichment import append_links, apply_sas_urls
 
 logger = logging.getLogger(__name__)
 
@@ -169,10 +170,14 @@ def chats_routes(app_context: AppContext):
                 if not response or not response.content:
                     continue
 
+                # Enrich with patient images, trial links, and SAS URLs
+                content = append_links(response.content, chat_context)
+                content = await apply_sas_urls(content, chat_context, data_access)
+
                 # Create bot response message for each response
                 bot_message = Message(
                     id=str(uuid.uuid4()),
-                    content=response.content,
+                    content=content,
                     sender=response.name or "assistant",
                     timestamp=datetime.now(timezone.utc),
                     isBot=True,
