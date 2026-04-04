@@ -1,45 +1,38 @@
-## Purpose
-<!-- Describe the intention of the changes being proposed. What problem does it solve or functionality does it add? -->
-* ...
+## Summary
+<!-- 1-3 bullet points describing what this PR does and why -->
+-
 
-## Does this introduce a breaking change?
-<!-- Mark one with an "x". -->
-```
-[ ] Yes
-[ ] No
-```
+## Type
+<!-- Check one -->
+- [ ] Bug fix
+- [ ] Feature / enhancement
+- [ ] Refactor (no functional change)
+- [ ] Agent tool or prompt change
+- [ ] Infrastructure / deployment
+- [ ] Documentation
 
-## Pull Request Type
-What kind of change does this Pull Request introduce?
+## PHI / Security Checklist
+<!-- All PRs must pass this checklist -->
+- [ ] No patient data, GUIDs, or MRNs in code or comments
+- [ ] No PHI logged at INFO level or above (DEBUG only, with metadata not content)
+- [ ] No new secrets or credentials hardcoded
+- [ ] Pre-commit hook passes (PHI GUID scan)
 
-<!-- Please check the one that applies to this PR using "x". -->
-```
-[ ] Bugfix
-[ ] Feature
-[ ] Code style update (formatting, local variables)
-[ ] Refactoring (no functional changes, no api changes)
-[ ] Documentation content changes
-[ ] Other... Please describe:
-```
+## Testing
+<!-- How was this tested? -->
+- [ ] `python3 -m pytest tests/test_local_agents.py -v` passes
+- [ ] Tested with synthetic patient (`patient_gyn_001` or `patient_gyn_002`)
+- [ ] Tested with real patient data (specify count: ___)
+- [ ] `scripts/run_batch_e2e.py` batch run (if agent logic changed)
+- [ ] N/A (docs, infra, or config only)
 
-## How to Test
-*  Get the code
+## Agent Impact
+<!-- If this PR changes agent behavior, which agents are affected? -->
+- [ ] Orchestrator (turn routing, termination)
+- [ ] Data extraction agents (PatientHistory, Pathology, Radiology, OncologicHistory)
+- [ ] Synthesis agents (PatientStatus, ClinicalGuidelines, ClinicalTrials, MedicalResearch)
+- [ ] ReportCreation (Word doc, PPTX)
+- [ ] No agent impact
 
-```
-git clone [repo-address]
-cd [repo-name]
-git checkout [branch-name]
-npm install
-```
-
-* Test the code
-<!-- Add steps to run the tests suite and/or manually test -->
-```
-```
-
-## What to Check
-Verify that the following are valid
-* ...
-
-## Other Information
-<!-- Add any other helpful information that may be needed here. -->
+## Notes
+<!-- Anything else reviewers should know? Context, trade-offs, follow-up work. -->

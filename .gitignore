@@ -1,36 +1,57 @@
-.azure
-.ipynb_checkpoints
-.venv
-.conda
-.env
-.nx
-__pycache__
-democlient/build
-node_modules
-src/static
-src/static/static
-bin
-obj
-appsettings.json
-output
+# === OS / Editor ===
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
 
-.pytest_cache
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.conda/
+.pytest_cache/
 .coverage
+.mypy_cache/
+.ruff_cache/
 
-src/public/output_data
-infra/config
-data
+# === Node.js ===
+node_modules/
+democlient/build/
+
+# === IDEs ===
+.nx/
+*.iml
+
+# === Environment & Secrets ===
+.env
 .env.production
+.env.local
+appsettings.json
 
-# Real patient data (GUID folders) — keep only synthetic test patients
-# Matches standard 8-4-4-4-12 UUID format regardless of case
+# === Azure ===
+.azure/
+infra/config/
+
+# === Build artifacts ===
+bin/
+obj/
+build/
+output/
+src/static/
+src/public/output_data/
+data/
+
+# === Jupyter ===
+.ipynb_checkpoints/
+
+# === Real patient data (HIPAA) ===
+# GUID folders — keep only synthetic test patients (patient_gyn_*)
 infra/patient_data/????????-????-????-????-????????????/
 infra/patient_data/????????-????-????-????-????????????/**
 src/tests/local_patient_ids.json
 
-# Batch E2E evaluation output
+# === Evaluation artifacts ===
 src/evaluation/batch_e2e_output/
-
-# Real patient GUID evaluation queries — populate locally from local_patient_ids.json
 src/evaluation/initial_queries_gyn15.csv

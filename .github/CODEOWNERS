@@ -1,0 +1,20 @@
+# Default owner for everything
+* @RushAI-jcr
+
+# Core application
+/src/group_chat.py @RushAI-jcr
+/src/config.py @RushAI-jcr
+/src/app.py @RushAI-jcr
+
+# Agent tools (clinical logic)
+/src/scenarios/ @RushAI-jcr
+
+# Data access layer
+/src/data_models/ @RushAI-jcr
+
+# Infrastructure
+/infra/ @RushAI-jcr
+
+# CI/CD and GitHub config
+/.github/ @RushAI-jcr
+/.azdo/ @RushAI-jcr

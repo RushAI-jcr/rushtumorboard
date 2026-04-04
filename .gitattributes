@@ -1,0 +1,80 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Python
+*.py text diff=python
+*.pyi text diff=python
+
+# JavaScript / TypeScript
+*.js text
+*.ts text
+*.tsx text
+*.jsx text
+*.json text
+*.mjs text
+
+# Web
+*.html text diff=html
+*.css text
+*.scss text
+
+# Config
+*.yaml text
+*.yml text
+*.toml text
+*.cfg text
+*.ini text
+*.env text
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+*.rst text
+
+# Shell scripts (always LF)
+*.sh text eol=lf
+*.bash text eol=lf
+
+# PowerShell (always CRLF for Windows compat)
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+
+# Bicep / ARM
+*.bicep text
+*.bicepparam text
+
+# Jupyter notebooks
+*.ipynb text
+
+# CSV data (LF for cross-platform consistency)
+*.csv text eol=lf
+*.tsv text eol=lf
+*.parquet binary
+
+# Binary - images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Binary - documents
+*.pdf binary
+*.docx binary
+*.pptx binary
+*.xlsx binary
+
+# Binary - archives
+*.zip binary
+*.gz binary
+*.tar binary
+
+# Binary - fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Lock files (exact)
+package-lock.json -diff

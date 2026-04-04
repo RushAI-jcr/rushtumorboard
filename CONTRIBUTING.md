@@ -1,76 +1,98 @@
-# Contributing to this project
+# Contributing to Rush GYN Oncology Tumor Board
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+## Code of Conduct
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
- - [Code of Conduct](#coc)
- - [Issues and Bugs](#issue)
- - [Feature Requests](#feature)
- - [Submission Guidelines](#submit)
+## PHI and Patient Data
 
-## <a name="coc"></a> Code of Conduct
-Help us keep this project open and inclusive. Please read and follow our [Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+**This is a healthcare system handling real patient data. HIPAA compliance is non-negotiable.**
 
-## <a name="issue"></a> Found an Issue?
-If you find a bug in the source code or a mistake in the documentation, you can help us by
-[submitting an issue](#submit-issue) to the GitHub Repository. Even better, you can
-[submit a Pull Request](#submit-pr) with a fix.
+- Never commit real patient GUIDs, MRNs, or clinical data to version control
+- Real patient data lives in `infra/patient_data/<UUID>/` (gitignored)
+- Test with synthetic patients: `patient_gyn_001`, `patient_gyn_002`
+- For real patient testing, use `src/tests/local_patient_ids.json` (gitignored) or the `TEST_PATIENT_GUIDS` env var
+- Never log patient content at INFO level or above — use DEBUG with metadata only
+- The pre-commit hook blocks commits containing known patient GUIDs
 
-## <a name="feature"></a> Want a Feature?
-You can *request* a new feature by [submitting an issue](#submit-issue) to the GitHub
-Repository. If you would like to *implement* a new feature, please submit an issue with
-a proposal for your work first, to be sure that we can use it.
+## Local Development
 
-* **Small Features** can be crafted and directly [submitted as a Pull Request](#submit-pr).
+### Prerequisites
 
-## <a name="submit"></a> Submission Guidelines
+- Python 3.12+
+- Node.js 18+ (for PptxGenJS PowerPoint generation)
+- Azure OpenAI credentials
 
-### <a name="submit-issue"></a> Submitting an Issue
-Before you submit an issue, search the archive, maybe your question was already answered.
+### Setup
 
-If your issue appears to be a bug, and hasn't been reported, open a new issue.
-Help us to maximize the effort we can spend fixing issues and adding new
-features, by not reporting duplicate issues.  Providing the following information will increase the
-chances of your issue being dealt with quickly:
+```sh
+# Clone and configure
+git clone https://github.com/RushAI-jcr/rushtumorboard.git
+cd rushtumorboard
 
-* **Overview of the Issue** - if an error is being thrown a non-minified stack trace helps
-* **Version** - what version is affected (e.g. 0.1.2)
-* **Motivation for or Use Case** - explain what are you trying to do and why the current behavior is a bug for you
-* **Browsers and Operating System** - is this a problem with all browsers?
-* **Reproduce the Error** - provide a live example or a unambiguous set of steps
-* **Related Issues** - has a similar issue been reported before?
-* **Suggest a Fix** - if you can't fix the bug yourself, perhaps you can point to what might be
-  causing the problem (line of code or commit)
+# Install PHI pre-commit hook
+bash scripts/install-hooks.sh
 
-You can file new issues by providing the above information at the corresponding repository's issues link: https://github.com/RushAI-jcr/rushtumorboard/issues/new.
+# Python environment
+cd src
+cp .env.sample .env
+# Fill in Azure OpenAI credentials in .env
+pip3 install -r requirements.txt
 
-### <a name="submit-pr"></a> Submitting a Pull Request (PR)
-Before you submit your Pull Request (PR) consider the following guidelines:
+# Run tests with synthetic patient
+SCENARIO=default CLINICAL_NOTES_SOURCE=caboodle python3 -m pytest tests/test_local_agents.py -v
+```
 
-* Search the repository (https://github.com/RushAI-jcr/rushtumorboard/pulls) for an open or closed PR
-  that relates to your submission. You don't want to duplicate effort.
+### Running locally
 
-* Make your changes in a new git fork:
+```sh
+cd src
+SCENARIO=default CLINICAL_NOTES_SOURCE=caboodle python3 app.py
+```
 
-* Commit your changes using a descriptive commit message
-* Push your fork to GitHub:
-* In GitHub, create a pull request
-* If we suggest changes then:
-  * Make the required updates.
-  * Rebase your fork and force push to your GitHub repository (this will update your Pull Request):
+## Commit Conventions
 
-    ```shell
-    git rebase master -i
-    git push -f
-    ```
+Use [Conventional Commits](https://www.conventionalcommits.org/):
 
-That's it! Thank you for your contribution!
+```
+feat: add cervical cancer NCCN guidelines
+fix: prevent thread message duplication in group chat
+refactor: extract _is_tool_message helper
+docs: update data access layer documentation
+```
+
+**Types:** `feat`, `fix`, `refactor`, `docs`, `test`, `ci`, `chore`
+
+## Pull Request Workflow
+
+1. Create a feature branch from `main`
+2. Make changes and test locally
+3. Ensure the pre-commit hook passes (PHI scan)
+4. Push and open a PR using the template
+5. All PRs require PHI checklist completion
+6. If agent behavior changes, run `scripts/run_batch_e2e.py` with at least 2 synthetic patients
+
+## Testing
+
+| Test | Command | When |
+|------|---------|------|
+| Unit tests | `python3 -m pytest tests/test_local_agents.py -v` | Every PR |
+| Schema alignment | `python3 -m pytest tests/test_schema_alignment.py -v` | Data model changes |
+| Batch E2E (synthetic) | `python3 scripts/run_batch_e2e.py --patients patient_gyn_001,patient_gyn_002` | Agent logic changes |
+| Batch E2E (full) | `python3 scripts/run_batch_e2e.py` | Before release |
+| CSV validation | `python3 scripts/validate_patient_csvs.py` | New patient data |
+
+## Project Structure
+
+See [CLAUDE.md](./CLAUDE.md) for the full directory layout and agent architecture.
+
+## Reporting Issues
+
+- Search [existing issues](https://github.com/RushAI-jcr/rushtumorboard/issues) first
+- Use the bug report or feature request templates
+- For security vulnerabilities, see [SECURITY.md](./SECURITY.md)
+- Never include real patient data in issue descriptions
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the [MIT License](./LICENSE).
