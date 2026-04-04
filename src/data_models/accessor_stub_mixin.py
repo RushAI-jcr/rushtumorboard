@@ -4,6 +4,8 @@ Consolidates identical stub methods previously duplicated across Blob, FHIR, and
 Fabric accessor classes. Subclasses override only the methods they actually support.
 """
 
+from collections.abc import Sequence
+
 from data_models.patient_demographics import PatientDemographics
 
 
@@ -17,6 +19,7 @@ class ClinicalNoteAccessorStubMixin:
     # Methods that subclasses can override with real data
     _STUB_METHODS = frozenset({
         "get_lab_results",
+        "get_lab_results_with_notes_fallback",
         "get_tumor_markers",
         "get_pathology_reports",
         "get_radiology_reports",
@@ -42,6 +45,13 @@ class ClinicalNoteAccessorStubMixin:
     async def get_lab_results(self, patient_id: str, component_name: str | None = None) -> list[dict]:
         """Structured lab results are not available via this accessor."""
         return []
+
+    async def get_lab_results_with_notes_fallback(
+        self, patient_id: str, component_name: str | None = None,
+        keywords: Sequence[str] | None = None,
+    ) -> list[dict]:
+        """Lab results with clinical notes fallback — default delegates to get_lab_results."""
+        return await self.get_lab_results(patient_id, component_name)
 
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
         """Structured tumor markers are not available via this accessor."""

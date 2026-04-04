@@ -242,6 +242,70 @@ class CaboodleFileAccessor:
             ]
         return labs
 
+    async def get_lab_results_with_notes_fallback(
+        self,
+        patient_id: str,
+        component_name: str | None = None,
+        keywords: Sequence[str] | None = None,
+    ) -> list[dict]:
+        """Get lab results from lab_results.csv first, then fall back to clinical notes.
+
+        This method is designed for callers (like the pre-tumor board checklist) that
+        need to find lab values even when they are only documented in physician notes
+        rather than as structured lab rows.
+
+        Args:
+            patient_id: The patient ID.
+            component_name: Optional component filter for structured labs (e.g., 'CA-125').
+            keywords: Keywords to search in clinical notes. If None, uses component_name.
+
+        Returns:
+            List of dicts. Structured lab results come first; if empty, falls back to
+            clinical note excerpts with source='clinical_notes' marker.
+        """
+        # Layer 1: structured lab_results.csv
+        labs = await self.get_lab_results(patient_id, component_name)
+        if labs:
+            return labs
+
+        # Layer 2: search clinical notes for lab values
+        search_keywords = list(keywords) if keywords else []
+        if component_name and component_name.lower() not in [k.lower() for k in search_keywords]:
+            search_keywords.insert(0, component_name)
+        if not search_keywords:
+            return []
+
+        lab_note_types = [
+            "Progress Notes", "Progress Note", "H&P", "History and Physical",
+            "Oncology Consultation", "Consults", "Discharge Summary",
+            "ED Provider Notes", "Telephone",
+        ]
+        notes = await self.get_clinical_notes_by_keywords(patient_id, lab_note_types, search_keywords)
+        if not notes:
+            return []
+
+        logger.info(
+            "Lab fallback to clinical notes for %s (keywords=%s): found %d notes",
+            patient_id, search_keywords[:3], len(notes),
+        )
+
+        # Convert note excerpts to lab-like dicts so callers can process uniformly
+        results = []
+        for n in notes[:20]:
+            results.append({
+                "ComponentName": component_name or ", ".join(search_keywords[:3]),
+                "OrderDate": n.get("EntryDate", n.get("date", "")),
+                "ResultValue": "",
+                "ResultUnit": "",
+                "ReferenceRange": "",
+                "AbnormalFlag": "",
+                "source": "clinical_notes",
+                "NoteType": n.get("NoteType", n.get("note_type", "")),
+                "NoteText": n.get("NoteText", n.get("note_text", n.get("text", "")))[:2000],
+            })
+
+        return results
+
     async def get_tumor_markers(self, patient_id: str) -> list[dict]:
         """Get tumor marker results (CA-125, HE4, hCG, CEA, AFP, LDH)."""
         labs = await self._read_file(patient_id, "lab_results")

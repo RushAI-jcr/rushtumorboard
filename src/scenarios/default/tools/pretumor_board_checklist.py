@@ -134,6 +134,17 @@ def _match_any(value: str, patterns: list[str]) -> bool:
     return any(p in v for p in patterns)
 
 
+def _match_lab_row(row: dict, patterns: list[str]) -> bool:
+    """Match a lab row against patterns — checks ComponentName and (for clinical note
+    fallback rows) also searches the NoteText."""
+    if _match_any(row.get("ComponentName", row.get("component_name", "")), patterns):
+        return True
+    # For rows sourced from clinical notes, also search the note text
+    if row.get("source") == "clinical_notes":
+        return _match_any(row.get("NoteText", ""), patterns)
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Plugin
 # ---------------------------------------------------------------------------
@@ -222,7 +233,16 @@ class PreTumorBoardChecklistPlugin:
     # ------------------------------------------------------------------
 
     async def _get_labs(self, accessor, patient_id: str) -> list[dict]:
-        return await accessor.get_lab_results(patient_id)
+        """Get labs from structured lab_results.csv first, then fall back to clinical notes."""
+        # All lab keywords to search for in clinical notes if structured data is missing
+        all_lab_keywords = (
+            list(_CBC_PATTERNS) + list(_CMP_PATTERNS) +
+            list(_CA125_PATTERNS) + list(_HCG_PATTERNS) +
+            list(_CEA_PATTERNS) + list(_CA199_PATTERNS) + list(_HE4_PATTERNS)
+        )
+        return await accessor.get_lab_results_with_notes_fallback(
+            patient_id, component_name=None, keywords=all_lab_keywords,
+        )
 
     async def _get_radiology(self, accessor, patient_id: str) -> list[dict]:
         return await accessor.get_radiology_reports(patient_id)
@@ -245,7 +265,7 @@ class PreTumorBoardChecklistPlugin:
         results = []
 
         def _check(label: str, patterns: list[str], threshold: int, conditional: bool = False) -> dict:
-            matched = [r for r in labs if _match_any(r.get("ComponentName", ""), patterns)]
+            matched = [r for r in labs if _match_lab_row(r, patterns)]
             if not matched:
                 present = False
                 days = None
