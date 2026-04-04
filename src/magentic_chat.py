@@ -6,6 +6,7 @@ import os
 from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_agentchat.base import ChatAgent
 from autogen_agentchat.teams import MagenticOneGroupChat
+from autogen_core.tools import FunctionTool
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 from semantic_kernel.agents import Agent, AgentGroupChat
 
@@ -16,8 +17,11 @@ def convert_tools(agent: Agent):
     tools = []
     for plugin in agent.kernel.plugins.values():
         for function in plugin.functions.values():
-            tools.append(function)
-
+            tools.append(FunctionTool(
+                function.method,
+                description=function.description or function.name,
+                name=function.name,
+            ))
     return tools
 
 
