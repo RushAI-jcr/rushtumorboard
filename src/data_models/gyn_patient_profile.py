@@ -22,19 +22,15 @@ class GynPatientProfile(BaseModel):
 
     # --- Required fields ---
     age: str = Field(
-        max_length=10,
         description="Patient age (e.g., '62').",
     )
     primary_site: str = Field(
-        max_length=100,
         description="Cancer primary site: ovary, endometrium, cervix, vulva, vagina, fallopian tube, peritoneal, or gestational trophoblastic (GTN/GTD).",
     )
     histology: str = Field(
-        max_length=500,
         description="Histologic type (e.g., 'high-grade serous carcinoma', 'endometrioid grade 2', 'clear cell', 'squamous', 'choriocarcinoma', 'PSTT', 'hydatidiform mole').",
     )
     figo_stage: str = Field(
-        max_length=30,
         description="FIGO stage (e.g., 'IIIC', 'IVB', 'IA').",
     )
     biomarkers: list[str] = Field(
@@ -44,7 +40,6 @@ class GynPatientProfile(BaseModel):
         ),
     )
     ecog_performance_status: str = Field(
-        max_length=10,
         description="ECOG PS (e.g., '0', '1').",
     )
     prior_therapies: str = Field(

@@ -121,6 +121,11 @@ class HealthcareAgent(Agent):
         return self._client
 
     async def create_channel(self) -> AgentChannel:
+        # NOTE: HealthcareAgentChannel does NOT use CustomHistoryChannel from
+        # group_chat.py. If healthcare agents are re-enabled in agents.yaml,
+        # this channel will not benefit from tool-message filtering or thread
+        # truncation, which may cause OpenAI 400 errors from orphaned tool
+        # messages in multi-agent group chats. See SK issue #12095.
         logger.debug("Creating HealthcareAgentChannel.")
         return HealthcareAgentChannel()
 
