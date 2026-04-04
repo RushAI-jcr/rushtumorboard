@@ -1,14 +1,17 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 
-// Based on healthcare_agents.yaml
+// All agents from agents.yaml — must match names exactly
 const DEFAULT_AGENTS = [
     'Orchestrator',
     'PatientHistory',
+    'OncologicHistory',
+    'Pathology',
     'Radiology',
     'PatientStatus',
     'ClinicalGuidelines',
     'ClinicalTrials',
-    'ReportCreation'
+    'MedicalResearch',
+    'ReportCreation',
 ];
 
 // Thunk to fetch available agents from the API

@@ -12,7 +12,7 @@ import {
 } from '@fluentui/react-components';
 import { Person24Regular, SignOut24Regular, Navigation24Regular, QuestionCircle24Regular } from '@fluentui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import WorkflowGuide from './WorkflowGuide';
 
 // Add prop for toggling sidebar
@@ -70,6 +70,15 @@ export default function Header({ toggleSidebar, isMobile }: HeaderProps) {
     const classes = useStyles();
     const { user, logout } = useAuth();
     const [guideOpen, setGuideOpen] = useState(false);
+
+    // Auto-open guide on first visit
+    useEffect(() => {
+        const hasSeenGuide = localStorage.getItem('tb-guide-seen');
+        if (!hasSeenGuide) {
+            setGuideOpen(true);
+            localStorage.setItem('tb-guide-seen', '1');
+        }
+    }, []);
 
     const handleLogout = () => {
         logout();

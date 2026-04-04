@@ -425,7 +425,7 @@ export default function ChatPanel() {
                             }
                         }}
                         ref={inputRef}
-                        placeholder="Type a message... (Use @ to mention an agent)"
+                        placeholder="Type @ to pick an agent, e.g. @Orchestrator prepare tumor board for patient ..."
                     />
                     <Button
                         className={classes.sendButton}

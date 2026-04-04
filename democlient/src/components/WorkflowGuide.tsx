@@ -12,7 +12,8 @@ import {
     Divider,
     Badge,
 } from '@fluentui/react-components';
-import { Dismiss24Regular, Info24Regular } from '@fluentui/react-icons';
+import { Dismiss24Regular } from '@fluentui/react-icons';
+import { getAllAgentMeta } from '../utils/agentMeta';
 
 const useStyles = makeStyles({
     surface: {
@@ -158,6 +159,9 @@ export default function WorkflowGuide({ open, onClose }: WorkflowGuideProps) {
                             <code className={classes.commandExample}>
                                 @Orchestrator prepare tumor board for patient [Patient ID]
                             </code>
+                            <Text style={{ display: 'block', fontSize: tokens.fontSizeBase200, color: tokens.colorNeutralForeground3, marginBottom: '0.5rem' }}>
+                                The Patient ID is the folder name from the patient data directory (e.g., <code>patient_gyn_001</code> or a UUID like <code>XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX</code>).
+                            </Text>
                             <Text style={{ display: 'block' }}>
                                 3. Wait for the system to gather data and generate your report
                             </Text>
@@ -303,19 +307,14 @@ export default function WorkflowGuide({ open, onClose }: WorkflowGuideProps) {
                         <div className={classes.section} style={{ marginTop: '1rem' }}>
                             <Text className={classes.sectionTitle}>Available Agents</Text>
                             <Text className={classes.stepDesc} style={{ marginBottom: '0.5rem' }}>
-                                You can @mention any of these agents directly in the chat:
+                                Type <strong>@</strong> in the chat to pick an agent. Most of the time, just use <strong>@Orchestrator</strong> to run the full workflow.
                             </Text>
                             <ul className={classes.outputList}>
-                                <li className={classes.outputItem}><strong>@Orchestrator</strong> — Runs the full tumor board workflow start to finish</li>
-                                <li className={classes.outputItem}><strong>@PatientHistory</strong> — Demographics and clinical timeline</li>
-                                <li className={classes.outputItem}><strong>@OncologicHistory</strong> — Cancer diagnosis and treatment history</li>
-                                <li className={classes.outputItem}><strong>@Pathology</strong> — Pathology and molecular markers</li>
-                                <li className={classes.outputItem}><strong>@Radiology</strong> — Imaging findings</li>
-                                <li className={classes.outputItem}><strong>@PatientStatus</strong> — Current staging and tumor markers</li>
-                                <li className={classes.outputItem}><strong>@ClinicalGuidelines</strong> — NCCN treatment recommendations</li>
-                                <li className={classes.outputItem}><strong>@ClinicalTrials</strong> — Open clinical trial search</li>
-                                <li className={classes.outputItem}><strong>@MedicalResearch</strong> — PubMed literature review</li>
-                                <li className={classes.outputItem}><strong>@ReportCreation</strong> — Generate Word doc and PowerPoint</li>
+                                {getAllAgentMeta().map(agent => (
+                                    <li key={agent.id} className={classes.outputItem}>
+                                        {agent.icon} <strong>@{agent.id}</strong> ({agent.label}) — {agent.description}
+                                    </li>
+                                ))}
                             </ul>
                         </div>
                     </DialogContent>
@@ -338,8 +337,11 @@ export function InlineWorkflowHint() {
             </Text>
             <ol className={classes.steps}>
                 <li>Click <strong>New Chat</strong> in the sidebar</li>
-                <li>Type: <code className={classes.code}>@Orchestrator prepare tumor board for patient [Patient ID]</code></li>
-                <li>Wait for the agents to gather data and generate the Word doc and PowerPoint</li>
+                <li>Type <strong>@</strong> to pick an agent, then enter the patient ID</li>
+                <li style={{ fontSize: '0.85em', color: '#666' }}>
+                    Example: <code className={classes.code}>@Orchestrator prepare tumor board for patient patient_gyn_001</code>
+                </li>
+                <li>The system gathers all data and generates a Word doc + PowerPoint</li>
             </ol>
             <Text className={classes.hint}>
                 Click <strong>"How It Works"</strong> in the header for the full guide.
