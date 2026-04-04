@@ -4,6 +4,7 @@
 # for outside hospital transfer patients (~20-30% of cases).
 # Produces a clear timeline: diagnosis, treatments received, reason for referral.
 
+import asyncio
 import json
 import logging
 import textwrap
@@ -19,7 +20,7 @@ from data_models.plugin_configuration import PluginConfiguration
 from utils.model_utils import model_supports_temperature
 
 from utils.clinical_note_filter_utils import deduplicate_notes
-from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE
+from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE, _LLM_TIMEOUT_SECS
 from .note_type_constants import (
     ADDENDUM_TYPES, CONSULT_NOTE_TYPES, DISCHARGE_TYPES,
     ED_NOTE_TYPES, HP_TYPES, ONCOLOGY_TYPES, OPERATIVE_TYPES,
@@ -97,8 +98,12 @@ ONCOLOGIC_HISTORY_SYSTEM_PROMPT = """
     }
 
     Rules:
-    - If a field is not mentioned in any note, use "not reported" or an empty list.
-    - Only include information explicitly stated in the notes.
+    - When structured data (diagnoses, staging, medications) is provided alongside clinical
+      notes, use the structured data as the primary source for dates, ICD codes, medication
+      names, and staging values. Use clinical notes to fill in narrative context, reason for
+      referral, and treatment outcomes not captured in structured fields.
+    - If a field is not mentioned in any source, use "not reported" or an empty list.
+    - Only include information explicitly stated in the data.
     - Sort treatment_timeline and recurrence_history chronologically by date (oldest → newest).
     - DATES ARE MANDATORY: Every event in treatment_timeline and recurrence_history must have a date_range or date. Every molecular_profile result must include the date it was tested in parentheses, e.g., "BRCA1 pathogenic variant (tested 10/5/25)". Every tumor marker in current_tumor_markers must include its date, e.g., "CA-125 12 U/mL (3/15/26)".
     - For outside patients, clearly distinguish what was done at the outside institution vs. at this institution.
@@ -140,6 +145,15 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
     MAX_NOTES = 30
     MAX_CHARS_PER_NOTE = 4000
     MAX_TOTAL_CHARS = 120_000  # ~30K tokens
+    MAX_STRUCTURED_CHARS = 30_000  # ~7.5K tokens for structured preamble
+
+    # Oncology-relevant medication OrderClass values (filter medications before serializing)
+    _ONCOLOGY_MED_CLASSES = frozenset(
+        c.lower() for c in (
+            "chemotherapy", "antineoplastic", "immunotherapy",
+            "targeted therapy", "hormone therapy", "endocrine therapy",
+        )
+    )
 
     async def _get_clinical_notes(self, patient_id: str) -> list[dict]:
         """Get clinical notes — H&P, consults, referral letters, progress notes.
@@ -161,20 +175,48 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
         return notes[:self.MAX_NOTES]
 
     async def _extract(self, patient_id: str) -> str:
-        """Override base to read clinical notes instead of specific report type."""
+        """Override base to read structured CSVs (Tier 1) + clinical notes (Tier 2/3)."""
+        accessor = self.data_access.clinical_note_accessor
+
+        # Tier 1: Structured CSVs — high-confidence data for dates, codes, med names
+        diagnoses, staging, medications = await asyncio.gather(
+            accessor.get_diagnoses(patient_id),
+            accessor.get_cancer_staging(patient_id),
+            accessor.get_medications(patient_id),
+        )
+
+        # Tier 2/3: Clinical notes — narrative context, reason for referral, outcomes
         notes = await self._get_clinical_notes(patient_id)
         notes = deduplicate_notes(notes, label="oncologic_history")
 
-        if not notes:
+        # Filter medications to oncology-relevant classes (fall back to all if none match)
+        onc_meds = [
+            m for m in medications
+            if m.get("OrderClass", "").lower() in self._ONCOLOGY_MED_CLASSES
+        ]
+        if not onc_meds and medications:
+            onc_meds = medications  # fall back to all meds if no oncology class matches
+
+        has_structured = bool(diagnoses or staging or onc_meds)
+        if not notes and not has_structured:
             return json.dumps({
                 "patient_id": patient_id,
-                "error": "No clinical notes found for this patient.",
+                "error": "No clinical notes or structured data found for this patient.",
                 self.error_key: []
             })
 
+        # Build structured data preamble (compact JSON, capped at MAX_STRUCTURED_CHARS)
+        structured_preamble = ""
+        for label, data in [("DIAGNOSES", diagnoses), ("CANCER STAGING", staging), ("MEDICATIONS", onc_meds)]:
+            if data:
+                structured_preamble += f"--- STRUCTURED {label} ---\n"
+                structured_preamble += json.dumps(data) + "\n\n"
+        if len(structured_preamble) > self.MAX_STRUCTURED_CHARS:
+            structured_preamble = structured_preamble[:self.MAX_STRUCTURED_CHARS] + "\n[...truncated...]\n"
+
         # Build combined text from clinical notes with volume caps
         note_texts = []
-        total_chars = 0
+        total_chars = len(structured_preamble)
         for n in notes:
             text = n.get("text", n.get("NoteText", n.get("note_text", "")))
             if len(text) > self.MAX_CHARS_PER_NOTE:
@@ -193,21 +235,44 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
 
         combined_text = "\n\n".join(note_texts)
 
+        # Build LLM user message with structured data first (if available)
+        user_msg = f"Extract the structured oncologic history for patient {patient_id}.\n\n"
+        if structured_preamble:
+            user_msg += "STRUCTURED DATA (high confidence — use as primary source):\n\n"
+            user_msg += structured_preamble
+            if combined_text:
+                user_msg += "CLINICAL NOTES (use to supplement and enrich the structured data above):\n\n"
+        if combined_text:
+            user_msg += combined_text
+
         # LLM extraction
         chat_completion_service: AzureChatCompletion = self.kernel.get_service(service_id="default")
         chat_history = ChatHistory()
         chat_history.add_system_message(textwrap.dedent(self.system_prompt).strip())
-        chat_history.add_user_message(
-            f"Extract the structured oncologic history from these clinical notes for patient {patient_id}:\n\n{combined_text}"
-        )
+        chat_history.add_user_message(user_msg)
 
         if model_supports_temperature():
             settings = AzureChatPromptExecutionSettings(temperature=0.0, seed=42)
         else:
             settings = AzureChatPromptExecutionSettings(seed=42)
-        chat_resp = await chat_completion_service.get_chat_message_content(
-            chat_history=chat_history, settings=settings
-        )
+
+        try:
+            chat_resp = await asyncio.wait_for(
+                chat_completion_service.get_chat_message_content(
+                    chat_history=chat_history, settings=settings
+                ),
+                timeout=_LLM_TIMEOUT_SECS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "LLM oncologic history extraction timed out after %.0fs for patient %s",
+                _LLM_TIMEOUT_SECS, patient_id,
+            )
+            return json.dumps({
+                "patient_id": patient_id,
+                "error": "LLM oncologic history extraction timed out.",
+                self.error_key: []
+            })
 
         response_text = (chat_resp.content or "") if chat_resp is not None else ""
 
@@ -218,6 +283,11 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
             findings = json.loads(json_str)
             findings["patient_id"] = patient_id
             findings["notes_analyzed"] = len(notes)
+            findings["structured_sources"] = {
+                "diagnoses": len(diagnoses),
+                "staging": len(staging),
+                "medications": len(medications),
+            }
             result = json.dumps(findings, indent=2)
         except json.JSONDecodeError:
             result = json.dumps({
@@ -226,7 +296,10 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
                 "raw_extraction": response_text,
             }, indent=2)
 
-        logger.info("Extracted oncologic history for patient %s from %d notes", patient_id, len(notes))
+        logger.info(
+            "Extracted oncologic history for patient %s from %d notes + structured data (dx=%d, staging=%d, meds=%d)",
+            patient_id, len(notes), len(diagnoses), len(staging), len(medications),
+        )
         return result
 
     @kernel_function(

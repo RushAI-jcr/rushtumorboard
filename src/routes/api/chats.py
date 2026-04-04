@@ -6,8 +6,6 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -33,8 +31,8 @@ class DateTimeEncoder(json.JSONEncoder):
 class MessageRequest(BaseModel):
     content: str
     sender: str
-    mentions: Optional[List[str]] = None
-    channelData: Optional[Dict] = None
+    mentions: list[str] | None = None
+    channelData: dict | None = None
 
 
 class Message(BaseModel):
@@ -43,7 +41,7 @@ class Message(BaseModel):
     sender: str
     timestamp: datetime
     isBot: bool
-    mentions: Optional[List[str]] = None
+    mentions: list[str] | None = None
 
     def dict(self, *args, **kwargs):
         # Override dict method to handle datetime serialization
@@ -56,17 +54,17 @@ class Message(BaseModel):
 
 class MessageResponse(BaseModel):
     message: Message
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class MessagesResponse(BaseModel):
-    messages: List[Message]
-    error: Optional[str] = None
+    messages: list[Message]
+    error: str | None = None
 
 
 class AgentsResponse(BaseModel):
-    agents: List[str]
-    error: Optional[str] = None
+    agents: list[str]
+    error: str | None = None
 
 # Create a helper function to create JSON responses with datetime handling
 

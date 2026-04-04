@@ -252,11 +252,6 @@ class ClinicalTrialsPlugin:
                     "eligibility": "Evaluation timed out or failed -- manual review needed",
                     "title": title,
                 }
-            elif isinstance(response_result, BaseException):
-                trial_dict_results[nct_id] = {
-                    "eligibility": "Evaluation error -- manual review needed",
-                    "title": title,
-                }
             else:
                 trial_dict_results[nct_id] = {
                     "eligibility": str(response_result),
@@ -306,5 +301,5 @@ class ClinicalTrialsPlugin:
         chat_completion_response = await self.chat_completion_service.get_chat_message_content(
             chat_history=chat_history, settings=AzureChatPromptExecutionSettings())
         self.chat_ctx.display_clinical_trials.append(
-            self.clinical_trial_display + trial)
+            self.clinical_trial_display + nct_id)
         return str(chat_completion_response)

@@ -40,6 +40,11 @@ GYN_MARKERS = {
 }
 
 
+def _normalize_marker(name: str) -> str:
+    """Normalize a marker name for comparison (lowercase, strip hyphens and spaces)."""
+    return name.lower().replace("-", "").replace(" ", "")
+
+
 class TumorMarkerPlugin:
     # Note types and keywords for layered fallback when no lab data exists
     # NoteType values confirmed in real Epic Caboodle exports at Rush:
@@ -55,10 +60,41 @@ class TumorMarkerPlugin:
         "ca 27", "ca2729", "ca 15", "ca153", "tumor marker",
         "scc", "scc-ag", "squamous cell carcinoma antigen",
     ]
+    # Genomic testing companies whose pathology reports may contain tumor marker
+    # and biomarker data (HRD scores, BRCA status, TMB, etc.)
+    _GENOMIC_REPORT_KEYWORDS = [
+        "tempus", "ambry", "foundation", "guardant", "caris",
+        "neogenomics", "myriad", "invitae",
+    ]
 
     def __init__(self, config: PluginConfiguration):
         self.chat_ctx = config.chat_ctx
         self.data_access = config.data_access
+
+    async def _get_markers_from_pathology_reports(
+        self, patient_id: str, marker: str,
+    ) -> list[dict]:
+        """Tier 1: Search pathology reports for genomic testing results (Tempus/Ambry/etc.).
+
+        These reports often contain biomarker data (HRD scores, BRCA, TMB) that may not
+        appear in lab_results.csv because they come from external genomic companies.
+        """
+        accessor = self.data_access.clinical_note_accessor
+        path_reports = await accessor.get_pathology_reports(patient_id)
+        if not path_reports:
+            return []
+
+        marker_lower = _normalize_marker(marker)
+        relevant = []
+        for r in path_reports:
+            text = (r.get("ReportText", "") or "").lower()
+            # Check if report mentions the specific marker
+            if marker_lower in _normalize_marker(text):
+                relevant.append(r)
+            # Or if it's from a genomic testing company (may contain many markers)
+            elif any(kw in text for kw in self._GENOMIC_REPORT_KEYWORDS):
+                relevant.append(r)
+        return relevant
 
     async def _get_marker_notes_fallback(self, patient_id: str, marker: str) -> str | None:
         """Layer 2/3 fallback: extract marker mentions from clinical notes.
@@ -122,8 +158,8 @@ class TumorMarkerPlugin:
             return json.dumps({"error": "Invalid patient ID."})
 
         # Validate marker against known GYN markers (soft warning — allow unknown markers)
-        marker_key_norm = marker.lower().replace("-", "").replace(" ", "")
-        known_keys = {k.replace("-", "").replace(" ", "") for k in GYN_MARKERS}
+        marker_key_norm = _normalize_marker(marker)
+        known_keys = {_normalize_marker(k) for k in GYN_MARKERS}
         if marker_key_norm not in known_keys:
             logger.warning(
                 "Unrecognized tumor marker %r for patient %s; proceeding with best-effort lab lookup",
@@ -132,24 +168,51 @@ class TumorMarkerPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        # Layer 1: Get structured lab results — both calls are independent, gather concurrently
-        labs_result, all_markers_result = await asyncio.gather(
+        # Tier 1 (pathology reports) + Tier 2 (structured labs) — run concurrently
+        path_reports_result, labs_result, all_markers_result = await asyncio.gather(
+            self._get_markers_from_pathology_reports(patient_id, marker),
             accessor.get_lab_results(patient_id, component_name=marker),
             accessor.get_tumor_markers(patient_id),
             return_exceptions=True,
         )
+        if isinstance(path_reports_result, BaseException):
+            path_reports_result = []
         if isinstance(labs_result, BaseException):
             labs_result = []
         if isinstance(all_markers_result, BaseException):
             all_markers_result = []
         labs = labs_result or [
             m for m in all_markers_result
-            if marker.lower().replace("-", "") in
-            m.get("ComponentName", m.get("component_name", "")).lower().replace("-", "")
+            if _normalize_marker(marker) in
+            _normalize_marker(m.get("ComponentName", m.get("component_name", "")))
         ]
 
         if not labs:
-            # Layer 2/3: Fallback to clinical notes
+            # Tier 1 fallback: Pathology reports (Tempus/Ambry genomic results)
+            if path_reports_result:
+                logger.info(
+                    "Tumor marker fallback to pathology reports for %s/%s (%d reports)",
+                    patient_id, marker, len(path_reports_result),
+                )
+                excerpts = []
+                for r in path_reports_result[:10]:
+                    excerpts.append({
+                        "procedure": r.get("ProcedureName", ""),
+                        "date": r.get("OrderDate", ""),
+                        "text_preview": (r.get("ReportText", "") or "")[:2000],
+                    })
+                return json.dumps({
+                    "patient_id": patient_id,
+                    "marker": marker,
+                    "source": "pathology_reports",
+                    "source_description": (
+                        f"No structured lab data for {marker}. Found {len(path_reports_result)} "
+                        f"pathology/genomic reports mentioning this marker."
+                    ),
+                    "report_excerpts": excerpts,
+                }, indent=2)
+
+            # Tier 3: Clinical notes fallback
             fallback = await self._get_marker_notes_fallback(patient_id, marker)
             if fallback:
                 logger.info("Tumor marker fallback to clinical notes for %s/%s", patient_id, marker)
@@ -157,7 +220,7 @@ class TumorMarkerPlugin:
             return json.dumps({
                 "patient_id": patient_id,
                 "marker": marker,
-                "error": f"No {marker} results found in labs or clinical notes.",
+                "error": f"No {marker} results found in labs, pathology reports, or clinical notes.",
                 "data_points": []
             })
 
@@ -234,7 +297,28 @@ class TumorMarkerPlugin:
         all_markers = tumor_markers_result if tumor_markers_result else all_labs
 
         if not all_markers:
-            # Fallback to clinical notes
+            # Tier 1 fallback: pathology reports (Tempus/Ambry)
+            path_reports = await self._get_markers_from_pathology_reports(patient_id, "tumor marker")
+            if path_reports:
+                logger.info("All tumor markers fallback to pathology reports for %s", patient_id)
+                excerpts = []
+                for r in path_reports[:10]:
+                    excerpts.append({
+                        "procedure": r.get("ProcedureName", ""),
+                        "date": r.get("OrderDate", ""),
+                        "text_preview": (r.get("ReportText", "") or "")[:2000],
+                    })
+                return json.dumps({
+                    "patient_id": patient_id,
+                    "source": "pathology_reports",
+                    "source_description": (
+                        f"No structured lab data for tumor markers. Found {len(path_reports)} "
+                        f"pathology/genomic reports that may contain marker data."
+                    ),
+                    "report_excerpts": excerpts,
+                }, indent=2)
+
+            # Tier 3 fallback: clinical notes
             fallback = await self._get_marker_notes_fallback(patient_id, "tumor markers")
             if fallback:
                 logger.info("All tumor markers fallback to clinical notes for %s", patient_id)
@@ -242,7 +326,7 @@ class TumorMarkerPlugin:
             return json.dumps({
                 "patient_id": patient_id,
                 "markers": {},
-                "message": "No tumor marker results found in labs or clinical notes."
+                "message": "No tumor marker results found in labs, pathology reports, or clinical notes."
             })
 
         # Group by marker name
@@ -299,9 +383,9 @@ class TumorMarkerPlugin:
         }
 
         # Reference range
-        marker_key = marker.lower().replace("-", "").replace(" ", "")
+        marker_key = _normalize_marker(marker)
         for key, info in GYN_MARKERS.items():
-            if key.replace("-", "") == marker_key:
+            if _normalize_marker(key) == marker_key:
                 analysis["upper_normal"] = info["upper_normal"]
                 analysis["latest_above_normal"] = values[-1] > info["upper_normal"]
                 break

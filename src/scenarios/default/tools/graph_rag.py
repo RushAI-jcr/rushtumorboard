@@ -14,6 +14,7 @@ from data_models.chat_artifact import ChatArtifact, ChatArtifactFilename, ChatAr
 from data_models.chat_context import ChatContext
 from data_models.data_access import DataAccess
 from data_models.plugin_configuration import PluginConfiguration
+from utils.phi_scrubber import scrub_phi
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ class GraphRagPlugin:
         The sources will be a dictionary, with the source ID as the key and a dictionary with the title, authors, and link as the value.
         The text can be used to generate a response with links to the sources.
         """
+        # Scrub potential PHI before sending to external GraphRAG API
+        prompt = scrub_phi(prompt)
+
         headers = {"Ocp-Apim-Subscription-Key": self.subscription_key}
         body = {
             "index_name": self.index_name,

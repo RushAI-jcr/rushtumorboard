@@ -42,3 +42,21 @@ ALL_CLINICAL_TYPES: tuple[str, ...] = (
 # Note: PATHOLOGY_REPORT_TYPES is intentionally excluded from ALL_CLINICAL_TYPES.
 # Pathology notes are retrieved via get_pathology_reports() (Layer 1 CSV) or the
 # pathology extractor's Layer 2 note types, not via the general clinical note filter.
+
+# --- Tiered note types for data source fallback architecture ---
+# NOTE: Some types (e.g. "Oncology Consultation") intentionally appear in both
+# Tier A and Tier B lists. Tiers are priority-ordered, not partitions — when a
+# caller combines both tiers (e.g. pretumor_board_checklist imaging fallback),
+# deduplication happens at the accessor level.
+#
+# Tier A: Oncology-specific note types — most likely to contain structured
+# oncologic data (staging, treatment plans, molecular results), especially for
+# OSH transfer patients whose outside records arrive in consult notes.
+ONCOLOGY_TIER_A_TYPES: tuple[str, ...] = ONCOLOGY_TYPES + ("Oncology Consultation",)
+
+# Tier B: General clinical notes — broad clinical context from all specialties.
+GENERAL_TIER_B_TYPES: tuple[str, ...] = (
+    PROGRESS_NOTE_TYPES + HP_TYPES + CONSULT_NOTE_TYPES + DISCHARGE_TYPES
+    + OPERATIVE_TYPES + ED_NOTE_TYPES + ADDENDUM_TYPES + TELEPHONE_TYPES
+    + EXTERNAL_TYPES
+)

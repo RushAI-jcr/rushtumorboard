@@ -11,16 +11,21 @@
 #   Path:     Surgical pathology report + IHC (MMR, p53, ER/PR, HER2, POLE/NGS)
 #   Consults: GYN Onc surgery, Med Onc, Rad Onc (as applicable)
 
+import asyncio
 import json
 import logging
 from datetime import date
 
 from semantic_kernel.functions import kernel_function
 
+from data_models.chat_context import ChatContext
+from data_models.clinical_note_accessor_protocol import ClinicalNoteAccessorProtocol
+from data_models.data_access import DataAccess
 from data_models.plugin_configuration import PluginConfiguration
 
 from utils.date_utils import parse_date as _parse_date
 
+from .note_type_constants import GENERAL_TIER_B_TYPES, ONCOLOGY_TIER_A_TYPES
 from .validation import validate_patient_id
 
 logger = logging.getLogger(__name__)
@@ -162,7 +167,7 @@ class PreTumorBoardChecklistPlugin:
     for a Rush GYN Oncology Tumor Board case presentation.
     """
 
-    def __init__(self, data_access, chat_ctx):
+    def __init__(self, data_access: DataAccess, chat_ctx: ChatContext):
         self.data_access = data_access
         self.chat_ctx = chat_ctx
 
@@ -203,12 +208,16 @@ class PreTumorBoardChecklistPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        import asyncio
-        labs, rad_reports, path_reports, all_notes = await asyncio.gather(
+        (
+            labs, rad_reports, path_reports, all_notes,
+            staging, medications,
+        ) = await asyncio.gather(
             self._get_labs(accessor, patient_id),
             self._get_radiology(accessor, patient_id),
             self._get_pathology(accessor, patient_id),
             self._get_clinical_notes(accessor, patient_id),
+            self._get_staging(accessor, patient_id),
+            self._get_medications(accessor, patient_id),
         )
 
         checklist: list[dict] = []
@@ -222,6 +231,12 @@ class PreTumorBoardChecklistPlugin:
         # ===== PATHOLOGY & MOLECULAR =====
         checklist += self._check_pathology(path_reports, labs, all_notes)
 
+        # ===== STAGING =====
+        checklist += self._check_staging(staging)
+
+        # ===== MEDICATIONS =====
+        checklist += self._check_medications(medications)
+
         # ===== CONSULTS =====
         checklist += self._check_consults(all_notes)
 
@@ -232,7 +247,7 @@ class PreTumorBoardChecklistPlugin:
     # Data loaders
     # ------------------------------------------------------------------
 
-    async def _get_labs(self, accessor, patient_id: str) -> list[dict]:
+    async def _get_labs(self, accessor: ClinicalNoteAccessorProtocol, patient_id: str) -> list[dict]:
         """Get labs from structured lab_results.csv first, then fall back to clinical notes."""
         # All lab keywords to search for in clinical notes if structured data is missing
         all_lab_keywords = (
@@ -244,18 +259,55 @@ class PreTumorBoardChecklistPlugin:
             patient_id, component_name=None, keywords=all_lab_keywords,
         )
 
-    async def _get_radiology(self, accessor, patient_id: str) -> list[dict]:
-        return await accessor.get_radiology_reports(patient_id)
+    async def _get_radiology(self, accessor: ClinicalNoteAccessorProtocol, patient_id: str) -> list[dict]:
+        """Get radiology data: dedicated reports first, then clinical notes fallback."""
+        reports = await accessor.get_radiology_reports(patient_id)
+        if reports:
+            return reports
 
-    async def _get_pathology(self, accessor, patient_id: str) -> list[dict]:
+        # Fallback: search all clinical note types for imaging references
+        imaging_keywords = [
+            p.lower() for p in
+            _CT_CAP_PATTERNS + _MRI_PEL_PATTERNS + _PET_PATTERNS + _CXR_PATTERNS
+        ]
+        all_note_types = list(ONCOLOGY_TIER_A_TYPES + GENERAL_TIER_B_TYPES)
+        notes = await accessor.get_clinical_notes_by_keywords(
+            patient_id, all_note_types, imaging_keywords,
+        )
+        if notes:
+            logger.info(
+                "Imaging checklist fallback: found %d clinical notes with imaging for %s",
+                len(notes), patient_id,
+            )
+            return [self._note_to_rad_format(n) for n in notes]
+
+        return []
+
+    @staticmethod
+    def _note_to_rad_format(note: dict) -> dict:
+        """Convert a clinical note to a radiology-report-like dict for checklist matching."""
+        text = note.get("NoteText", note.get("text", note.get("note_text", ""))) or ""
+        return {
+            "ProcedureName": text[:500],
+            "OrderDate": note.get("EntryDate", note.get("date", "")),
+            "source": "clinical_notes",
+        }
+
+    async def _get_pathology(self, accessor: ClinicalNoteAccessorProtocol, patient_id: str) -> list[dict]:
         return await accessor.get_pathology_reports(patient_id)
 
-    async def _get_clinical_notes(self, accessor, patient_id: str) -> list[dict]:
+    async def _get_clinical_notes(self, accessor: ClinicalNoteAccessorProtocol, patient_id: str) -> list[dict]:
         consult_types = (
             "Consults", "Consult Note", "Oncology Consultation",
             "Genetic Counseling", "Procedures",
         )
         return await accessor.get_clinical_notes_by_type(patient_id, consult_types)
+
+    async def _get_staging(self, accessor: ClinicalNoteAccessorProtocol, patient_id: str) -> list[dict]:
+        return await accessor.get_cancer_staging(patient_id)
+
+    async def _get_medications(self, accessor: ClinicalNoteAccessorProtocol, patient_id: str) -> list[dict]:
+        return await accessor.get_medications(patient_id)
 
     # ------------------------------------------------------------------
     # Lab checks
@@ -322,8 +374,11 @@ class PreTumorBoardChecklistPlugin:
 
         def _check_rad(label: str, patterns: list[str], threshold: int,
                        order_code: str, conditional: bool = False) -> dict:
-            matched = [r for r in rad_reports
-                       if _match_any(r.get("ProcedureName", ""), patterns)]
+            matched = []
+            for r in rad_reports:
+                proc = r.get("ProcedureName", "")
+                if _match_any(proc, patterns):
+                    matched.append(r)
             if not matched:
                 present = False
                 days = None
@@ -473,6 +528,61 @@ class PreTumorBoardChecklistPlugin:
             ),
         })
 
+        return results
+
+    # ------------------------------------------------------------------
+    # Staging checks
+    # ------------------------------------------------------------------
+
+    def _check_staging(self, staging: list[dict]) -> list[dict]:
+        """Check for structured FIGO/TNM staging records in cancer_staging.csv."""
+        results = []
+        has_figo = any(r.get("FIGOStage") for r in staging)
+        has_tnm = any(r.get("TNM_T") or r.get("StageGroup") for r in staging)
+        results.append({
+            "section": "Staging",
+            "item": "FIGO staging",
+            "order_code": "",
+            "conditional": False,
+            "present": has_figo,
+            "days_ago": None,
+            "threshold_days": None,
+            "status": "✓ FIGO stage recorded" if has_figo else "⚠ no FIGO staging in structured data — confirm verbally",
+        })
+        results.append({
+            "section": "Staging",
+            "item": "TNM staging",
+            "order_code": "",
+            "conditional": True,
+            "present": has_tnm,
+            "days_ago": None,
+            "threshold_days": None,
+            "status": "✓ TNM staging recorded" if has_tnm else "⚠ no TNM staging in structured data",
+        })
+        return results
+
+    # ------------------------------------------------------------------
+    # Medication checks
+    # ------------------------------------------------------------------
+
+    def _check_medications(self, medications: list[dict]) -> list[dict]:
+        """Check for systemic therapy medication records in medications.csv."""
+        results = []
+        chemo_patterns = ["chemotherapy", "antineoplastic", "immunotherapy", "targeted"]
+        chemo = [m for m in medications if _match_any(m.get("OrderClass", ""), chemo_patterns)]
+        results.append({
+            "section": "Medications",
+            "item": "Systemic therapy orders",
+            "order_code": "",
+            "conditional": True,
+            "present": len(chemo) > 0,
+            "days_ago": None,
+            "threshold_days": None,
+            "status": (
+                f"✓ {len(chemo)} systemic therapy order(s) found"
+                if chemo else "⚠ no systemic therapy orders in medication data"
+            ),
+        })
         return results
 
     # ------------------------------------------------------------------

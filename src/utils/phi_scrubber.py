@@ -12,7 +12,7 @@ _PHI_PATTERNS = [
     # US date formats: M/D/YY, MM/DD/YYYY, M-D-YYYY, etc.
     re.compile(r'\b\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b'),
     # ISO dates: 2024-01-15, 2024-01-15T10:30:00Z
-    re.compile(r'\b\d{4}-\d{2}-\d{2}(?:T\S+)?\b'),
+    re.compile(r'\b\d{4}-\d{2}-\d{2}(?:T\S{1,30})?\b'),
     # MRN-like numbers (5+ digits — validation.py accepts 5-digit MRNs)
     re.compile(r'\b\d{5,}\b'),
     # SYN-prefixed synthetic MRNs

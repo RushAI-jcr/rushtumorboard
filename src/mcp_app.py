@@ -19,6 +19,7 @@ import group_chat
 from data_models.app_context import AppContext
 from data_models.fabric.fabric_clinical_note_accessor import FabricClinicalNoteAccessor
 from mcp_servers.clinical_trials_mcp import create_clinical_trials_mcp
+from utils.message_enrichment import append_links, apply_sas_urls
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +70,12 @@ def create_fast_mcp_app(
 
             chat.is_complete = False
             async for response in chat.invoke(agent=agent):
+                # Enrich with patient images, trial links, and SAS URLs
+                content = append_links(response.content, chat_ctx)
+                content = await apply_sas_urls(content, chat_ctx, data_access)
                 responses.append({
                     "name": response.name,
-                    "content": response.content,
+                    "content": content,
                 })
             # Save chat context
             try:
