@@ -11,7 +11,7 @@ A multi-agent system that coordinates specialized AI agents to support **Gynecol
 - **Pre-meeting procedure pass** — audits required labs (CBC ≤14d, CMP ≤14d, CA-125 ≤28d), imaging (CT CAP ≤56d, MRI Pelvis ≤42d), pathology, IHC/NGS, and consults before the tumor board; surfaces outstanding items with Rush Epic order codes
 - **GYN oncology-focused** extraction: pathology (histology, IHC, endometrial molecular classification), radiology (RECIST, PCI), tumor markers (CA-125 trending, GCIG criteria), oncologic history
 - **3-layer note fallback** — dedicated CSV → NoteType filter → keyword filter, ensuring pathology and radiology data is recovered even for outside-hospital (OSH) transfer patients
-- **NCCN guideline lookup** — Docling + PyMuPDF pipeline loads NCCN GYN PDFs; GPT-4o retrieves algorithm-relevant pages for uterine/endometrial, vaginal, and vulvar cancers (ovarian and cervical use model training knowledge)
+- **NCCN guideline lookup** — Docling + PyMuPDF pipeline loads NCCN GYN PDFs for all 6 cancer types (ovarian v3.2026, cervical v2.2026, uterine v2.2026, vaginal v2.2026, vulvar v2.2026, GTN v2.2026) with Evidence Blocks; uses reasoning model (o4-mini) for algorithm interpretation
 - **Evidence-based research** — real-time PubMed, Europe PMC, and Semantic Scholar search with RISEN synthesis prompt, PubMed-first deduplication, and post-synthesis citation validation (no fabricated PMIDs)
 - **Outside hospital (OSH) transfer support** — structured history extraction for the ~20–30% of patients referred from other institutions
 - **Landscape 5-column Word document** matching the Rush tumor board format (Patient | Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
@@ -169,7 +169,7 @@ flowchart LR
 | **Pathology** | `pathology_extractor`, `patient_data` | Extracts histology, IHC panel (MMR/p53/ER/HER2), molecular markers, FIGO grade, endometrial molecular classification (POLEmut/MMRd/NSMP/p53abn) |
 | **Radiology** | `radiology_extractor`, `patient_data` | Structures imaging findings from CT, MRI, PET/CT, US reports using LLM text analysis; RECIST response tracking |
 | **PatientStatus** | `tumor_markers`, `pretumor_board_checklist`, `patient_data` | Step 0: pre-meeting procedure pass (labs/imaging/path/consults); then FIGO staging, molecular profile, platinum sensitivity |
-| **ClinicalGuidelines** | `nccn_guidelines` | NCCN-based treatment recommendations using loaded NCCN PDFs (uterine/endometrial, vaginal, vulvar); ovarian and cervical use model training knowledge |
+| **ClinicalGuidelines** | `nccn_guidelines` | NCCN-based treatment recommendations using loaded NCCN PDFs for all 6 GYN cancer types (ovarian v3.2026, cervical v2.2026, uterine v2.2026, vaginal v2.2026, vulvar v2.2026, GTN v2.2026) with Evidence Blocks. Uses reasoning model (o4-mini) for NCCN algorithm interpretation |
 | **ClinicalTrials** | `clinical_trials`, `clinical_trials_nci` | Searches NCI ClinicalTrials.gov + AACT for eligible trials with GOG/NRG awareness and GYN-specific metadata |
 | **MedicalResearch** | `medical_research` | Real-time PubMed/Europe PMC/Semantic Scholar search; RISEN synthesis prompt; post-synthesis citation validation |
 | **ReportCreation** | `content_export`, `presentation_export` | Assembles landscape 5-column Word doc + 5-slide PPTX with CA-125 trend chart |
@@ -237,8 +237,13 @@ azd env set AZURE_APPSERVICE_LOCATION <region>
 | `AZURE_GPT_LOCATION` | Region for GPT resources | Azure region | `AZURE_LOCATION` |
 | `AZURE_APPSERVICE_LOCATION` | Region for App Service deployment | Azure region | `AZURE_LOCATION` |
 | `CLINICAL_NOTES_SOURCE` | Source of clinical notes | `caboodle`, `blob`, `fhir`, `fabric` | `blob` |
-| `AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL` | Reasoning model deployment (required for ClinicalTrials agent) | Azure OpenAI deployment name | — |
-| `AZURE_OPENAI_REASONING_MODEL_ENDPOINT` | Reasoning model endpoint (required for ClinicalTrials agent) | Azure OpenAI endpoint URL | — |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Primary model for all agents | Azure OpenAI deployment name | `gpt-4.1` |
+| `AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME` | Fast model for agent routing/selection | Azure OpenAI deployment name | falls back to primary |
+| `AZURE_OPENAI_DEPLOYMENT_NAME_GUIDELINES` | Reasoning model for ClinicalGuidelines agent | Azure OpenAI deployment name | falls back to primary |
+| `AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL` | Reasoning model for ClinicalTrials tool | Azure OpenAI deployment name | — |
+| `AZURE_OPENAI_REASONING_MODEL_ENDPOINT` | Reasoning model endpoint for ClinicalTrials tool | Azure OpenAI endpoint URL | — |
+| `EXCLUDED_AGENTS` | Comma-separated agent names to skip loading | Agent names | (empty) |
+| `CABOODLE_DATA_DIR` | Path to Epic Caboodle CSV patient data | Directory path | `infra/patient_data` |
 | `DEMO_ROUTES_ENABLED` | Enable demo view routes (`/view/` endpoints) | `true`, `false` | `false` |
 
 For local development with Epic Clarity CSV exports:

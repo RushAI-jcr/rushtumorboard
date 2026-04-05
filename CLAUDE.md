@@ -87,22 +87,24 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 
 ## Agents (10 total, defined in agents.yaml)
 
-| Agent | Tools | Role |
-|-------|-------|------|
-| Orchestrator | — | Facilitator: manages turn order (step 0 + steps a–i) |
-| PatientHistory | patient_data | Loads Epic Clarity CSV, builds timeline filtered to 55 NoteTypes |
-| OncologicHistory | oncologic_history_extractor, patient_data | Prior onc history, OSH transfers |
-| Pathology | pathology_extractor, patient_data | Histology, IHC, molecular classification (POLEmut/MMRd/NSMP/p53abn) |
-| Radiology | radiology_extractor, patient_data | CT/MRI/PET/US findings, RECIST tracking |
-| PatientStatus | tumor_markers, pretumor_board_checklist, patient_data | Step 0: pre-meeting procedure pass; FIGO staging, platinum sensitivity |
-| ClinicalGuidelines | nccn_guidelines | NCCN-based GYN recommendations from loaded PDF guidelines |
-| ClinicalTrials | clinical_trials, clinical_trials_nci | Trial search + eligibility matching (NCI + AACT) |
-| MedicalResearch | medical_research | PubMed/EuropePMC/S2 search with RISEN synthesis + citation validation |
-| ReportCreation | content_export, presentation_export | Landscape 5-column Word doc + 5-slide PPTX generation |
+| Agent | Tools | Deployment | Role |
+|-------|-------|------------|------|
+| Orchestrator | — | gpt-4.1-mini | Facilitator: manages turn order (step 0 + steps a–i) |
+| PatientHistory | patient_data | gpt-4.1 (default) | Loads Epic Clarity CSV, builds timeline filtered to 55 NoteTypes |
+| OncologicHistory | oncologic_history_extractor, patient_data | gpt-4.1 (default) | Prior onc history, OSH transfers |
+| Pathology | pathology_extractor, patient_data | gpt-4.1 (default) | Histology, IHC, molecular classification (POLEmut/MMRd/NSMP/p53abn) |
+| Radiology | radiology_extractor, patient_data | gpt-4.1 (default) | CT/MRI/PET/US findings, RECIST tracking |
+| PatientStatus | tumor_markers, pretumor_board_checklist, patient_data | gpt-4.1 (default) | Step 0: pre-meeting procedure pass; FIGO staging, platinum sensitivity |
+| ClinicalGuidelines | nccn_guidelines | o4-mini (reasoning) | NCCN-based GYN recommendations from loaded PDFs (all 6 cancer types + Evidence Blocks) |
+| ClinicalTrials | clinical_trials, clinical_trials_nci | gpt-5.4 (reasoning, tool-level) | Trial search + eligibility matching (NCI + AACT) |
+| MedicalResearch | medical_research | gpt-4.1 (default) | PubMed/EuropePMC/S2 search with RISEN synthesis + citation validation |
+| ReportCreation | content_export, presentation_export | gpt-4.1 (default) | Landscape 5-column Word doc + 5-slide PPTX generation |
+
+Selection/termination strategy uses `gpt-4.1-mini` (`AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME`).
 
 ## Tech Stack
 
-- Python 3.12+, Semantic Kernel (Microsoft), Azure OpenAI (GPT-4o/4.1 + o3-mini)
+- Python 3.12+, Semantic Kernel (Microsoft), Azure OpenAI (GPT-4.1 + o4-mini + gpt-5.4)
 - FastAPI + Starlette, aiohttp
 - docxtpl (Word), PptxGenJS via Node.js (PowerPoint), matplotlib (charts)
 - Epic Caboodle CSV/Parquet file accessor for clinical data
@@ -113,9 +115,27 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 ```sh
 cp src/.env.sample src/.env
 # Fill in Azure OpenAI credentials, then:
-cd src && SCENARIO=default pip3 install -r requirements.txt
+cd src && pip3 install -r requirements.txt
+
+# Run tests
 CLINICAL_NOTES_SOURCE=caboodle python3 -m pytest tests/test_local_agents.py -v
+
+# Run full app (backend + frontend)
+cd src && LOCAL_DEV=true python3 -m uvicorn app:app --port 8000 --reload
+cd democlient && npm run dev   # frontend at http://localhost:3000
 ```
+
+`LOCAL_DEV=true` skips Azure Blob Storage and Teams bot adapters. Generated Word/PPTX artifacts are saved to `~/Desktop/dev testing/{patient_id}/`.
+
+## Key Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Primary model for all agents | gpt-4.1 |
+| `AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME` | Faster model for agent routing | falls back to primary |
+| `AZURE_OPENAI_DEPLOYMENT_NAME_GUIDELINES` | Reasoning model for ClinicalGuidelines | falls back to primary |
+| `AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL` | Reasoning model for ClinicalTrials tool | required |
+| `EXCLUDED_AGENTS` | Comma-separated agent names to exclude | (empty) |
 
 ## Conventions
 
@@ -123,3 +143,4 @@ CLINICAL_NOTES_SOURCE=caboodle python3 -m pytest tests/test_local_agents.py -v
 - Clinical shorthand in tumor board outputs (s/p, dx, bx, LN, mets, etc.)
 - FIGO staging for GYN cancers
 - All patient data in `infra/patient_data/` is synthetic (no PHI)
+- `agents.yaml` supports `${ENV_VAR}` interpolation for deployment names

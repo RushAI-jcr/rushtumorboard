@@ -25,9 +25,11 @@ Everything you need to define new agents and give them custom tools for the GYN 
 | Field | Purpose |
 |-------|---------|
 | **tools** | List of Semantic-Kernel plugin names the agent can call. See [tools](#adding-tools-plugins-to-your-agents) |
-| **temperature** | LLM temperature (defaults to `0`) |
+| **temperature** | LLM temperature (defaults to `0`). Omitted automatically for reasoning models. |
 | **facilitator** | `true` → this agent moderates the conversation (only **one** allowed) |
-| Other model parameters | e.g., `graph_rag_url`, `graph_rag_index_name`, `top_p`, `max_tokens` |
+| **deployment** | Azure OpenAI deployment name override. Supports `${ENV_VAR}` interpolation. Falls back to `AZURE_OPENAI_DEPLOYMENT_NAME` if unset. |
+| **max_completion_tokens** | Maximum output tokens per agent response (default: 4096). Sent as `max_completion_tokens` for reasoning models, `max_tokens` for standard models. |
+| **addition_instructions** | List of markdown files (in the config dir) appended to the agent's `instructions` at load time (e.g., `["shared_agent_footer.md"]`). |
 
 ### Example Agent
 ```yaml
@@ -40,6 +42,8 @@ Everything you need to define new agents and give them custom tools for the GYN 
     for referral. Flag OSH vs Rush events.
     Yield back with "back to you: *Orchestrator*".
   temperature: 0
+  max_completion_tokens: 4096
+  addition_instructions: ["shared_agent_footer.md"]
   tools:
     - name: oncologic_history_extractor
     - name: patient_data
@@ -49,6 +53,23 @@ Everything you need to define new agents and give them custom tools for the GYN 
     recurrences, molecular profile, current status, and reason for referral.
     **You need**: patient data loaded by PatientHistory.
 ```
+
+### Per-Agent Model Routing
+
+Agents can use different Azure OpenAI deployments. Set the `deployment` field to a literal name or `${ENV_VAR}` reference:
+
+```yaml
+- name: Orchestrator
+  deployment: gpt-4.1-mini           # literal — fast model for workflow coordination
+
+- name: ClinicalGuidelines
+  deployment: ${AZURE_OPENAI_DEPLOYMENT_NAME_GUIDELINES}  # env var — reasoning model for NCCN interpretation
+```
+
+Reasoning models (o-series, gpt-5*) are detected automatically — `temperature`, `seed`, and `max_tokens` are adjusted:
+- `temperature` → omitted (reasoning models reject it)
+- `seed` → omitted
+- `max_tokens` → sent as `max_completion_tokens` instead
 
 ### Add a Custom Icon (Optional)
 1. Place the PNG/SVG in `infra/botIcons/`
