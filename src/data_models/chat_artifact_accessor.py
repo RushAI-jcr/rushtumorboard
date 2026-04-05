@@ -35,7 +35,7 @@ class ChatArtifactAccessor:
                 await new_blob_client.start_copy_from_url(blob_client.url, requires_sync=True)
                 await blob_client.delete_blob()
         finally:
-            logger.info(f"Archive ran for {conversation_id}. Duration: {time() - start}s")
+            logger.info("Archive completed. Duration: %ss", time() - start)
         return conversation_id
 
     def get_blob_path(self, artifact_id: ChatArtifactIdentifier) -> str:
@@ -63,7 +63,7 @@ class ChatArtifactAccessor:
 
             return ChatArtifact(artifact_id=artifact_id, data=blob_data)
         finally:
-            logger.info(f"Read artifact for {blob_path}. Duration: {time() - start}s")
+            logger.info("Read artifact %s. Duration: %ss", artifact_id.filename, time() - start)
 
     async def write(self, artifact: ChatArtifact) -> None:
         """Write the WordDocument object to blob storage."""
@@ -73,4 +73,4 @@ class ChatArtifactAccessor:
             blob_client = self.container_client.get_blob_client(blob_path)
             await blob_client.upload_blob(artifact.data, overwrite=True)
         finally:
-            logger.info(f"Wrote artifact for {blob_path}. Duration: {time() - start}s")
+            logger.info("Wrote artifact %s. Duration: %ss", artifact.artifact_id.filename, time() - start)

@@ -78,6 +78,7 @@ class MedicalReportExtractorBase:
         self.kernel = config.kernel
         self.chat_ctx = config.chat_ctx
         self.data_access = config.data_access
+        self.deployment_name = config.deployment_name
 
     @classmethod
     def _is_osh_stub(cls, report: dict) -> bool:
@@ -203,7 +204,7 @@ class MedicalReportExtractorBase:
         chat_history.add_system_message(textwrap.dedent(self.system_prompt).strip())
         chat_history.add_user_message(f"{user_preamble}\n\n{combined_text}")
 
-        if model_supports_temperature():
+        if model_supports_temperature(self.deployment_name):
             settings = AzureChatPromptExecutionSettings(temperature=0.0, seed=42)
         else:
             settings = AzureChatPromptExecutionSettings()

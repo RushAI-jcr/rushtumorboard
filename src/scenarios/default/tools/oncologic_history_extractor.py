@@ -251,7 +251,7 @@ class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
         chat_history.add_system_message(textwrap.dedent(self.system_prompt).strip())
         chat_history.add_user_message(user_msg)
 
-        if model_supports_temperature():
+        if model_supports_temperature(self.deployment_name):
             settings = AzureChatPromptExecutionSettings(temperature=0.0, seed=42)
         else:
             settings = AzureChatPromptExecutionSettings(seed=42)

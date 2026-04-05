@@ -16,7 +16,9 @@ from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_
 )
 from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.functions import kernel_function
+from semantic_kernel.kernel import Kernel
 
+from data_models.app_context import AppContext
 from data_models.chat_artifact import ChatArtifact, ChatArtifactFilename, ChatArtifactIdentifier
 from data_models.chat_context import ChatContext
 from data_models.data_access import DataAccess
@@ -129,14 +131,16 @@ def create_plugin(plugin_config: PluginConfiguration) -> "MedicalResearchPlugin"
         data_access=plugin_config.data_access,
         app_ctx=plugin_config.app_ctx,
         kernel=plugin_config.kernel,
+        deployment_name=plugin_config.deployment_name,
     )
 
 
 class MedicalResearchPlugin:
-    def __init__(self, chat_ctx: ChatContext, data_access: DataAccess, app_ctx=None, kernel=None):
+    def __init__(self, chat_ctx: ChatContext, data_access: DataAccess, app_ctx: AppContext | None = None, kernel: Kernel | None = None, deployment_name: str | None = None):
         self.chat_ctx = chat_ctx
         self.data_access = data_access
         self.kernel = kernel
+        self.deployment_name = deployment_name
 
     # =====================================================================
     # Main entry point
@@ -559,7 +563,7 @@ class MedicalResearchPlugin:
             f"**Retrieved Literature ({len(papers)} papers):**\n\n{context}"
         )
 
-        if model_supports_temperature():
+        if model_supports_temperature(self.deployment_name):
             settings = AzureChatPromptExecutionSettings(temperature=0.0)
         else:
             settings = AzureChatPromptExecutionSettings()

@@ -10,37 +10,39 @@ from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_
 )
 
 
-def model_supports_temperature() -> bool:
+_NON_TEMP_MODELS = frozenset({
+    "o1", "o1-mini", "o3", "o3-mini", "o3-pro",
+    "o4-mini", "gpt-5", "gpt-5-mini", "gpt-5-nano", "deepseek-r1",
+})
+
+
+def model_supports_temperature(deployment_name: str | None = None) -> bool:
     """
     Check if the given model supports the temperature parameter.
 
     Args:
-        model_name: checks AZURE_OPENAI_DEPLOYMENT_NAME from environment.
+        deployment_name: Azure deployment name to check. Falls back to
+            AZURE_OPENAI_DEPLOYMENT_NAME env var if not provided.
 
     Returns:
-        bool: True if the model supports temperature, False if it's a non-temperature/reasoning model that doesn't.
+        bool: True if the model supports temperature, False if it's a
+        reasoning model that doesn't.
     """
-    non_temp_models = {"o1", "o1-mini", "o3", "o3-mini", "o3-pro",
-                       "o4-mini", "gpt-5", "gpt-5-mini", "gpt-5-nano", "DeepSeek-R1"}
-
-    model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "")
-
-    # Check if the model name contains any of the non-temperature model names
+    model_name = deployment_name or os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "")
     model = model_name.lower()
-    for non_temp_model in non_temp_models:
-        if non_temp_model.lower() in model:
+    for non_temp_model in _NON_TEMP_MODELS:
+        if non_temp_model in model:
             return False
-
     return True
 
 
-def make_structured_settings(response_format=None, **kwargs) -> AzureChatPromptExecutionSettings:
+def make_structured_settings(response_format: type | None = None, deployment_name: str | None = None, **kwargs) -> AzureChatPromptExecutionSettings:
     """Create AzureChatPromptExecutionSettings with temperature guard.
 
     If the model supports temperature, sets temperature=0.0.
     Otherwise, omits temperature (for reasoning models).
     """
     settings = AzureChatPromptExecutionSettings(response_format=response_format, **kwargs)
-    if model_supports_temperature():
+    if model_supports_temperature(deployment_name):
         settings.temperature = 0.0
     return settings

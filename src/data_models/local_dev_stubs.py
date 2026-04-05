@@ -1,6 +1,7 @@
 """In-memory stubs for local development without Azure Blob Storage."""
 
 import logging
+from pathlib import Path
 
 from azure.core.exceptions import ResourceNotFoundError
 
@@ -49,6 +50,28 @@ class InMemoryChatArtifactAccessor:
     async def write(self, artifact: ChatArtifact) -> None:
         key = self.get_blob_path(artifact.artifact_id)
         self._store[key] = artifact.data
+
+        # Persist to ~/Desktop/dev testing/{patient_id}/
+        try:
+            pid = artifact.artifact_id.patient_id
+            fname = artifact.artifact_id.filename
+            if "\x00" in pid or "\x00" in fname:
+                logger.warning("Rejected artifact write: null byte in patient_id or filename")
+                return
+            base_dir = (Path.home() / "Desktop" / "dev testing").resolve()
+            dest_dir = (base_dir / pid).resolve()
+            if not str(dest_dir).startswith(str(base_dir) + "/"):
+                logger.warning("Rejected artifact write: path escapes base directory")
+                return
+            dest_file = (dest_dir / fname).resolve()
+            if not str(dest_file).startswith(str(dest_dir) + "/"):
+                logger.warning("Rejected artifact write: filename escapes patient directory")
+                return
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_file.write_bytes(artifact.data)
+            logger.info("Saved artifact: %s", fname)
+        except Exception:
+            logger.warning("Failed to save artifact to disk", exc_info=True)
 
     async def archive(self, conversation_id: str) -> str:
         keys_to_remove = [k for k in self._store if k.startswith(f"{conversation_id}/")]

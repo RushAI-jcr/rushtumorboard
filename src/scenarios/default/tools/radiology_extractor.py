@@ -13,7 +13,7 @@ from data_models.plugin_configuration import PluginConfiguration
 from .medical_report_extractor import MedicalReportExtractorBase
 from .note_type_constants import (
     ADDENDUM_TYPES, ASSESSMENT_PLAN_TYPES, EXTERNAL_TYPES,
-    GENERAL_CLINICAL_TYPES,
+    GENERAL_CLINICAL_TYPES, ONCOLOGY_TIER_A_TYPES,
 )
 from .validation import validate_patient_id
 
@@ -24,9 +24,10 @@ RADIOLOGY_SYSTEM_PROMPT = """
     {
         "studies": [
             {
-                "modality": "CT/MRI/PET-CT/Ultrasound",
-                "study_name": "full study name",
-                "study_date": "date",
+                "modality": "CT/MRI/PET-CT/Ultrasound/CXR",
+                "study_name": "full study name (e.g., CT CAP, MRI Pelvis, PET/CT, TVUS, CT Angio Chest)",
+                "study_date": "date in M/D/YY format",
+                "osh_origin": "true if from outside hospital, false otherwise",
                 "indication": "clinical indication",
                 "comparison": "prior study compared to, if any",
                 "primary_tumor": {
@@ -59,7 +60,7 @@ RADIOLOGY_SYSTEM_PROMPT = """
                     "brain": "description or absent",
                     "other": "any other metastatic sites"
                 },
-                "other_findings": "any additional relevant findings",
+                "other_findings": "ANY additional clinically significant findings: PE, pleural effusions, hydropneumothorax, SBO, fistula, hydronephrosis, stents, consolidation, etc. These are CRITICAL for the tumor board.",
                 "recist_measurements": {
                     "target_lesions": [
                         {
@@ -73,19 +74,24 @@ RADIOLOGY_SYSTEM_PROMPT = """
                     "prior_sum_cm": number,
                     "overall_response": "CR/PR/SD/PD or not assessed"
                 },
-                "impression": "radiologist's impression/conclusion"
+                "impression": "CRITICAL: Copy the radiologist's IMPRESSION/CONCLUSION section verbatim or near-verbatim. This is the most important field. If the report has an 'IMPRESSION:' section, extract it completely. If no formal impression section exists, synthesize the key conclusions from the findings."
             }
         ],
-        "longitudinal_summary": "Brief narrative comparing findings across studies if multiple reports",
+        "longitudinal_summary": "Brief narrative comparing findings across studies if multiple reports — note disease trajectory (responding, stable, progressing, new sites)",
         "disease_burden_assessment": "overall assessment of disease extent"
     }
 
-    If a field is not mentioned in the report, use "not reported" or null.
-    Only include information explicitly stated in the reports.
-    CHRONOLOGICAL ORDER IS MANDATORY: The "studies" array must be sorted oldest study_date first,
-    most recent last. This allows the reader to follow disease progression over time.
-    For RECIST: calculate percent change as ((current - prior) / prior * 100).
-    CR = complete resolution, PR = >=30% decrease, PD = >=20% increase, SD = neither.
+    CRITICAL RULES:
+    1. The "impression" field is THE MOST IMPORTANT field. Extract the full radiologist impression.
+    2. Include ALL studies found — do not skip or summarize older studies. The tumor board needs complete imaging history.
+    3. Include clinically significant non-cancer findings (PE, pleural effusions, SBO, fistulas, hydronephrosis, etc.).
+    4. Preserve specific measurements (cm, mm) exactly as stated in the reports.
+    5. Note comparison findings explicitly: "interval increased", "stable", "new", "decreased".
+    6. If a field is not mentioned in the report, use "not reported" or null.
+    7. Only include information explicitly stated in the reports.
+    8. CHRONOLOGICAL ORDER IS MANDATORY: oldest study_date first, most recent last.
+    9. For RECIST: calculate percent change as ((current - prior) / prior * 100).
+       CR = complete resolution, PR = >=30% decrease, PD = >=20% increase, SD = neither.
 """
 
 
@@ -99,8 +105,9 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
     system_prompt = RADIOLOGY_SYSTEM_PROMPT
     error_key = "studies"
 
-    # Layer 2: External/OSH imaging reports may arrive as unmapped notes.
-    layer2_note_types: tuple[str, ...] = EXTERNAL_TYPES
+    # Layer 2: Tier A oncology notes (imaging often summarized in oncology consults,
+    # especially for OSH patients) + external/OSH unmapped notes.
+    layer2_note_types: tuple[str, ...] = ONCOLOGY_TIER_A_TYPES + EXTERNAL_TYPES
     # Layer 3: General notes where physicians summarize imaging findings.
     # Confirmed NoteTypes in real Rush Epic Clarity exports.
     layer3_note_types: tuple[str, ...] = (

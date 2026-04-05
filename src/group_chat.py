@@ -256,7 +256,8 @@ def create_group_chat(
         return kernel
 
     def _create_agent(agent_config: dict[str, Any]) -> CustomChatCompletionAgent | HealthcareAgent:
-        agent_kernel = _create_kernel_with_chat_completion()
+        agent_deployment = agent_config.get("deployment") or None  # empty string → None → use default
+        agent_kernel = _create_kernel_with_chat_completion(agent_deployment)
         plugin_config = PluginConfiguration(
             kernel=agent_kernel,
             agent_config=agent_config,
@@ -264,6 +265,7 @@ def create_group_chat(
             chat_ctx=chat_ctx,
             azureml_token_provider=app_ctx.azureml_token_provider,
             app_ctx=app_ctx,
+            deployment_name=agent_deployment,
         )
         is_healthcare_agent = healthcare_agent_config.yaml_key in agent_config and bool(
             agent_config[healthcare_agent_config.yaml_key])
@@ -301,20 +303,29 @@ def create_group_chat(
             else:
                 raise ValueError(f"Unknown tool type: {tool_type}")
 
-        if model_supports_temperature():
+        is_reasoning = not model_supports_temperature(agent_deployment)
+        if not is_reasoning:
             temperature = agent_config.get("temperature", DEFAULT_MODEL_TEMP)
             if temperature is None:
                 temperature = DEFAULT_MODEL_TEMP
-            logger.debug("Agent %s: temperature=%s", agent_config["name"], temperature)
+            logger.debug("Agent %s [%s]: temperature=%s", agent_config["name"],
+                         agent_deployment or "default", temperature)
         else:
             temperature = None
-            logger.debug("Agent %s: temperature=None (reasoning model)", agent_config["name"])
+            logger.debug("Agent %s [%s]: temperature=None (reasoning model)",
+                         agent_config["name"], agent_deployment or "default")
         # Limit agent response length to prevent context window overflow in multi-agent chats.
         # 128K-token context with 9+ agents means each agent should stay under ~4K tokens output.
-        max_completion_tokens = agent_config.get("max_completion_tokens", 4096)
+        max_tok = agent_config.get("max_completion_tokens", 4096)
+        # Reasoning models (o-series, gpt-5*) require max_completion_tokens;
+        # standard models use max_tokens. Using the wrong parameter causes 400.
+        token_kwargs = {"max_completion_tokens": max_tok} if is_reasoning else {"max_tokens": max_tok}
         settings = AzureChatPromptExecutionSettings(
-            function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, temperature=temperature,
-            max_tokens=max_completion_tokens)
+            function_choice_behavior=FunctionChoiceBehavior.Auto(),
+            seed=None if is_reasoning else 42,
+            temperature=temperature,
+            **token_kwargs,
+        )
         arguments = KernelArguments(settings=settings)
         instructions = agent_config.get("instructions")
         if agent_config.get("facilitator") and instructions:
@@ -335,7 +346,8 @@ def create_group_chat(
             arguments=arguments,
         )
 
-    if model_supports_temperature():
+    selection_deployment = os.environ.get("AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME")
+    if model_supports_temperature(selection_deployment):
         settings = AzureChatPromptExecutionSettings(
             function_choice_behavior=FunctionChoiceBehavior.Auto(), seed=42, temperature=0, response_format=ChatRule)
     else:
@@ -465,8 +477,6 @@ def create_group_chat(
         except (ValidationError, ValueError) as exc:
             logger.warning("Selection parse failed (type=%s), defaulting to %s", type(exc).__name__, facilitator)
             return facilitator
-
-    selection_deployment = os.environ.get("AZURE_OPENAI_SELECTION_DEPLOYMENT_NAME")
 
     # Bound the canonical session history to prevent unbounded growth across
     # multi-turn conversations. Per-agent channels cap at _MAX_THREAD_MESSAGES,

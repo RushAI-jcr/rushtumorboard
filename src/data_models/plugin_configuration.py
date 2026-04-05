@@ -33,3 +33,4 @@ class PluginConfiguration:
     agent_config: dict
     data_access: DataAccess
     azureml_token_provider: Callable[[], Coroutine[Any, Any, str]]
+    deployment_name: str | None = None

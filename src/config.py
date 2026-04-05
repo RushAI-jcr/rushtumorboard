@@ -4,6 +4,8 @@
 import json
 import logging
 import os
+import re
+from typing import Any
 
 import yaml
 from azure.monitor.opentelemetry import configure_azure_monitor
@@ -109,6 +111,33 @@ def _validate_agent_config(agents: list[dict], scenario: str) -> None:
                     )
 
 
+_ENV_VAR_RE = re.compile(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}')
+
+
+def _resolve_env_vars_in_agents(agents: list[dict]) -> list[dict]:
+    """Resolve ${ENV_VAR} references in string values within agent configs.
+
+    Empty resolved strings are converted to None so that optional fields like
+    ``deployment`` fall back to defaults when the env var is unset.
+    """
+    def _resolve(value: Any) -> Any:
+        if isinstance(value, str) and _ENV_VAR_RE.search(value):
+            def _sub(m: re.Match) -> str:
+                var_name = m.group(1)
+                env_val = os.environ.get(var_name, "")
+                if not env_val:
+                    logger.debug("Env var %s not set, resolving to empty", var_name)
+                return env_val
+            resolved = _ENV_VAR_RE.sub(_sub, value)
+            return resolved if resolved else None
+        if isinstance(value, dict):
+            return {k: _resolve(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [_resolve(item) for item in value]
+        return value
+    return [_resolve(agent) for agent in agents]
+
+
 def load_agent_config(scenario: str) -> list[dict]:
     src_dir = os.path.dirname(os.path.abspath(__file__))
     scenario_directory = os.path.join(src_dir, f"scenarios/{scenario}/config")
@@ -120,6 +149,7 @@ def load_agent_config(scenario: str) -> list[dict]:
 
     with open(agent_config_path, "r", encoding="utf-8") as f:
         agent_config = yaml.safe_load(f)
+        agent_config = _resolve_env_vars_in_agents(agent_config)
         agent_config = [agent for agent in agent_config if agent["name"] not in excluded_agents]
         _validate_agent_config(agent_config, scenario)
         logger.info(
