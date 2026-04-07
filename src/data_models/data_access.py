@@ -135,10 +135,15 @@ def create_data_access(
             data_dir=os.getenv("CABOODLE_DATA_DIR"),
             reference_date=reference_date,
         )
+    elif clinical_notes_source:
+        raise ValueError(
+            f"Unknown CLINICAL_NOTES_SOURCE: {clinical_notes_source!r}. "
+            f"Valid values: fhir, fabric, epic, caboodle"
+        )
     else:
-        if clinical_notes_source:
-            logger.warning(f"Unrecognized CLINICAL_NOTES_SOURCE value: {clinical_notes_source!r}. Falling back to default blob accessor.")
         clinical_note_accessor = BlobClinicalNoteAccessor(blob_service_client)
+
+    logger.info("Data accessor: %s", type(clinical_note_accessor).__name__)
 
     return DataAccess(
         blob_sas_delegate=BlobSasDelegate(blob_service_client),

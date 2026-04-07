@@ -259,10 +259,9 @@ class FhirClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
         if patient_id in self._note_cache:
             return self._note_cache[patient_id]
 
-        if patient_id not in self._read_locks:
-            self._read_locks[patient_id] = asyncio.Lock()
+        lock = self._read_locks.setdefault(patient_id, asyncio.Lock())
 
-        async with self._read_locks[patient_id]:
+        async with lock:
             if patient_id in self._note_cache:
                 return self._note_cache[patient_id]
 
@@ -270,12 +269,12 @@ class FhirClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
 
             notes = []
             batch_size = 10
-            async with aiohttp.ClientSession() as session:
-                for i in range(0, len(metadata_list), batch_size):
-                    batch_input = metadata_list[i:i + batch_size]
-                    batch = [self._read_note(note["id"], session) for note in batch_input]
-                    batch_results = await asyncio.gather(*batch)
-                    notes.extend(batch_results)
+            session = await self._get_session()
+            for i in range(0, len(metadata_list), batch_size):
+                batch_input = metadata_list[i:i + batch_size]
+                batch = [self._read_note(note["id"], session) for note in batch_input]
+                batch_results = await asyncio.gather(*batch)
+                notes.extend(batch_results)
 
             # FIFO eviction (oldest entry removed first)
             if len(self._note_cache) >= self._CACHE_MAX_PATIENTS:

@@ -5,6 +5,7 @@ import contextlib
 import logging
 import os
 from collections.abc import Callable
+from datetime import datetime
 from secrets import token_hex
 from typing import Any
 
@@ -52,24 +53,33 @@ def create_fast_mcp_app(
                     await accessor.close()
                 logger.info("Resources cleaned up successfully.")
 
+    # Find the facilitator agent for orchestrator-mode detection
+    facilitator_agent = next((a for a in agent_config if a.get("facilitator")), agent_config[0])
+    facilitator_name = facilitator_agent["name"]
+
     def create_app(session_id):
 
-        app = FastMCP("mcp-streamable-http-demo")
-        logger.info("Creating multi MCP app...")
+        app = FastMCP("rush-gyn-tumor-board")
+        logger.info("Creating MCP app for session")
 
         async def process_chat(agent_name: str, message: str) -> list[dict[str, str]]:
-            logger.info(f"Processing chat with question: {message}, agent: {agent_name}")
+            logger.info("Processing chat (len=%d) for agent %s", len(message), agent_name)
 
             chat_ctx = await data_access.chat_context_accessor.read(session_id)
+            if not chat_ctx.request_date:
+                chat_ctx.request_date = datetime.now().strftime("%Y-%m-%d")
             chat_ctx.chat_history.add_user_message(message)
             (chat, chat_ctx) = group_chat.create_group_chat(app_ctx, chat_ctx)
-            logger.info(f"Processing chat with question: {message}")
             chat.is_complete = False
             responses = []
-            agent = next(agent for agent in chat.agents if agent.name == agent_name)
 
-            chat.is_complete = False
-            async for response in chat.invoke(agent=agent):
+            # Facilitator mode: pass agent=None to trigger multi-agent orchestration
+            if agent_name == facilitator_name:
+                target_agent = None
+            else:
+                target_agent = next(agent for agent in chat.agents if agent.name == agent_name)
+
+            async for response in chat.invoke(agent=target_agent):
                 # Enrich with patient images, trial links, and SAS URLs
                 content = append_links(response.content, chat_ctx)
                 content = await apply_sas_urls(content, chat_ctx, data_access)
@@ -90,7 +100,7 @@ def create_fast_mcp_app(
             if agent["name"] == "magentic":
                 continue
 
-            logger.info(f"Adding tool for agent: {agent['name']}")
+            logger.info("Adding tool for agent: %s", agent["name"])
 
             def generate_tool_function(agent_name: str):
                 async def inner_process_chat(message: str) -> list[dict[str, str]]:
@@ -114,12 +124,23 @@ def create_fast_mcp_app(
 
         return app
 
+    def _check_auth(request: Request) -> bool:
+        """Verify request is authenticated. Matches WebSocket auth pattern."""
+        principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+        if principal_id:
+            return True
+        if os.getenv("LOCAL_DEV", "").lower() == "true":
+            return True
+        return False
+
     async def handle_streamable_http(scope, receive, send):
-        logger.info("Handling handle_multi_streamable_http HTTP request")
         request = Request(scope, receive)
-        logger.info(f"Request headers: {request.headers}")
-        logger.info(f"Request path: {request.url.path}")
-        logger.info(f"Request method: {request.method}")
+        if not _check_auth(request):
+            from starlette.responses import JSONResponse
+            response = JSONResponse({"error": "Authentication required"}, status_code=401)
+            await response(scope, receive, send)
+            return
+        logger.info("MCP orchestrator request: %s %s", request.method, request.url.path)
         request_mcp_session_id = request.headers.get(MCP_SESSION_ID_HEADER)
         if not request_mcp_session_id:
             request_mcp_session_id = token_hex(16)
@@ -152,9 +173,8 @@ def create_fast_mcp_app(
                         initialization_options=app._mcp_server.create_initialization_options(),
                         stateless=True
                     )
-                except Exception as e:
-                    logger.error(f"Error running MCP server: {e}")
-                    pass
+                except Exception:
+                    logger.exception("MCP orchestrator server error")
 
             if not task_group:
                 raise RuntimeError("Task group is not initialized")
@@ -168,8 +188,13 @@ def create_fast_mcp_app(
 
     async def handle_clinical_trials_http(scope, receive, send):
         """Handle requests for the clinical trials MCP server."""
-        logger.info("Handling clinical trials MCP HTTP request")
         request = Request(scope, receive)
+        if not _check_auth(request):
+            from starlette.responses import JSONResponse
+            response = JSONResponse({"error": "Authentication required"}, status_code=401)
+            await response(scope, receive, send)
+            return
+        logger.info("Clinical trials MCP request: %s %s", request.method, request.url.path)
         request_mcp_session_id = request.headers.get(MCP_SESSION_ID_HEADER)
         if not request_mcp_session_id:
             request_mcp_session_id = token_hex(16)
@@ -193,8 +218,8 @@ def create_fast_mcp_app(
                         initialization_options=clinical_trials_mcp._mcp_server.create_initialization_options(),
                         stateless=True,
                     )
-                except Exception as e:
-                    logger.error(f"Error running clinical trials MCP server: {e}")
+                except Exception:
+                    logger.exception("Clinical trials MCP server error")
 
             if not task_group:
                 raise RuntimeError("Task group is not initialized")
@@ -204,7 +229,7 @@ def create_fast_mcp_app(
 
     # Create an ASGI application using the transport
     starlette_app = Starlette(
-        debug=os.environ.get("DEBUG", "").lower() in ("1", "true"),
+        debug=False,
         routes=[
             Mount("/orchestrator/", app=handle_streamable_http),
             Mount("/clinical-trials/", app=handle_clinical_trials_http),

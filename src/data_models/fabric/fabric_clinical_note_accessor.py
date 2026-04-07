@@ -42,6 +42,7 @@ class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
         self._note_cache: dict[str, list[str]] = {}
         self._read_locks: dict[str, asyncio.Lock] = {}
         self._session: aiohttp.ClientSession | None = None
+        self._session_lock = asyncio.Lock()
 
     def __parse_fabric_endpoint(self, url: str) -> tuple[str, str] | None:
         """
@@ -86,9 +87,10 @@ class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Lazy session: created on first use, reused across requests."""
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
-        return self._session
+        async with self._session_lock:
+            if self._session is None or self._session.closed:
+                self._session = aiohttp.ClientSession()
+            return self._session
 
     async def close(self) -> None:
         """Close the shared aiohttp session."""
@@ -160,10 +162,9 @@ class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
         if patient_id in self._note_cache:
             return self._note_cache[patient_id]
 
-        if patient_id not in self._read_locks:
-            self._read_locks[patient_id] = asyncio.Lock()
+        lock = self._read_locks.setdefault(patient_id, asyncio.Lock())
 
-        async with self._read_locks[patient_id]:
+        async with lock:
             if patient_id in self._note_cache:
                 return self._note_cache[patient_id]
 
