@@ -91,6 +91,29 @@ class PatientDataPlugin:
         self.kernel = kernel
         self.data_access = data_access
 
+    async def _load_and_cap_notes(self, patient_id: str, label: str) -> tuple[list, int]:
+        accessor = self.data_access.clinical_note_accessor
+        files: list = await accessor.get_clinical_notes_by_type(patient_id, list(TIMELINE_NOTE_TYPES))
+        if not files:
+            files = await accessor.read_all(patient_id)
+
+        files = deduplicate_notes(files, label=label)
+
+        if len(files) > _MAX_TIMELINE_NOTES:
+            logger.info(
+                "Capping %s notes from %d to %d for patient %s",
+                label, len(files), _MAX_TIMELINE_NOTES, patient_id,
+            )
+            files = files[:_MAX_TIMELINE_NOTES]
+
+        files, total_chars = _cap_note_text(files)
+
+        logger.info(
+            "%s: %d notes, ~%dK chars after capping for patient %s (from %s)",
+            label, len(files), total_chars // 1000, patient_id, type(accessor).__name__,
+        )
+        return files, total_chars
+
     @kernel_function(
         description=(
             "Load all clinical notes and imaging reports for the patient and set the active patient ID. "
@@ -154,26 +177,7 @@ class PatientDataPlugin:
         # Filter to clinically relevant note types — avoids sending Telephone Encounters,
         # Discharge Instructions, Anesthesia notes, etc. to the LLM.
         # Falls back to read_all() if no notes match the type filter.
-        accessor = self.data_access.clinical_note_accessor
-        files: list = await accessor.get_clinical_notes_by_type(patient_id, list(TIMELINE_NOTE_TYPES))
-        if not files:
-            files = await accessor.read_all(patient_id)
-
-        files = deduplicate_notes(files, label="timeline")
-
-        if len(files) > _MAX_TIMELINE_NOTES:
-            logger.info(
-                "Capping timeline notes from %d to %d for patient %s",
-                len(files), _MAX_TIMELINE_NOTES, patient_id,
-            )
-            files = files[:_MAX_TIMELINE_NOTES]
-
-        files, total_chars = _cap_note_text(files)
-
-        logger.info(
-            "create_timeline: %d notes, ~%dK chars after capping for patient %s (from %s)",
-            len(files), total_chars // 1000, patient_id, type(accessor).__name__,
-        )
+        files, total_chars = await self._load_and_cap_notes(patient_id, "create_timeline")
 
         chat_completion_service: AzureChatCompletion = self.kernel.get_service(service_id="default")
         chat_history = ChatHistory()
@@ -264,26 +268,7 @@ class PatientDataPlugin:
 
         conversation_id = self.chat_ctx.conversation_id
 
-        accessor = self.data_access.clinical_note_accessor
-        files: list = await accessor.get_clinical_notes_by_type(patient_id, list(TIMELINE_NOTE_TYPES))
-        if not files:
-            files = await accessor.read_all(patient_id)
-
-        files = deduplicate_notes(files, label="process_prompt")
-
-        if len(files) > _MAX_TIMELINE_NOTES:
-            logger.info(
-                "Capping process_prompt notes from %d to %d for patient %s",
-                len(files), _MAX_TIMELINE_NOTES, patient_id,
-            )
-            files = files[:_MAX_TIMELINE_NOTES]
-
-        files, total_chars = _cap_note_text(files)
-
-        logger.info(
-            "process_prompt: %d notes, ~%dK chars after capping for patient %s",
-            len(files), total_chars // 1000, patient_id,
-        )
+        files, total_chars = await self._load_and_cap_notes(patient_id, "process_prompt")
 
         MAX_PROMPT_LEN = 2000
         if len(prompt) > MAX_PROMPT_LEN:

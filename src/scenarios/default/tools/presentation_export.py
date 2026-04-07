@@ -33,6 +33,8 @@ from data_models.tumor_board_summary import SlideContent
 from routes.patient_data.patient_data_routes import get_chat_artifacts_url
 from utils.model_utils import make_structured_settings, model_supports_temperature
 
+from scenarios.default.tools.content_export._shared import prepare_export_data
+
 logger = logging.getLogger(__name__)
 
 OUTPUT_PPTX_FILENAME = "tumor_board_slides-{}.pptx"
@@ -40,14 +42,6 @@ OUTPUT_PPTX_FILENAME = "tumor_board_slides-{}.pptx"
 _LLM_TIMEOUT_SECS_STANDARD = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
 _LLM_TIMEOUT_SECS_REASONING = 150.0  # max wait for reasoning models (o3-mini, o3)
 _NODE_TIMEOUT_SECS = 60.0            # max wait for PptxGenJS subprocess
-
-# Per-field character caps applied before LLM serialization (mirrors content_export.py)
-_MAX_PATHOLOGY_CHARS = 3000
-_MAX_RADIOLOGY_CHARS = 3000
-_MAX_TREATMENT_PLAN_CHARS = 4000
-_MAX_ONCOLOGIC_HIST_CHARS = 4000
-_MAX_BOARD_DISC_CHARS = 2000
-_MAX_CLINICAL_TRIALS_CHARS = 2000
 
 # Concurrency limit for Node.js subprocess spawning (CPU-bound; one per core)
 _NODE_SEMAPHORE = asyncio.Semaphore(max(os.cpu_count() or 2, 2))
@@ -233,34 +227,26 @@ class PresentationExportPlugin:
         conversation_id = self.chat_ctx.conversation_id
 
         # 1. Summarize all agent data into 5-column SlideContent via LLM
-        all_data: dict = {
-            "patient_id": patient_id,
-            "patient_age": patient_age,
-            "patient_gender": patient_gender,
-            "cancer_type": cancer_type,
-            "figo_stage": figo_stage,
-            "molecular_profile": molecular_profile,
-            "pathology_findings": pathology_findings,
-            "radiology_findings": radiology_findings,
-            "tumor_markers": tumor_markers,
-            "surgical_findings": surgical_findings,
-            "treatment_plan": treatment_plan,
-            "clinical_trials": clinical_trials,
-            "board_discussion": board_discussion,
-            "oncologic_history": oncologic_history,
-        }
-        # Inject patient demographics (MRN, name, DOB, sex) if available
-        demographics = self.chat_ctx.patient_demographics
-        if demographics:
-            all_data["patient_demographics"] = demographics
-
-        # Apply per-field token budget caps before LLM serialization
-        all_data["pathology_findings"] = str(all_data.get("pathology_findings") or "")[:_MAX_PATHOLOGY_CHARS]
-        all_data["radiology_findings"] = str(all_data.get("radiology_findings") or "")[:_MAX_RADIOLOGY_CHARS]
-        all_data["treatment_plan"] = str(all_data.get("treatment_plan") or "")[:_MAX_TREATMENT_PLAN_CHARS]
-        all_data["oncologic_history"] = str(all_data.get("oncologic_history") or "")[:_MAX_ONCOLOGIC_HIST_CHARS]
-        all_data["board_discussion"] = str(all_data.get("board_discussion") or "")[:_MAX_BOARD_DISC_CHARS]
-        all_data["clinical_trials"] = str(all_data.get("clinical_trials") or "")[:_MAX_CLINICAL_TRIALS_CHARS]
+        all_data = prepare_export_data(
+            {
+                "patient_id": patient_id,
+                "patient_age": patient_age,
+                "patient_gender": patient_gender,
+                "cancer_type": cancer_type,
+                "figo_stage": figo_stage,
+                "molecular_profile": molecular_profile,
+                "pathology_findings": pathology_findings,
+                "radiology_findings": radiology_findings,
+                "tumor_markers": tumor_markers,
+                "surgical_findings": surgical_findings,
+                "treatment_plan": treatment_plan,
+                "clinical_trials": clinical_trials,
+                "board_discussion": board_discussion,
+                "oncologic_history": oncologic_history,
+            },
+            demographics=self.chat_ctx.patient_demographics,
+            caps={"board_discussion": 2000},
+        )
         slide_content = await self._summarize_for_slides(all_data)
 
         # 2. Parse raw tumor marker data for native PptxGenJS chart

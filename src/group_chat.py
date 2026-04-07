@@ -41,8 +41,6 @@ from semantic_kernel.prompt_template.prompt_template_config import PromptTemplat
 from data_models.app_context import AppContext
 from data_models.chat_context import ChatContext
 from data_models.plugin_configuration import PluginConfiguration
-from healthcare_agents import HealthcareAgent
-from healthcare_agents import config as healthcare_agent_config
 from utils.logging_http_client import create_logging_http_client
 from utils.model_utils import model_supports_temperature
 
@@ -255,7 +253,7 @@ def create_group_chat(
         kernel.add_service(AzureChatCompletion(**service_kwargs))
         return kernel
 
-    def _create_agent(agent_config: dict[str, Any]) -> CustomChatCompletionAgent | HealthcareAgent:
+    def _create_agent(agent_config: dict[str, Any]) -> CustomChatCompletionAgent:
         agent_deployment = agent_config.get("deployment") or None  # empty string → None → use default
         agent_kernel = _create_kernel_with_chat_completion(agent_deployment)
         plugin_config = PluginConfiguration(
@@ -267,9 +265,6 @@ def create_group_chat(
             app_ctx=app_ctx,
             deployment_name=agent_deployment,
         )
-        is_healthcare_agent = healthcare_agent_config.yaml_key in agent_config and bool(
-            agent_config[healthcare_agent_config.yaml_key])
-
         for tool in agent_config.get("tools", []):
             tool_name = tool.get("name")
             tool_type = tool.get("type", DEFAULT_TOOL_TYPE)
@@ -332,12 +327,6 @@ def create_group_chat(
             agent_list = "\n\t\t".join([f"- {agent['name']}: {agent['description']}" for agent in all_agents_config])
             instructions = instructions.replace("{{aiAgents}}", agent_list)
 
-        if is_healthcare_agent:
-            return HealthcareAgent(
-                name=agent_config["name"],
-                chat_ctx=chat_ctx,
-                app_ctx=app_ctx,
-            )
         return CustomChatCompletionAgent(
             kernel=agent_kernel,
             name=agent_config["name"],

@@ -13,16 +13,7 @@ from data_models.data_access import DataAccess
 def append_links(msg_text: str, chat_ctx: ChatContext) -> str:
     """Append patient image tags and clinical trial links to message text."""
     try:
-        image_urls = chat_ctx.display_image_urls
         clinical_trial_urls = chat_ctx.display_clinical_trials
-
-        # Display loaded images
-        if image_urls:
-            msg_text += "<h2>Patient Images</h2>"
-            for url in image_urls:
-                safe_url = html.escape(url, quote=True)
-                filename = html.escape(url.split("/")[-1], quote=True)
-                msg_text += f'<img src="{safe_url}" alt="{filename}" height="300px"/>'
 
         # Display clinical trials
         if clinical_trial_urls:
@@ -35,7 +26,6 @@ def append_links(msg_text: str, chat_ctx: ChatContext) -> str:
 
         return msg_text
     finally:
-        chat_ctx.display_image_urls = []
         chat_ctx.display_clinical_trials = []
 
 

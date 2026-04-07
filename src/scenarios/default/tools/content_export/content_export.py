@@ -38,6 +38,8 @@ from data_models.tumor_board_summary import TumorBoardDocContent
 from routes.patient_data.patient_data_routes import get_chat_artifacts_url
 from utils.model_utils import model_supports_temperature
 
+from ._shared import prepare_export_data
+
 # RichText.add() size parameter expects half-points (not Pt objects).
 # 9pt = 18, 10pt = 20, 11pt = 22, 12pt = 24
 HP_9 = 18   # 9pt in half-points
@@ -56,15 +58,11 @@ GRAY = "666666"
 _LLM_TIMEOUT_SECS_STANDARD = 90.0   # max wait for Azure OpenAI (GPT-4o and similar)
 _LLM_TIMEOUT_SECS_REASONING = 150.0  # max wait for reasoning models (o3-mini, o3)
 
-# Character caps for high-variability fields before LLM summarization.
-# Prevents unbounded token counts in the highest-cost LLM call per patient export.
-_MAX_ONCOLOGIC_HISTORY_CHARS = 4000
+# Content-export-specific caps (list fields and action items not handled by _shared)
 _MAX_MEDICAL_HISTORY_CHARS = 2000
-_MAX_BOARD_DISCUSSION_CHARS = 3000
 _MAX_CT_FINDINGS_CHARS = 3000      # per element in list
 _MAX_ACTION_ITEM_CHARS = 200       # per action item in Col 4
 _MAX_IMAGING_ITEMS = 10            # max imaging studies per list
-_MAX_TUMOR_MARKERS_CHARS = 2000    # tumor markers string cap
 
 # Prompt for LLM summarization into 5-column clinical shorthand
 # All clinical examples in this prompt are synthetic and do not represent actual patients.
@@ -375,30 +373,29 @@ class ContentExportPlugin:
         conversation_id = self.chat_ctx.conversation_id
         patient_id = self.chat_ctx.patient_id or ""
 
-        # 1. Collect all agent data
-        all_data = {
-            "patient_id": patient_id,
-            "patient_age": patient_age,
-            "patient_gender": patient_gender,
-            "medical_history": medical_history,
-            "social_history": social_history,
-            "cancer_type": cancer_type,
-            "figo_stage": figo_stage,
-            "molecular_profile": molecular_profile,
-            "pathology_findings": pathology_findings,
-            "ct_scan_findings": ct_scan_findings,
-            "x_ray_findings": x_ray_findings,
-            "tumor_markers": tumor_markers,
-            "surgical_findings": surgical_findings,
-            "treatment_plan": treatment_plan,
-            "clinical_trials": clinical_trials or "",
-            "board_discussion": board_discussion,
-            "oncologic_history": oncologic_history,
-        }
-        # Inject patient demographics (MRN, name) if available from CSV
-        demographics = self.chat_ctx.patient_demographics
-        if demographics:
-            all_data["patient_demographics"] = demographics
+        # 1. Collect all agent data (shared caps applied by prepare_export_data)
+        all_data = prepare_export_data(
+            {
+                "patient_id": patient_id,
+                "patient_age": patient_age,
+                "patient_gender": patient_gender,
+                "medical_history": medical_history,
+                "social_history": social_history,
+                "cancer_type": cancer_type,
+                "figo_stage": figo_stage,
+                "molecular_profile": molecular_profile,
+                "pathology_findings": pathology_findings,
+                "ct_scan_findings": ct_scan_findings,
+                "x_ray_findings": x_ray_findings,
+                "tumor_markers": tumor_markers,
+                "surgical_findings": surgical_findings,
+                "treatment_plan": treatment_plan,
+                "clinical_trials": clinical_trials or "",
+                "board_discussion": board_discussion,
+                "oncologic_history": oncologic_history,
+            },
+            demographics=self.chat_ctx.patient_demographics,
+        )
         logger.info("Generating tumor board doc")
 
         # 2. Summarize into 5-column clinical shorthand via LLM
@@ -419,7 +416,9 @@ class ContentExportPlugin:
             "col4_content": self._build_col4_richtext(doc, doc_content),
         }
 
-        doc.render(doc_data)
+        # Render and save in executor to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        stream = await loop.run_in_executor(None, self._render_and_save_doc, doc, doc_data)
 
         # 4. Save to blob storage
         artifact_id = ChatArtifactIdentifier(
@@ -429,10 +428,6 @@ class ContentExportPlugin:
         )
         doc_blob_path = self.data_access.chat_artifact_accessor.get_blob_path(artifact_id)
         doc_output_url = get_chat_artifacts_url(doc_blob_path)
-
-        stream = BytesIO()
-        doc.save(stream)
-        stream.seek(0)
 
         artifact = ChatArtifact(artifact_id=artifact_id, data=stream.getvalue())
         for _attempt in range(2):
@@ -603,20 +598,26 @@ class ContentExportPlugin:
 
         return rt
 
+    @staticmethod
+    def _render_and_save_doc(doc: DocxTemplate, doc_data: dict) -> BytesIO:
+        """Render and save docx synchronously (called via run_in_executor)."""
+        doc.render(doc_data)
+        stream = BytesIO()
+        doc.save(stream)
+        stream.seek(0)
+        return stream
+
     # -- LLM Summarization --
 
     async def _summarize_for_tumor_board_doc(self, all_data: dict) -> TumorBoardDocContent:
         """Summarize all agent data into 5-column tumor board format via LLM."""
-        # Apply per-field token budget to cap the highest-cost LLM call
+        # Apply content-export-specific caps (string fields already capped by prepare_export_data)
         all_data = dict(all_data)  # shallow copy -- don't mutate caller's dict
-        all_data["oncologic_history"] = str(all_data.get("oncologic_history") or "")[:_MAX_ONCOLOGIC_HISTORY_CHARS]
         all_data["medical_history"] = str(all_data.get("medical_history") or "")[:_MAX_MEDICAL_HISTORY_CHARS]
-        all_data["board_discussion"] = str(all_data.get("board_discussion") or "")[:_MAX_BOARD_DISCUSSION_CHARS]
         ct = all_data.get("ct_scan_findings") or []
         all_data["ct_scan_findings"] = [str(f)[:_MAX_CT_FINDINGS_CHARS] for f in ct[:_MAX_IMAGING_ITEMS]]
         xr = all_data.get("x_ray_findings") or []
         all_data["x_ray_findings"] = [str(f)[:_MAX_CT_FINDINGS_CHARS] for f in xr[:_MAX_IMAGING_ITEMS]]
-        all_data["tumor_markers"] = str(all_data.get("tumor_markers") or "")[:_MAX_TUMOR_MARKERS_CHARS]
 
         chat_history = ChatHistory()
         chat_history.add_system_message(TUMOR_BOARD_DOC_PROMPT)

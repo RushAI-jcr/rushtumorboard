@@ -162,14 +162,8 @@ def load_agent_config(scenario: str) -> list[dict]:
     except json.JSONDecodeError:
         logger.error("Invalid JSON in BOT_IDS environment variable")
         bot_ids = {}
-    try:
-        hls_model_endpoints = json.loads(os.getenv("HLS_MODEL_ENDPOINTS", "{}"))
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON in HLS_MODEL_ENDPOINTS environment variable")
-        hls_model_endpoints = {}
     for agent in agent_config:
         agent["bot_id"] = bot_ids.get(agent["name"])
-        agent["hls_model_endpoint"] = hls_model_endpoints
         if agent.get("addition_instructions"):
             for file in agent["addition_instructions"]:
                 filepath = os.path.join(scenario_directory, file)

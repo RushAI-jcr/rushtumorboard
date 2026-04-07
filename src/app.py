@@ -87,6 +87,14 @@ def create_app(
     app.include_router(messages_routes(adapters, bots))
     app.include_router(chats_routes(app_context))
     app.include_router(user_routes())
+
+    @app.get("/health")
+    async def health_check():
+        accessor = app_context.data_access.clinical_note_accessor
+        return {
+            "status": "ok",
+            "accessor": type(accessor).__name__,
+        }
     app.include_router(patient_data_routes(
         app_context.blob_service_client,
         chat_artifact_accessor=app_context.data_access.chat_artifact_accessor,

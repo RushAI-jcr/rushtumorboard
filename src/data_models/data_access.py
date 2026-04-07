@@ -69,7 +69,7 @@ class BlobSasDelegate(UserDelegationKeyDelegate):
         account_name = self.blob_service_client.account_name or ""
         blob_name = url[len(f"https://{account_name}.blob.core.windows.net/{container_name}/"):]
         expiry_time = datetime.datetime.now(datetime.UTC) + expiry_delta
-        logger.info(f"url: {url}, blob_name: {blob_name}")
+        logger.info("url: %s, blob_name: %s", url, blob_name)
 
         # Generate the SAS token using the user delegation key
         sas_token = generate_blob_sas(
@@ -130,7 +130,7 @@ def create_data_access(
             fabric_user_data_function_endpoint=os.getenv("FABRIC_USER_DATA_FUNCTION_ENDPOINT") or "",
             credential=credential,
         )
-    elif clinical_notes_source == "epic" or clinical_notes_source == "caboodle":
+    elif clinical_notes_source in ("epic", "caboodle"):
         clinical_note_accessor = CaboodleFileAccessor(
             data_dir=os.getenv("CABOODLE_DATA_DIR"),
             reference_date=reference_date,

@@ -168,24 +168,32 @@ class TumorMarkerPlugin:
 
         accessor = self.data_access.clinical_note_accessor
 
-        # Tier 1 (pathology reports) + Tier 2 (structured labs) — run concurrently
-        path_reports_result, labs_result, all_markers_result = await asyncio.gather(
-            self._get_markers_from_pathology_reports(patient_id, marker),
-            accessor.get_lab_results(patient_id, component_name=marker),
-            accessor.get_tumor_markers(patient_id),
-            return_exceptions=True,
+        path_reports_task = asyncio.create_task(
+            self._get_markers_from_pathology_reports(patient_id, marker)
         )
-        if isinstance(path_reports_result, BaseException):
-            path_reports_result = []
-        if isinstance(labs_result, BaseException):
+
+        try:
+            labs_result = await accessor.get_lab_results(patient_id, component_name=marker)
+        except Exception:
             labs_result = []
-        if isinstance(all_markers_result, BaseException):
-            all_markers_result = []
-        labs = labs_result or [
-            m for m in all_markers_result
-            if _normalize_marker(marker) in
-            _normalize_marker(m.get("ComponentName", m.get("component_name", "")))
-        ]
+
+        if labs_result:
+            labs = labs_result
+        else:
+            try:
+                all_markers_result = await accessor.get_tumor_markers(patient_id)
+            except Exception:
+                all_markers_result = []
+            labs = [
+                m for m in all_markers_result
+                if _normalize_marker(marker) in
+                _normalize_marker(m.get("ComponentName", m.get("component_name", "")))
+            ]
+
+        try:
+            path_reports_result = await path_reports_task
+        except Exception:
+            path_reports_result = []
 
         if not labs:
             # Tier 1 fallback: Pathology reports (Tempus/Ambry genomic results)

@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-import json
 import logging
 import os
 import uuid
@@ -15,15 +14,6 @@ from data_models.app_context import AppContext
 from utils.message_enrichment import append_links, apply_sas_urls
 
 logger = logging.getLogger(__name__)
-
-# Custom JSON encoder that handles datetime
-
-
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, o: object) -> object:
-        if isinstance(o, datetime):
-            return o.isoformat()
-        return super().default(o)
 
 # Pydantic models for request/response
 
@@ -43,9 +33,9 @@ class Message(BaseModel):
     isBot: bool
     mentions: list[str] | None = None
 
-    def dict(self, *args, **kwargs):
-        # Override dict method to handle datetime serialization
-        d = super().dict(*args, **kwargs)
+    def model_dump(self, *args, **kwargs):
+        # Override model_dump method to handle datetime serialization
+        d = super().model_dump(*args, **kwargs)
         # Convert datetime to ISO format string
         if isinstance(d.get('timestamp'), datetime):
             d['timestamp'] = d['timestamp'].isoformat()
@@ -65,17 +55,6 @@ class MessagesResponse(BaseModel):
 class AgentsResponse(BaseModel):
     agents: list[str]
     error: str | None = None
-
-# Create a helper function to create JSON responses with datetime handling
-
-
-def create_json_response(content, headers=None):
-    """Create a JSONResponse with proper datetime handling."""
-    return JSONResponse(
-        content=content,
-        headers=headers or {},
-    )
-
 
 def chats_routes(app_context: AppContext):
     router = APIRouter()
@@ -124,7 +103,13 @@ def chats_routes(app_context: AppContext):
             logger.info("WebSocket connection established for chat: %s", chat_id)
 
             # Wait for the first message from the client
-            client_message = await websocket.receive_json()
+            raw_data = await websocket.receive_text()
+            if len(raw_data) > 10_240:
+                await websocket.send_json({"error": "Message too large (max 10KB)"})
+                await websocket.send_json({"type": "done"})
+                return
+            import json as _json
+            client_message = _json.loads(raw_data)
             logger.debug("Received WebSocket message: sender=%s, mention_count=%d", client_message.get("sender", ""), len(client_message.get("mentions", []) or []))
 
             # Extract message content, sender and mentions
@@ -183,7 +168,7 @@ def chats_routes(app_context: AppContext):
                 )
 
                 # Convert to dict for JSON serialization
-                message_dict = bot_message.dict()
+                message_dict = bot_message.model_dump()
 
                 # Send message over WebSocket
                 await websocket.send_json(message_dict)
@@ -204,5 +189,22 @@ def chats_routes(app_context: AppContext):
                 await websocket.send_json({"type": "done"})
             except Exception:
                 pass
+
+    @router.delete("/api/chats/{chat_id}")
+    async def delete_chat(chat_id: str):
+        """Archive chat context and artifacts for a conversation."""
+        try:
+            chat_context = await data_access.chat_context_accessor.read(chat_id)
+            await data_access.chat_context_accessor.archive(chat_context)
+            await data_access.chat_artifact_accessor.archive(chat_id)
+            logger.info("Chat %s archived", chat_id)
+            return JSONResponse(content={"status": "archived"})
+        except Exception:
+            ref = uuid.uuid4().hex[:8]
+            logger.exception("Error archiving chat [ref=%s]", ref)
+            return JSONResponse(
+                content={"error": f"An internal error occurred. Reference: {ref}"},
+                status_code=500,
+            )
 
     return router

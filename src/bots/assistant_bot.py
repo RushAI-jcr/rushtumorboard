@@ -62,7 +62,7 @@ class AssistantBot(TeamsActivityHandler):
             chat_ctx.request_date = turn_context.activity.timestamp.strftime("%Y-%m-%d")
 
         # Delete thread if user asks
-        if (turn_context.activity.text or "").endswith("clear"):
+        if (turn_context.activity.text or "").strip().lower() in ("clear", "/clear"):
             # Add clear message to chat history
             chat_ctx.chat_history.add_user_message((turn_context.activity.text or "").strip())
             await chat_context_accessor.archive(chat_ctx)

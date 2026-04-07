@@ -1,9 +1,10 @@
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from data_models.patient_demographics import PatientDemographics
 
 
+@runtime_checkable
 class ClinicalNoteAccessorProtocol(Protocol):
     # --- Base methods: implemented by all accessors (Caboodle, FHIR, Fabric) ---
     async def get_patients(self) -> list[str]: ...

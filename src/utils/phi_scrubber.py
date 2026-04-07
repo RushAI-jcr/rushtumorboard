@@ -20,6 +20,9 @@ _PHI_PATTERNS = [
     # Labeled patient identifiers: "Patient: John Smith", "Name: Jane Doe", "Pt: J. Smith"
     # Case-insensitive keyword, but name parts must be proper case (prevents matching MRN, BRCA, etc.)
     re.compile(r'(?:[Pp]atient|[Nn]ame|[Pp]t)\s*[:=]\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+'),
+    # Ages with context: "72-year-old", "45 year old", "age 62"
+    re.compile(r'\b\d{1,3}[\s-]?year[\s-]?old\b', re.IGNORECASE),
+    re.compile(r'\bage\s+\d{1,3}\b', re.IGNORECASE),
 ]
 
 

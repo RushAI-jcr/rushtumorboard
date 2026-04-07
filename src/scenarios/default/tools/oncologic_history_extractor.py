@@ -20,7 +20,7 @@ from data_models.plugin_configuration import PluginConfiguration
 from utils.model_utils import model_supports_temperature
 
 from utils.clinical_note_filter_utils import deduplicate_notes
-from .medical_report_extractor import MedicalReportExtractorBase, _JSON_FENCE_RE, _LLM_TIMEOUT_SECS
+from .medical_report_extractor import _JSON_FENCE_RE, _LLM_TIMEOUT_SECS
 from .note_type_constants import (
     ADDENDUM_TYPES, CONSULT_NOTE_TYPES, DISCHARGE_TYPES,
     ED_NOTE_TYPES, HP_TYPES, ONCOLOGY_TYPES, OPERATIVE_TYPES,
@@ -120,10 +120,16 @@ def create_plugin(plugin_config: PluginConfiguration):
     return OncologicHistoryExtractorPlugin(plugin_config)
 
 
-class OncologicHistoryExtractorPlugin(MedicalReportExtractorBase):
+class OncologicHistoryExtractorPlugin:
     report_type = "clinical notes"
     system_prompt = ONCOLOGIC_HISTORY_SYSTEM_PROMPT
     error_key = "history"
+
+    def __init__(self, config: PluginConfiguration):
+        self.kernel = config.kernel
+        self.chat_ctx = config.chat_ctx
+        self.data_access = config.data_access
+        self.deployment_name = config.deployment_name
 
     # Note types most relevant to oncologic history (lowercase for case-insensitive match)
     # Confirmed in real Rush Caboodle exports: "progress notes", "consults", "ed provider notes"

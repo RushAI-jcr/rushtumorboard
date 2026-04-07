@@ -25,6 +25,24 @@ from utils.phi_scrubber import scrub_phi
 
 logger = logging.getLogger(__name__)
 
+_aact_pool = None
+
+
+async def _get_aact_pool():
+    global _aact_pool
+    if _aact_pool is None:
+        import asyncpg
+        _aact_pool = await asyncpg.create_pool(
+            host=os.getenv("AACT_HOST", "aact-db.ctti-clinicaltrials.org"),
+            port=int(os.getenv("AACT_PORT", "5432")),
+            database="aact",
+            user=os.getenv("AACT_USER", ""),
+            password=os.getenv("AACT_PASSWORD", ""),
+            min_size=1,
+            max_size=3,
+        )
+    return _aact_pool
+
 # GYN cancer type mappings for NCI API
 NCI_DISEASE_MAP = {
     "ovarian": "Ovarian Cancer",
@@ -487,15 +505,6 @@ async def aact_search(
             "trials": [],
         })
 
-    try:
-        import asyncpg
-    except ImportError:
-        return json.dumps({
-            "error": "asyncpg not installed. Run: pip install asyncpg",
-            "total": 0,
-            "trials": [],
-        })
-
     # Scrub PHI from free-text fields before sending to external database
     condition = scrub_phi(condition)
     if eligibility_keywords:
@@ -506,69 +515,62 @@ async def aact_search(
     # Clamp limit to prevent abuse
     limit = min(max(limit, 1), 100)
 
-    conn = None
+    pool = await _get_aact_pool()
     try:
-        conn = await asyncpg.connect(
-            host=os.getenv("AACT_HOST", "aact-db.ctti-clinicaltrials.org"),
-            port=int(os.getenv("AACT_PORT", "5432")),
-            database="aact",
-            user=aact_user,
-            password=aact_password,
-        )
-
-        query = """
-            SELECT DISTINCT s.nct_id, s.brief_title, s.overall_status, s.phase,
-                   s.start_date, s.enrollment, e.criteria
-            FROM ctgov.studies s
-            JOIN ctgov.eligibilities e ON s.nct_id = e.nct_id
-            JOIN ctgov.conditions c ON s.nct_id = c.nct_id
-            WHERE s.overall_status = $1
-              AND c.name ILIKE $2
-        """
-        params: list[str | int] = [status, f"%{condition}%"]
-        param_idx = 3
-
-        if eligibility_keywords:
-            query += f" AND e.criteria ILIKE ${param_idx}"
-            params.append(f"%{eligibility_keywords}%")
-            param_idx += 1
-
-        if intervention:
-            query += f"""
-                AND EXISTS (
-                    SELECT 1 FROM ctgov.interventions i
-                    WHERE i.nct_id = s.nct_id AND i.name ILIKE ${param_idx}
-                )
+        async with pool.acquire() as conn:
+            query = """
+                SELECT DISTINCT s.nct_id, s.brief_title, s.overall_status, s.phase,
+                       s.start_date, s.enrollment, e.criteria
+                FROM ctgov.studies s
+                JOIN ctgov.eligibilities e ON s.nct_id = e.nct_id
+                JOIN ctgov.conditions c ON s.nct_id = c.nct_id
+                WHERE s.overall_status = $1
+                  AND c.name ILIKE $2
             """
-            params.append(f"%{intervention}%")
-            param_idx += 1
+            params: list[str | int] = [status, f"%{condition}%"]
+            param_idx = 3
 
-        query += f" ORDER BY s.start_date DESC NULLS LAST LIMIT ${param_idx}"
-        params.append(limit)
+            if eligibility_keywords:
+                query += f" AND e.criteria ILIKE ${param_idx}"
+                params.append(f"%{eligibility_keywords}%")
+                param_idx += 1
 
-        rows = await conn.fetch(query, *params)
+            if intervention:
+                query += f"""
+                    AND EXISTS (
+                        SELECT 1 FROM ctgov.interventions i
+                        WHERE i.nct_id = s.nct_id AND i.name ILIKE ${param_idx}
+                    )
+                """
+                params.append(f"%{intervention}%")
+                param_idx += 1
 
-        trials = []
-        for r in rows:
-            trial = dict(r)
-            for k, v in trial.items():
-                if hasattr(v, "isoformat"):
-                    trial[k] = v.isoformat()
-            trial["url"] = f"https://clinicaltrials.gov/study/{trial.get('nct_id', '')}"
-            if trial.get("criteria"):
-                trial["criteria"] = trial["criteria"][:2000]
-            trials.append(trial)
+            query += f" ORDER BY s.start_date DESC NULLS LAST LIMIT ${param_idx}"
+            params.append(limit)
 
-        result = {
-            "total": len(trials),
-            "source": "AACT Database (ClinicalTrials.gov mirror)",
-            "condition_searched": condition,
-            "eligibility_filter": eligibility_keywords or "none",
-            "trials": trials,
-        }
+            rows = await conn.fetch(query, *params)
 
-        logger.info("AACT search for '%s' (keywords='%s') returned %d trials", condition, eligibility_keywords, len(trials))
-        return json.dumps(result, indent=2)
+            trials = []
+            for r in rows:
+                trial = dict(r)
+                for k, v in trial.items():
+                    if hasattr(v, "isoformat"):
+                        trial[k] = v.isoformat()
+                trial["url"] = f"https://clinicaltrials.gov/study/{trial.get('nct_id', '')}"
+                if trial.get("criteria"):
+                    trial["criteria"] = trial["criteria"][:2000]
+                trials.append(trial)
+
+            result = {
+                "total": len(trials),
+                "source": "AACT Database (ClinicalTrials.gov mirror)",
+                "condition_searched": condition,
+                "eligibility_filter": eligibility_keywords or "none",
+                "trials": trials,
+            }
+
+            logger.info("AACT search for '%s' (keywords='%s') returned %d trials", condition, eligibility_keywords, len(trials))
+            return json.dumps(result, indent=2)
 
     except Exception as e:
         ref = uuid.uuid4().hex[:8]
@@ -578,9 +580,6 @@ async def aact_search(
             "total": 0,
             "trials": [],
         })
-    finally:
-        if conn:
-            await conn.close()
 
 
 # ============================================================================
