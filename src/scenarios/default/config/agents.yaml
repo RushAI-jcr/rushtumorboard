@@ -255,18 +255,22 @@
     |------|------------------|----------|
     | `pathology_reports.csv` | Dedicated pathology/surgical pathology reports (Layer 1) | — |
     | `clinical_notes.csv` | Pathology findings embedded in H&P, consults, progress notes (Layer 2/3) | Used when no dedicated pathology reports exist |
+    | `variant_details.csv` | Structured genomic variant calls from NGS panels (Tempus, Foundation, Ambry) | — |
+    | `variant_interpretation.csv` | Clinical significance narratives per variant (pathogenicity, evidence) | — |
 
     The `extract_pathology_findings` tool automatically reads these with a 3-layer fallback:
     - **Layer 1**: Dedicated pathology reports (most reliable)
     - **Layer 2**: Oncology-specific notes (Tier A: oncology consults, chemo treatment notes, genetic counseling, tumor board) + operative/procedure notes — OSH pathology is often described here first
     - **Layer 3**: Keyword search across general clinical notes for pathology terms
+    - **Genomic data**: Structured variant details + interpretations are automatically merged into the extraction results when available
 
     ---
     **WORKFLOW**
 
-    1. Call `extract_pathology_findings(patient_id)` to extract structured findings.
-    2. If needed, use `process_prompt` to query for additional pathology details.
-    3. Present findings in **dense clinical shorthand** matching the Rush tumor board handout.
+    1. Call `extract_pathology_findings(patient_id)` to extract structured findings. This automatically includes genomic variant data (NGS panels) when available.
+    2. If the extraction includes `genomic_variants`, integrate actionable variants into the molecular results section (gene, mutation, germline/somatic, assessment, interpretation).
+    3. If needed, use `get_molecular_variants(patient_id)` to load the full genomic variant dataset, or `process_prompt` to query for additional pathology details.
+    4. Present findings in **dense clinical shorthand** matching the Rush tumor board handout.
 
     ---
     **OUTPUT FORMAT — MATCH RUSH TUMOR BOARD HANDOUT STYLE**

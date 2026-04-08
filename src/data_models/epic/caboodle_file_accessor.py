@@ -62,6 +62,19 @@ class CaboodleFileAccessor:
 
     diagnoses.csv:
         PatientID, DiagnosisName, ICD10Code, DateOfEntry, Status
+
+    variant_details.csv (optional — genomic variant calls from NGS/Tempus/Foundation):
+        PatientID, VARIANT_ID, VARIANT_NAME, DISPLAY_NAME, VARIANT_TYPE, GENOME_ASSEMBLY,
+        CHROMOSOME, START_POSITION, GENE, REFERENCE_ALLELE, OBSERVED_ALLELE,
+        ALLELIC_READ_DEPTH, DNA_CHANGE, DNA_VAR_TYPE, TRANSCRIPT_REF_SEQ,
+        TRANSCRIPT_SYSTEM, AMINO_ACID_CHANGE, ALLELIC_FREQUENCY, GENOMIC_SOURCE,
+        METHOD_TYPE, ASSESSMENT, STDRD_AMINO_ACID_CHANGE, MOLECULAR_CONSEQUENCE,
+        CMPT_AMINO_ACID_START_CODON, CMPT_AMINO_ACID_END_CODON,
+        CMPT_AMINO_ACID_REFERENCE, CMPT_AMINO_ACID_ALTERNATE, ENTRY_SOURCE,
+        STDRD_TRANSCRIPT_REF_SEQ
+
+    variant_interpretation.csv (optional — clinical significance narratives per variant):
+        VARIANT_ID, PatientID, CONCATENATED_TEXT
     """
 
     # Max patients' data kept in cache before evicting oldest (HIPAA: limit PHI in heap)
@@ -78,6 +91,31 @@ class CaboodleFileAccessor:
         "cancer_staging",
         "medications",
         "diagnoses",
+        "variant_details",
+        "variant_interpretation",
+    })
+
+    # Known GYN oncology genes — variants in these genes are always surfaced as actionable.
+    # Covers: hereditary syndromes (BRCA, Lynch), targeted therapy targets (HER2, NTRK),
+    # molecular classification (POLE, TP53, MMR), and common GYN somatic drivers.
+    _GYN_ONCOLOGY_GENES: frozenset[str] = frozenset({
+        # Hereditary / germline
+        "BRCA1", "BRCA2", "MLH1", "MSH2", "MSH6", "PMS2", "EPCAM",
+        "RAD51C", "RAD51D", "BRIP1", "PALB2", "ATM", "CHEK2",
+        "STK11", "PTEN", "TP53", "MUTYH", "RAD50",
+        # Molecular classification (endometrial)
+        "POLE",
+        # Targeted therapy targets
+        "ERBB2", "HER2", "NTRK1", "NTRK2", "NTRK3",
+        "PIK3CA", "KRAS", "BRAF", "FGFR2", "FGFR3",
+        "CCNE1", "CDK4", "CDK6",
+        # Common GYN somatic drivers
+        "ARID1A", "CTNNB1", "FBXW7", "PPP2R1A", "RB1",
+        "NF1", "CDKN2A", "CDKN2B", "APC",
+        # Immuno markers
+        "CD274",  # PD-L1
+        # HRD-related
+        "RAD51B", "FANCA", "FANCC",
     })
 
     _TUMOR_MARKER_NAMES: frozenset[str] = frozenset([
@@ -113,6 +151,8 @@ class CaboodleFileAccessor:
         "medications": None,         # all
         "diagnoses": None,           # all
         "patient_demographics": None,  # no date filtering
+        "variant_details": None,       # all — static molecular results
+        "variant_interpretation": None,  # all — static molecular results
     }
 
     def __init__(self, data_dir: str | None = None, reference_date: str | None = None):
@@ -335,6 +375,88 @@ class CaboodleFileAccessor:
         """Get diagnosis list."""
         return await self._read_file(patient_id, "diagnoses")
 
+    async def get_variant_details(self, patient_id: str, gene: str | None = None) -> list[dict]:
+        """Get genomic variant details (somatic/germline), optionally filtered by gene."""
+        variants = await self._read_file(patient_id, "variant_details")
+        if gene:
+            gene_lower = gene.lower()
+            variants = [
+                v for v in variants
+                if gene_lower in v.get("GENE", v.get("gene", "")).lower()
+            ]
+        return variants
+
+    async def get_variant_interpretation(self, patient_id: str) -> list[dict]:
+        """Get variant interpretation text (clinical significance narratives)."""
+        return await self._read_file(patient_id, "variant_interpretation")
+
+    async def get_molecular_data(self, patient_id: str) -> dict:
+        """Get combined molecular/genomic data: variant details + interpretations.
+
+        Returns a dict with 'variant_details' and 'variant_interpretation' keys,
+        plus a 'variant_summary' with key actionable variants.
+        """
+        details, interps = await asyncio.gather(
+            self.get_variant_details(patient_id),
+            self.get_variant_interpretation(patient_id),
+        )
+
+        # Build interpretation lookup by VARIANT_ID
+        interp_map: dict[str, str] = {}
+        for row in interps:
+            vid = row.get("VARIANT_ID", row.get("variant_id", ""))
+            text = row.get("CONCATENATED_TEXT", row.get("concatenated_text", ""))
+            if vid and text:
+                interp_map[str(vid)] = text
+
+        interpreted_vids = set(interp_map.keys())
+
+        # Summarize actionable variants using clinically meaningful criteria:
+        # 1. All germline variants (always relevant for hereditary cancer syndromes)
+        # 2. Somatic variants in known GYN oncology genes
+        # 3. Any variant with a clinical interpretation
+        # 4. Loss-of-function variants (nonsense, frameshift) in any gene
+        actionable = []
+        seen_keys: set[str] = set()
+        for v in details:
+            gene = v.get("GENE", v.get("gene", ""))
+            source = v.get("GENOMIC_SOURCE", v.get("genomic_source", "")).lower()
+            consequence = v.get("MOLECULAR_CONSEQUENCE", v.get("molecular_consequence", "")).lower()
+            vid = str(v.get("VARIANT_ID", v.get("variant_id", "")))
+
+            is_germline = source == "germline"
+            is_oncology_gene = gene.upper() in self._GYN_ONCOLOGY_GENES
+            has_interpretation = vid in interpreted_vids
+            is_lof = consequence in ("nonsense", "frameshift variant", "splice donor variant", "splice acceptor variant")
+
+            if not (is_germline or is_oncology_gene or has_interpretation or is_lof):
+                continue
+
+            # Deduplicate by gene + change
+            change = v.get("AMINO_ACID_CHANGE", v.get("amino_acid_change", ""))
+            dedup_key = f"{gene}|{change or v.get('DNA_CHANGE', v.get('dna_change', ''))}"
+            if dedup_key in seen_keys:
+                continue
+            seen_keys.add(dedup_key)
+
+            interp_text = interp_map.get(vid, "")
+            actionable.append({
+                "gene": gene,
+                "change": change or v.get("DNA_CHANGE", v.get("dna_change", "")),
+                "source": v.get("GENOMIC_SOURCE", v.get("genomic_source", "")),
+                "assessment": v.get("ASSESSMENT", v.get("assessment", "")),
+                "consequence": v.get("MOLECULAR_CONSEQUENCE", v.get("molecular_consequence", "")),
+                "interpretation": interp_text[:500] if interp_text else "",
+            })
+
+        return {
+            "variant_details_count": len(details),
+            "variant_interpretation_count": len(interps),
+            "actionable_variants": actionable,
+            "variant_details": details,
+            "variant_interpretation": interps,
+        }
+
     async def get_patient_demographics(self, patient_id: str) -> PatientDemographics | None:
         """Get patient demographics (MRN, name, DOB, sex) if available.
 
@@ -501,16 +623,32 @@ class CaboodleFileAccessor:
             logger.error("Error reading CSV %s: %s", filepath, e)
             return []
 
+    # Canonical column name mapping: alternate names → expected names.
+    # Covers column differences across Caboodle export batches (e.g., March vs April).
+    _COLUMN_ALIASES: dict[str, str] = {
+        "NOTE_ID": "NoteID",
+        "NOTE_TYPE": "NoteType",
+        "NOTE_DATE": "EntryDate",
+        "CONCATENATED_TEXT": "NoteText",
+        "STATUS": "Status",
+        "Frequency (days)": "Frequency",
+    }
+
     def _read_csv_sync(self, filepath: str, patient_id: str) -> list[dict]:
-        """Synchronous CSV read."""
+        """Synchronous CSV read with column name normalization."""
         rows = []
         with open(filepath, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                # Normalize alternate column names to canonical names
+                normalized = {}
+                for k, v in row.items():
+                    canonical = self._COLUMN_ALIASES.get(k, k)
+                    normalized[canonical] = v
                 # Filter by patient_id if the file contains multiple patients
-                row_patient = row.get("PatientID", row.get("patient_id", patient_id))
+                row_patient = normalized.get("PatientID", normalized.get("patient_id", patient_id))
                 if str(row_patient) == str(patient_id):
-                    rows.append(dict(row))
+                    rows.append(normalized)
         return rows
 
     async def _read_parquet(self, filepath: str, patient_id: str) -> list[dict]:

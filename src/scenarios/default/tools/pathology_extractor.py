@@ -139,19 +139,57 @@ class PathologyExtractorPlugin(MedicalReportExtractorBase):
     )
 
     @kernel_function(
-        description="Extract structured pathology findings from a patient's pathology reports. "
+        description="Extract structured pathology findings from a patient's pathology reports "
+        "and genomic variant data (NGS panels). "
         "Returns histologic type, grade, margins, IHC panel, molecular results, "
-        "and endometrial molecular classification."
+        "genomic variants, and endometrial molecular classification."
     )
     async def extract_pathology_findings(self, patient_id: str) -> str:
-        """Extract structured pathology findings from Epic pathology reports using LLM.
+        """Extract structured pathology findings from Epic pathology reports + variant data.
+
+        Combines pathology reports (3-layer fallback) with structured genomic variant
+        data (variant_details.csv, variant_interpretation.csv) when available.
 
         Args:
             patient_id: The patient ID to retrieve pathology reports for.
 
         Returns:
-            Structured JSON with pathology findings.
+            Structured JSON with pathology findings and genomic variants.
         """
         if not validate_patient_id(patient_id):
             return json.dumps({"error": "Invalid patient ID."})
-        return await self._extract(patient_id)
+
+        import asyncio as _asyncio
+
+        # Run pathology extraction and molecular data load in parallel
+        extract_task = self._extract(patient_id)
+        molecular_task = self._load_molecular_data(patient_id)
+        extraction_result, molecular_data = await _asyncio.gather(
+            extract_task, molecular_task
+        )
+
+        # If we have molecular data, merge it into the extraction result
+        if molecular_data and molecular_data.get("actionable_variants"):
+            try:
+                findings = json.loads(extraction_result)
+                findings["genomic_variants"] = {
+                    "total_variants": molecular_data["variant_details_count"],
+                    "actionable_variants": molecular_data["actionable_variants"],
+                    "data_source": "variant_details + variant_interpretation (structured genomic data)",
+                }
+                extraction_result = json.dumps(findings, indent=2)
+            except json.JSONDecodeError:
+                pass  # extraction_result is raw text, can't merge
+
+        return extraction_result
+
+    async def _load_molecular_data(self, patient_id: str) -> dict | None:
+        """Load variant data from accessor, return None if unavailable."""
+        try:
+            return await self.data_access.clinical_note_accessor.get_molecular_data(patient_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).debug(
+                "No molecular variant data for patient %s", patient_id
+            )
+        return None

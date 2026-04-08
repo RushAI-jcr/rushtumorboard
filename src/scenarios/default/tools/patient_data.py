@@ -335,6 +335,62 @@ class PatientDataPlugin:
 
         return response
 
+    @kernel_function(
+        description=(
+            "Load molecular/genomic variant data for a patient. "
+            "Returns structured variant details (gene, mutation, assessment) and clinical interpretations "
+            "from NGS panels (Tempus, Foundation, Ambry, etc.). "
+            "Includes actionable variants summary with gene, amino acid change, germline/somatic source, "
+            "and interpretation text. Use for molecular profiling and targeted therapy decisions."
+        )
+    )
+    async def get_molecular_variants(self, patient_id: str) -> str:
+        """Load variant_details.csv and variant_interpretation.csv for a patient.
+
+        Args:
+            patient_id: The patient ID.
+
+        Returns:
+            JSON with actionable_variants summary and full variant data.
+        """
+        if not validate_patient_id(patient_id):
+            return json.dumps({"error": "Invalid patient ID."})
+
+        try:
+            accessor = self.data_access.clinical_note_accessor
+            molecular = await accessor.get_molecular_data(patient_id)
+
+            # For the response, include the actionable summary but cap full details
+            response = {
+                "patient_id": patient_id,
+                "variant_details_count": molecular["variant_details_count"],
+                "variant_interpretation_count": molecular["variant_interpretation_count"],
+                "actionable_variants": molecular["actionable_variants"],
+            }
+
+            # Include full variant details only if manageable size
+            if molecular["variant_details_count"] <= 200:
+                response["variant_details"] = molecular["variant_details"]
+                response["variant_interpretation"] = molecular["variant_interpretation"]
+            else:
+                response["note"] = (
+                    f"Full variant details ({molecular['variant_details_count']} rows) omitted "
+                    "due to size. Actionable variants are included above. "
+                    "Use process_prompt to query specific genes."
+                )
+
+            logger.info(
+                "Loaded molecular data for patient %s: %d variants, %d actionable",
+                patient_id, molecular["variant_details_count"], len(molecular["actionable_variants"]),
+            )
+            return json.dumps(response, indent=2)
+        except Exception:
+            logger.exception("Error loading molecular data for patient %s", patient_id)
+            return json.dumps({
+                "error": "Failed to load molecular variant data.",
+                "patient_id": patient_id,
+            })
+
     @staticmethod
     def _get_chat_prompt_exec_settings(response_format) -> AzureChatPromptExecutionSettings:
         return AzureChatPromptExecutionSettings(

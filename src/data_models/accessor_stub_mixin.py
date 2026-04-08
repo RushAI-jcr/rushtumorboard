@@ -61,6 +61,21 @@ class ClinicalNoteAccessorStubMixin:
         logger.warning("%s.get_diagnoses: stub — returning empty for patient %s", type(self).__name__, patient_id)
         return []
 
+    async def get_variant_details(self, patient_id: str, gene: str | None = None) -> list[dict]:
+        """Genomic variant details are not available via this accessor."""
+        logger.warning("%s.get_variant_details: stub — returning empty for patient %s", type(self).__name__, patient_id)
+        return []
+
+    async def get_variant_interpretation(self, patient_id: str) -> list[dict]:
+        """Variant interpretation text is not available via this accessor."""
+        logger.warning("%s.get_variant_interpretation: stub — returning empty for patient %s", type(self).__name__, patient_id)
+        return []
+
+    async def get_molecular_data(self, patient_id: str) -> dict:
+        """Combined molecular/genomic data is not available via this accessor."""
+        logger.warning("%s.get_molecular_data: stub — returning empty for patient %s", type(self).__name__, patient_id)
+        return {"variant_details_count": 0, "variant_interpretation_count": 0, "actionable_variants": [], "variant_details": [], "variant_interpretation": []}
+
     async def get_patient_demographics(self, patient_id: str) -> PatientDemographics | None:
         """Patient demographics are not available via this accessor."""
         logger.warning("%s.get_patient_demographics: stub — returning None for patient %s", type(self).__name__, patient_id)
