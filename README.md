@@ -20,7 +20,7 @@ A multi-agent system that coordinates specialized AI agents to support **Gynecol
 - **Landscape 5-column Word document** matching the Rush tumor board format (Patient | Diagnosis & History | Previous Tx/Findings | Imaging | Discussion)
 - **5-slide PowerPoint** summary with CA-125 trend chart (one slide per tumor board column)
 - **Clinical trials search** via NCI ClinicalTrials.gov API + AACT with GOG/NRG awareness
-- **MCP server** for clinical trials (6 FastMCP tools) with Copilot Studio integration
+- **MCP server** for clinical trials (6 FastMCP tools) — Copilot Studio integration architected but not yet connected (see [Roadmap](#roadmap))
 - **PHI scrubbing** at all external API boundaries — shared scrubber strips dates, MRNs, names before queries reach PubMed, ClinicalTrials.gov, NCI, Europe PMC, Semantic Scholar, or AACT
 - **Path traversal protection** — `Path.resolve().is_relative_to()` guards on both `resolve_patient_id` and `_read_file` prevent cross-patient data reads via adversarial identifiers
 - **Prompt injection defense** — Data Isolation rules on all data-extraction agents prevent adversarial instructions embedded in EHR clinical text
@@ -169,7 +169,7 @@ flowchart LR
     end
 
     CTA["ClinicalTrials Agent\nclinical_trials_nci"] --> mcp_server
-    CS2["Copilot Studio"] --> mcp_server
+    CS2["Copilot Studio\n⚠ NOT YET CONNECTED"] -.->|planned| mcp_server
 ```
 
 ## AI Agent Role Summaries
@@ -220,7 +220,7 @@ Before deploying, verify your Azure subscription has sufficient quota.
 * **Azure Resource Access**
   - You need **Owner** rights on at least one resource group
 
-* **Teams Integration**
+* **Teams Integration** _(required only when Teams deployment is ready — see [Roadmap](#roadmap))_
   - Ensure your IT admin allows custom Teams apps to be uploaded — see [Teams app upload](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/deploy-and-publish/apps-upload)
 
 
@@ -286,7 +286,10 @@ During deployment you will be prompted for subscription, region, and resource gr
 > [!IMPORTANT]
 > Full deployment can take 20–30 minutes. See the [Troubleshooting guide](./docs/troubleshooting.md) for common issues.
 
-### Step 4: Install Agents in Microsoft Teams
+### Step 4: Install Agents in Microsoft Teams ⚠️ PLANNED — NOT YET DEPLOYED
+
+> [!WARNING]
+> Teams integration is **not yet connected**. The bot framework architecture is in place, but agents have not been deployed to Teams. This step will become available in a future release. See [Roadmap](#roadmap).
 
 ```sh
 ./scripts/uploadPackage.sh ./output <teamsChatId|meetingLink> [tenantId]
@@ -393,11 +396,11 @@ Staging and genetics (primary site, FIGO stage, germline, somatic) appear in red
 - [GYN Tumor Board Scenario Guide](./docs/scenarios.md)
 - [Data Access & Epic Integration](./docs/data_access.md)
 - [FHIR Integration](./docs/fhir_integration.md)
-- [Fabric Integration](./docs/fabric/fabric_integration.md)
+- [Fabric Integration](./docs/fabric/fabric_integration.md) _(planned — not yet connected to production)_
 - [Data Ingestion Guide](./docs/data_ingestion.md) for adding patient data
-- [MCP & Copilot Integration](./docs/mcp.md)
+- [MCP & Copilot Integration](./docs/mcp.md) _(MCP server implemented; Copilot Studio connector not yet configured)_
 - [Network Architecture](./docs/network.md)
-- [Teams Integration Guide](./docs/teams.md)
+- [Teams Integration Guide](./docs/teams.md) _(planned — not yet deployed)_
 - [PHI Scrubbing & Security Fix](./docs/solutions/security-issues/phi-leakage-external-apis-hipaa-compliance.md)
 
 ### External Documentation
