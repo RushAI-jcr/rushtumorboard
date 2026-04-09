@@ -111,6 +111,7 @@ ONCOLOGIC_HISTORY_SYSTEM_PROMPT = """
       and whether performed at an outside hospital (OSH).
       Example: "PET 12/13/25 (OSH): FDG-avid lymphadenopathy c/w disease progression"
     - Rush Copley is a Rush affiliate, not an outside hospital.
+      (Source of truth for OSH hospitals and Rush affiliates: imaging_constants.py)
     - If imaging is described as "scheduled", "ordered", or "pending", include it in
       treatment_timeline with a note that results are pending.
     - Calculate platinum-free interval if the patient had platinum-based chemotherapy and later recurred.

@@ -209,6 +209,7 @@ imaging_findings: MOST RECENT FIRST (reverse chronological). Each study is a BLO
   MANDATORY OSH RULE: If any imaging was performed at an outside hospital, the '[OSH]' tag
   MUST appear in the study header after the date. Do NOT omit OSH even if findings are unremarkable.
   EXCEPTION: Rush Copley is a Rush affiliate — do NOT tag Copley imaging as OSH.
+  (Source of truth for OSH hospitals and Rush affiliates: imaging_constants.py)
   PENDING IMAGING: If imaging is scheduled but not yet completed, include it with
   '[PENDING]' tag: e.g., "Lymphangiogram 3/13 [PENDING]" or "MRI Pelvis [ORDERED]".
   Each study block should include:

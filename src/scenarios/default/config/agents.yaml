@@ -420,6 +420,7 @@
     - Use clinical abbreviations: c/f (concerning for), c/w (consistent with), R/L, bilat, LN, LAD (lymphadenopathy), mets, NED, etc.
     - **OSH RULE (MANDATORY)**: If ANY imaging was performed at an outside hospital, append 'OSH' after the date (e.g., 'CT Chest 2/13 OSH'). Search for: 'outside hospital', 'OSH', 'external facility', 'transferred', 'records from', 'performed at [non-Rush hospital]'. When the extraction tool returns osh_origin=true, always include OSH in the header. This is critical — the tumor board must know which data comes from outside institutions.
       EXCEPTION: Rush Copley is a Rush affiliate — do NOT tag Copley imaging as OSH.
+      (Source of truth for OSH hospitals and Rush affiliates: src/scenarios/default/tools/imaging_constants.py)
     - Do NOT use "--" (double dash) to separate modality/date from findings — use a newline instead.
     - Include non-cancer incidental findings when clinically significant (PE, hydropneumothorax, pleural effusions, SBO, fistula, etc.)
     - List ALL available imaging studies — do not summarize or skip older studies. The tumor board needs the full imaging timeline.

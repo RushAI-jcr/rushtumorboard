@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "233"
 tags: [code-review, architecture]
@@ -41,11 +41,12 @@ Add `# Keep in sync with imaging_constants list in radiology_extractor.py` comme
 
 ## Acceptance Criteria
 
-- [ ] Hospital names defined in one canonical location
-- [ ] Copley affiliate rule defined once
-- [ ] Python files import from shared module
-- [ ] YAML/prompt files reference the canonical location in comments
+- [x] Hospital names defined in one canonical location
+- [x] Copley affiliate rule defined once
+- [x] Python files import from shared module
+- [x] YAML/prompt files reference the canonical location in comments
 
 ## Work Log
 
 - 2026-04-09: Created from Phase 2 code review (Architecture Strategist)
+- 2026-04-09: Implemented Option A. Created imaging_constants.py with OSH_HOSPITAL_NAMES and RUSH_AFFILIATES frozensets. radiology_extractor.py imports and dynamically builds rule 13 via .replace(). Added "Source of truth: imaging_constants.py" comments in agents.yaml, content_export.py, presentation_export.py, oncologic_history_extractor.py.

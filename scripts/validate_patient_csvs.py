@@ -35,6 +35,8 @@ REQUIRED_COLUMNS = {
 
 # Column aliases handled by CaboodleFileAccessor._COLUMN_ALIASES — accept either name.
 # Maps alternate column name -> canonical name (same mapping as the accessor).
+# IMPORTANT: Keep in sync with CaboodleFileAccessor._COLUMN_ALIASES
+# in src/data_models/epic/caboodle_file_accessor.py (the authoritative source).
 COLUMN_ALIASES: dict[str, str] = {
     "NOTE_ID": "NoteID",
     "NOTE_TYPE": "NoteType",

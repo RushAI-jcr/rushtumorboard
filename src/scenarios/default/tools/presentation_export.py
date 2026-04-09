@@ -127,6 +127,7 @@ Slide 4 — Imaging (Col 3):
     Format: "Modality Date [OSH]" as the header, then impression/findings below. No "--" separator.
     MANDATORY: If imaging was from outside hospital, '[OSH]' tag MUST appear after the date.
     EXCEPTION: Rush Copley is a Rush affiliate — do NOT tag Copley imaging as OSH.
+    (Source of truth for OSH hospitals and Rush affiliates: imaging_constants.py)
     If imaging is scheduled but not yet done, include with [PENDING] tag.
     For slides, condense multi-point impressions into 1-3 key findings per study.
     Include:

@@ -10,6 +10,7 @@ from semantic_kernel.functions import kernel_function
 
 from data_models.plugin_configuration import PluginConfiguration
 
+from .imaging_constants import OSH_HOSPITAL_NAMES
 from .medical_report_extractor import MedicalReportExtractorBase
 from .note_type_constants import (
     ADDENDUM_TYPES, ASSESSMENT_PLAN_TYPES, EXTERNAL_TYPES,
@@ -105,9 +106,15 @@ RADIOLOGY_SYSTEM_PROMPT = """
         {"study_name": "Lymphangiogram", "date": "3/13/26", "status": "pending",
          "findings": "Scheduled, results not yet available"}
     13. Rush Copley is a Rush affiliate — do NOT flag Copley imaging as OSH.
-        Only flag as OSH when imaging is from non-Rush institutions (Riverside, Lutheran,
-        Good Samaritan/GSH, Edwards, or explicitly labeled "outside hospital"/"OSH").
-"""
+        Only flag as OSH when imaging is from non-Rush institutions (__OSH_HOSPITALS__,
+        or explicitly labeled "outside hospital"/"OSH").
+""".replace(
+    "__OSH_HOSPITALS__",
+    ", ".join(
+        name.title() + ("/GSH" if name == "good samaritan" else "")
+        for name in sorted(OSH_HOSPITAL_NAMES - {"gsh"})
+    ),
+)
 
 
 def create_plugin(plugin_config: PluginConfiguration):

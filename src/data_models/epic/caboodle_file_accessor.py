@@ -620,6 +620,11 @@ class CaboodleFileAccessor:
         Results are cached per (patient_id, file_type) since clinical data
         is immutable within a session. Eliminates redundant I/O when multiple
         agents read the same file.
+
+        Note: calls resolve_patient_id() even though callers may have already
+        resolved. This is intentional defense-in-depth — the second resolution
+        is idempotent (fast-path: folder exists) and ensures _read_file is safe
+        to call with raw MRN identifiers.
         """
         if file_type not in self._VALID_FILE_TYPES:
             raise ValueError(
@@ -685,6 +690,7 @@ class CaboodleFileAccessor:
 
     # Canonical column name mapping: alternate names → expected names.
     # Covers column differences across Caboodle export batches (e.g., March vs April).
+    # Mirrored in scripts/validate_patient_csvs.py — update both when changing.
     _COLUMN_ALIASES: dict[str, str] = {
         "NOTE_ID": "NoteID",
         "NOTE_TYPE": "NoteType",
