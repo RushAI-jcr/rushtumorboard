@@ -127,6 +127,8 @@ class CaboodleFileAccessor:
         "ldh",
         "scc", "scc ag", "squamous cell carcinoma antigen",
         "inhibin",
+        # ctDNA / Signatera
+        "signatera", "ctdna", "natera", "mrd",
     ])
 
     # Map file_type → column name containing the date to filter on
@@ -174,6 +176,7 @@ class CaboodleFileAccessor:
         self._resolved_data_dir = Path(self.data_dir).resolve()
         self._cache: OrderedDict[tuple[str, str], list[dict]] = OrderedDict()
         self._mrn_index: dict[str, str] | None = None  # lazy MRN→GUID index
+        self._mrn_index_lock = asyncio.Lock()
 
         # Reference date for per-file-type lookback windows
         ref_date_str = reference_date or os.getenv("TUMOR_BOARD_DATE")
@@ -191,20 +194,28 @@ class CaboodleFileAccessor:
         If the identifier matches an existing patient folder, returns it as-is.
         Otherwise, scans patient_demographics.csv files for a matching MRN and
         returns the corresponding PatientID (GUID).
+
+        Also called inside _read_file as defense-in-depth — the second call is
+        idempotent (hits the fast path since the folder exists after first resolution).
         """
         # Fast path: identifier is already a valid folder name
-        patient_dir = os.path.join(self.data_dir, identifier)
-        if os.path.isdir(patient_dir):
+        candidate = Path(os.path.join(self.data_dir, identifier)).resolve()
+        if not candidate.is_relative_to(self._resolved_data_dir):
+            raise ValueError(f"Invalid identifier {identifier!r}: path traversal detected")
+        if candidate.is_dir():
             return identifier
 
-        # Build MRN→GUID index lazily (once per accessor lifetime)
+        # Build MRN→GUID index lazily (once per accessor lifetime), guarded by lock
         if self._mrn_index is None:
-            loop = asyncio.get_running_loop()
-            self._mrn_index = await loop.run_in_executor(None, self._build_mrn_index_sync)
+            async with self._mrn_index_lock:
+                if self._mrn_index is None:  # double-check after acquiring lock
+                    loop = asyncio.get_running_loop()
+                    self._mrn_index = await loop.run_in_executor(None, self._build_mrn_index_sync)
 
-        resolved = self._mrn_index.get(identifier)
+        mrn_index = self._mrn_index or {}
+        resolved = mrn_index.get(identifier)
         if resolved:
-            logger.info("Resolved MRN %s → PatientID %s", identifier, resolved)
+            logger.debug("Resolved MRN ***%s → PatientID %s", identifier[-4:], resolved)
             return resolved
 
         # No match found — return as-is (will fail downstream with empty results)
@@ -226,8 +237,8 @@ class CaboodleFileAccessor:
                         mrn = row.get("MRN", "").strip()
                         if mrn:
                             index[mrn] = folder
-            except Exception:
-                logger.debug("Could not read demographics for %s", folder)
+            except (OSError, csv.Error, UnicodeDecodeError) as exc:
+                logger.warning("Could not read demographics for %s: %s", folder, exc)
         logger.info("Built MRN→PatientID index: %d entries", len(index))
         return index
 
@@ -552,13 +563,12 @@ class CaboodleFileAccessor:
         if not keywords:
             return notes
         kw_lower = [k.lower() for k in keywords]
-        return [
-            n for n in notes
-            if any(
-                kw in n.get("NoteText", n.get("note_text", n.get("text", ""))).lower()
-                for kw in kw_lower
-            )
-        ]
+        results = []
+        for n in notes:
+            text_lower = (n.get("NoteText", n.get("note_text", n.get("text", ""))) or "").lower()
+            if any(kw in text_lower for kw in kw_lower):
+                results.append(n)
+        return results
 
     # --- Internal helpers ---
 

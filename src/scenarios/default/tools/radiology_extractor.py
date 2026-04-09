@@ -130,44 +130,29 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
         + ("Multidisciplinary Tumor Board",) + ADDENDUM_TYPES
     )
     layer3_keywords = (
-        # CT variants
+        # CT variants (shorter keywords subsume longer ones via substring matching)
         "ct scan", "ct chest", "ct abdomen", "ct pelvis", "ct a/p", "ct cap",
-        "ct angiography", "ct angio", "cta", "ct enterography", "ct w/wo",
-        # MRI variants
-        "mri", "mri pelvis", "mri abdomen", "mr pelvis", "mri brain", "mri spine",
-        # PET variants (high-miss-risk — often only in oncology notes)
-        "pet", "pet-ct", "pet/ct", "suv", "fdg", "fdg-pet", "fdg pet", "fdg avid",
-        # Ultrasound variants (high-miss-risk — often only in GYN notes)
-        "ultrasound", "transvaginal", "tvus", "transvaginal us", "endovaginal",
-        "pelvic ultrasound", "pelvic us", "renal ultrasound", "renal us", "doppler",
+        "ct angio", "cta", "ct enterography", "ct w/wo",
+        "ct ap", "ct rp", "ctap",
+        # MRI variants ("mri" subsumes "mri pelvis", "mri abdomen", etc.)
+        "mri", "mr pelvis",
+        # PET variants ("pet" subsumes "pet-ct", "pet/ct"; "fdg" subsumes "fdg-pet", "fdg avid")
+        "pet", "suv", "fdg",
+        # Ultrasound variants ("ultrasound" subsumes "pelvic ultrasound", "renal ultrasound";
+        # "transvaginal" subsumes "transvaginal us")
+        "ultrasound", "transvaginal", "tvus", "endovaginal",
+        "pelvic us", "renal us", "us pelvis", "tv us", "doppler",
         # General imaging terms
         "imaging", "radiolog",
         "recist", "lesion", "mass", "tumor", "nodule",
         "ascites", "peritoneal", "omental", "lymph node",
         # Additional imaging modalities
-        "x-ray", "xray", "cxr", "chest x-ray", "bone scan", "mammogram", "dexa",
-        "nuclear medicine", "lymphoscintigraphy",
-        # OSH imaging (expanded — catches referral language)
+        "x-ray", "xray", "cxr", "bone scan", "mammogram", "dexa",
+        "nuclear medicine", "lymphoscintigraphy", "lymphangiogram",
+        # OSH imaging (catches referral language; hospital names handled by LLM prompt rule 13)
         "outside imaging", "osh", "prior imaging", "outside hospital",
         "outside facility", "external facility", "outside institution",
         "referring hospital", "transferred from", "records from",
-        # CT variants — March 11 gap fills
-        "ct ap",          # no-slash variant of "ct a/p" — common in handouts
-        "ct rp",          # CT retroperitoneum
-        "ct cap w",       # CT CAP with contrast
-        "ctap",           # no-space variant
-        # Ultrasound variants — March 11 gap fills
-        "us pelvis",      # reversed word order of "pelvic us"
-        "tv us",          # space-separated variant of "tvus"
-        # MRI variants — March 11 gap fills
-        "pelvic mri",     # reversed word order of "mri pelvis"
-        "mri ap",         # MRI abdomen/pelvis
-        # Additional modalities — March 11 gap fills
-        "lymphangiogram", # rare but clinically significant (vulvar cancer workups)
-        # Pending/scheduled imaging keywords
-        "scheduled", "ordered", "pending",
-        # Named OSH hospitals (supplement generic OSH keywords)
-        "riverside", "lutheran", "good samaritan", "edwards",
     )
 
     @kernel_function(

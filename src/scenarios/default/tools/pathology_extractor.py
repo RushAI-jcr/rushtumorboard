@@ -136,6 +136,8 @@ class PathologyExtractorPlugin(MedicalReportExtractorBase):
         "outside hospital", "osh path", "reviewed slides", "outside pathology",
         # Common clinical shorthand for embedded path results
         "final path", "hrd", "interval debulking",
+        # ctDNA / Signatera (results may arrive as pathology/genomic reports)
+        "signatera", "ctdna", "natera",
     )
 
     @kernel_function(

@@ -314,7 +314,9 @@ def validate_mrn_consistency(mrn_map, output_dir, mrn_map_file=None):
     if mismatches:
         print(f"\nWARNING: {len(mismatches)} MRN mismatch(es) detected:")
         for pid, expected, got in mismatches:
-            print(f"  {pid}: existing/expected={expected}, extracted={got}")
+            exp_masked = f"***{expected[-4:]}" if len(expected) >= 4 else expected
+            got_masked = f"***{got[-4:]}" if len(got) >= 4 else got
+            print(f"  {pid}: existing/expected={exp_masked}, extracted={got_masked}")
         print("  -> Verify correct MRN before running agents")
 
 
@@ -467,7 +469,8 @@ def main():
     print(f"\nPatientID -> MRN mapping:")
     for pid in sorted(all_patients):
         mrn = mrn_map.get(pid, "[NOT FOUND]")
-        print(f"  {pid} -> {mrn}")
+        mrn_masked = f"***{mrn[-4:]}" if len(mrn) >= 4 else mrn
+        print(f"  {pid} -> {mrn_masked}")
 
     # Cross-validate MRNs
     validate_mrn_consistency(mrn_map, output_dir, args.mrn_map)
@@ -481,7 +484,8 @@ def main():
         dob = info.get("dob", "")
         sex = info.get("sex", "")
         if name or dob or sex:
-            print(f"  {pid} -> Name={name or '?'}, DOB={dob or '?'}, Sex={sex or '?'}")
+            name_masked = f"{name[0]}." if name else "?"
+            print(f"  {pid} -> Name={name_masked}, DOB={'***' if dob else '?'}, Sex={sex or '?'}")
 
     # Determine new vs existing
     new_patients = sorted(all_patients - SKIP_PATIENTS)
@@ -532,8 +536,9 @@ def main():
                 dob=demo_info.get("dob", ""),
                 sex=demo_info.get("sex", ""),
             )
-            mrn_display = mrn if mrn else "[NOT FOUND - needs manual entry]"
-            name_display = demo_info.get("name", "") or "?"
+            mrn_display = f"***{mrn[-4:]}" if len(mrn) >= 4 else (mrn or "[NOT FOUND - needs manual entry]")
+            name_raw = demo_info.get("name", "")
+            name_display = f"{name_raw[0]}." if name_raw else "?"
             print(f"  patient_demographics.csv: {action_word} MRN={mrn_display}, Name={name_display}")
         else:
             print(f"  patient_demographics.csv: EXISTS (skipped, use --force-demographics to overwrite)")

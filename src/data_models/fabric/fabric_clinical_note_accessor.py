@@ -45,6 +45,8 @@ class FabricClinicalNoteAccessor(ClinicalNoteAccessorStubMixin):
         "cea", "afp", "alpha fetoprotein", "ldh",
         "scc", "scc ag", "squamous cell carcinoma antigen",
         "inhibin",
+        # ctDNA / Signatera
+        "signatera", "ctdna", "natera", "mrd",
     ])
 
     # Map Fabric UDF function names to structured data types.

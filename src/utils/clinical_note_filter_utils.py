@@ -59,13 +59,12 @@ def filter_notes_by_keywords(
     if not keywords:
         return notes
     kw_lower = [k.lower() for k in keywords]
-    return [
-        note for note in notes
-        if any(
-            kw in (str(note.get("NoteText", note.get("text", note.get("note_text", ""))) or "")).lower()
-            for kw in kw_lower
-        )
-    ]
+    results = []
+    for note in notes:
+        text_lower = (str(note.get("NoteText", note.get("text", note.get("note_text", ""))) or "")).lower()
+        if any(kw in text_lower for kw in kw_lower):
+            results.append(note)
+    return results
 
 
 def deduplicate_notes(

@@ -94,7 +94,8 @@ _NGS_PATTERNS = ["ngs", "next generation", "genomic panel", "myriad", "foundatio
 # Imaging procedure name patterns
 _CT_CAP_PATTERNS = ["ct chest, abdomen and pelvis", "ct chest abdomen pelvis",
                     "ct chest abdomen & pelvis", "ct a/p", "ct ap", "ct cap",
-                    "ctap", "ct chest/abdomen/pelvis", "ct rp"]
+                    "ctap", "ct chest/abdomen/pelvis"]
+_CT_RP_PATTERNS = ["ct rp", "ct retroperitoneum", "retroperitoneal ct"]
 _MRI_PEL_PATTERNS = ["mri pelvis", "mr pelvis", "mri of the pelvis"]
 _PET_PATTERNS = ["pet", "pet-ct", "pet/ct", "pet scan"]
 _CXR_PATTERNS = ["chest x-ray", "cxr", "chest radiograph", "pa chest",
@@ -430,6 +431,10 @@ class PreTumorBoardChecklistPlugin:
         ))
         results.append(_check_rad(
             "Lymphangiogram", _LYMPHANGIOGRAM_PATTERNS, 56,
+            "", conditional=True,
+        ))
+        results.append(_check_rad(
+            "CT Retroperitoneum", _CT_RP_PATTERNS, 56,
             "", conditional=True,
         ))
 
