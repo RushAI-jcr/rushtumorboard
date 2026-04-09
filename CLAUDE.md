@@ -27,9 +27,9 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   │       ├── patient_data.py                  # Load records, timeline (TIMELINE_NOTE_TYPES filter)
 │   │       ├── medical_report_extractor.py       # Base class: 3-layer note fallback
 │   │       ├── oncologic_history_extractor.py    # Prior onc history (OSH transfers)
-│   │       ├── pathology_extractor.py            # Histology, IHC, molecular markers
-│   │       ├── radiology_extractor.py            # CT/MRI/PET/US findings (LLM-based)
-│   │       ├── tumor_markers.py                  # CA-125/HE4/hCG trending + GCIG
+│   │       ├── pathology_extractor.py            # Histology, IHC, molecular markers + genomic variants
+│   │       ├── radiology_extractor.py            # CT/MRI/PET/US findings (LLM-based, OSH flagging)
+│   │       ├── tumor_markers.py                  # CA-125/HE4/hCG/SCC-Ag/Signatera trending + GCIG
 │   │       ├── pretumor_board_checklist.py       # Pre-meeting procedure pass (Rush order codes)
 │   │       ├── nccn_guidelines.py                # NCCN PDF lookup (Docling + PyMuPDF)
 │   │       ├── medical_research.py               # PubMed/EuropePMC/S2 + RISEN synthesis
@@ -38,11 +38,13 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   │       ├── graph_rag.py                      # GraphRAG (fallback, not primary)
 │   │       ├── validation.py                     # Shared input validation helpers
 │   │       ├── note_type_constants.py            # TIMELINE_NOTE_TYPES + extractor NoteType lists
+│   │       ├── imaging_constants.py              # OSH hospital names + Rush affiliates (single source of truth)
 │   │       ├── content_export/content_export.py  # Landscape 5-column Word doc (docxtpl)
+│   │       ├── content_export/_shared.py         # Shared export data preparation (demographics, staging)
 │   │       ├── content_export/timeline_image.py  # Timeline image generation helper
 │   │       └── presentation_export.py            # 5-slide PPTX via PptxGenJS (Node.js)
 │   ├── data_models/
-│   │   ├── epic/caboodle_file_accessor.py  # Epic Clarity CSV reader (7 CSVs per patient)
+│   │   ├── epic/caboodle_file_accessor.py  # Epic Clarity CSV reader (10 CSVs per patient, MRN→GUID index)
 │   │   ├── clinical_note_accessor.py       # Blob-based clinical note accessor
 │   │   ├── clinical_note_accessor_protocol.py  # Protocol interface for accessor duck-typing
 │   │   ├── accessor_stub_mixin.py          # Mixin for stub accessors (missing CSV graceful handling)
@@ -75,6 +77,7 @@ GYN Oncology Tumor Board — a forked adaptation of Microsoft's `healthcare-agen
 │   ├── parse_tumor_board_excel.py    # Parse tumor board Excel input to patient CSVs
 │   ├── nccn_pdf_processor.py         # NCCN PDF → structured guideline data
 │   ├── validate_patient_csvs.py      # Validate patient CSV file integrity
+│   ├── audit_handout_vs_data.py      # Compare handout (.docx) vs CSV data — gap report
 │   ├── run_batch_e2e.py              # Batch end-to-end test runner (15 patients)
 │   ├── generate_docx_template.py     # Generate Word template for content_export
 │   ├── generate_pptx_template.py     # Generate PPTX template
@@ -136,6 +139,8 @@ cd democlient && npm run dev   # frontend at http://localhost:3000
 | `AZURE_OPENAI_DEPLOYMENT_NAME_GUIDELINES` | Reasoning model for ClinicalGuidelines | falls back to primary |
 | `AZURE_OPENAI_DEPLOYMENT_NAME_REASONING_MODEL` | Reasoning model for ClinicalTrials tool | required |
 | `EXCLUDED_AGENTS` | Comma-separated agent names to exclude | (empty) |
+| `TUMOR_BOARD_DATE` | ISO date (YYYY-MM-DD) for lookback windows | today |
+| `CABOODLE_DATA_DIR` | Path to Epic Caboodle CSV patient data | `infra/patient_data` |
 
 ## Conventions
 

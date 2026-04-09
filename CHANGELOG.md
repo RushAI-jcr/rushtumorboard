@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Genomic variant pipeline** — `variant_details.csv` and `variant_interpretation.csv` support in CaboodleFileAccessor and FabricClinicalNoteAccessor; filters to 40+ actionable GYN oncology genes (BRCA1/2, HRD, POLE, TP53, MMR, PIK3CA, NTRK, HER2, etc.); pathology extractor merges genomic variants with structured pathology findings
+- **Signatera/ctDNA tumor marker support** — added to `tumor_markers.py`, `pretumor_board_checklist.py`, Caboodle and Fabric accessors, pathology/oncologic history extractors, and content/presentation export prompts
+- **Expanded imaging modality coverage** — 25+ new keywords for CT RP, CT AP, TVUS, pelvic US, FDG-PET, bone scan, DEXA, lymphangiogram, nuclear medicine; pending/scheduled imaging flagged with `[PENDING]` tag
+- **OSH (outside hospital) flagging** — centralized `imaging_constants.py` with `OSH_HOSPITAL_NAMES` and `RUSH_AFFILIATES` frozensets; referenced across radiology extractor, agents.yaml, content/presentation export, oncologic history extractor; Copley recognized as Rush affiliate
+- **MRN→GUID resolution** — lazy-built index from `patient_demographics.csv` files; asyncio.Lock with double-check pattern; path traversal protection via `Path.resolve().is_relative_to()`
+- **Handout audit script** (`scripts/audit_handout_vs_data.py`) — compares tumor board handout (.docx) against CSV data, produces per-patient gap report
+- **Content export shared module** (`content_export/_shared.py`) — extracted shared data preparation logic used by both Word and PPTX exports
 - `.gitattributes` for line ending normalization and binary file handling
 - `.editorconfig` for consistent formatting across editors
 - `CODEOWNERS` for automatic PR review assignment
@@ -14,11 +21,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Dependabot monitoring for Python pip, npm, and GitHub Actions dependencies
 
 ### Changed
+- CaboodleFileAccessor now handles 10 CSVs per patient (added `patient_demographics`, `variant_details`, `variant_interpretation`)
+- Column alias normalization in CaboodleFileAccessor (handles March vs April export differences)
+- Per-file-type date lookback windows: clinical notes 90d, labs 1yr, pathology/radiology/staging all data
+- LRU cache with per-patient eviction (max 5 patients in heap, HIPAA: limit PHI in memory)
+- Radiology extractor `layer3_keywords` pruned from 81 to 52 entries (removed redundant substring-subsumed keywords, hospital names moved to LLM prompt, "scheduled"/"ordered"/"pending" removed to prevent over-matching)
+- Pre-tumor board checklist expanded: conditional checks for TVUS, bone scan, lymphangiogram, CT RP, Signatera/ctDNA
 - `CONTRIBUTING.md` rewritten with local dev setup, PHI guidelines, commit conventions, and testing workflow
 - `docs/README.md` reorganized with quick-link table and clearer categories
 - PR template updated for Python/healthcare project (PHI checklist, agent impact, testing)
 
 ### Fixed
+- **HIPAA: MRN plaintext logging** — MRN values masked to last 4 digits in all log output; parse script masks MRN/name/DOB in console
+- **Path traversal** in `resolve_patient_id` and `_read_file` — added `is_relative_to` guards preventing cross-patient data reads
+- **Race condition** on lazy MRN index build — added asyncio.Lock with double-check pattern
+- **Bare except** in `_build_mrn_index_sync` narrowed to `(OSError, csv.Error, UnicodeDecodeError)`
+- **CT RP clinical correctness** — moved to own pattern list so CT retroperitoneum doesn't satisfy CT CAP checklist
+- **Keyword matching performance** — hoisted `.lower()` out of inner `any()` loop in `get_clinical_notes_by_keywords` and `clinical_note_filter_utils`
 - 13 code review findings in `group_chat.py` (4 P1, 6 P2, 3 P3):
   - Removed PHI-leaking diagnostic `invoke()` override
   - Capped `self.messages` and canonical history to prevent unbounded memory growth
@@ -30,6 +49,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - Added anti-injection preamble to selection and termination prompts
   - Moved all imports to module scope
   - Added SCENARIO/tool_name regex validation before dynamic import
+
+### Security
+- 6 P1 security findings resolved: FHIR session leak, MCP endpoint auth, MCP PHI logging, stub mixin silent failures, MCP facilitator mode, MCP missing request date
+- WebSocket connection auth hardened: reject unauthenticated before accept
+- File type allowlist (`_VALID_FILE_TYPES`) prevents adversarial `file_type` values
+- Data factory fallthrough now raises ValueError for invalid `CLINICAL_NOTES_SOURCE`
 
 ## [0.3.0] - 2026-03-28
 
