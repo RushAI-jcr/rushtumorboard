@@ -173,6 +173,7 @@ class CaboodleFileAccessor:
         self.data_dir = os.path.abspath(self.data_dir)
         self._resolved_data_dir = Path(self.data_dir).resolve()
         self._cache: OrderedDict[tuple[str, str], list[dict]] = OrderedDict()
+        self._mrn_index: dict[str, str] | None = None  # lazy MRN→GUID index
 
         # Reference date for per-file-type lookback windows
         ref_date_str = reference_date or os.getenv("TUMOR_BOARD_DATE")
@@ -183,6 +184,52 @@ class CaboodleFileAccessor:
             self._reference_date = None
 
         logger.info("CaboodleFileAccessor initialized with data_dir: %s", self.data_dir)
+
+    async def resolve_patient_id(self, identifier: str) -> str:
+        """Resolve a patient identifier (GUID or MRN) to the canonical PatientID folder name.
+
+        If the identifier matches an existing patient folder, returns it as-is.
+        Otherwise, scans patient_demographics.csv files for a matching MRN and
+        returns the corresponding PatientID (GUID).
+        """
+        # Fast path: identifier is already a valid folder name
+        patient_dir = os.path.join(self.data_dir, identifier)
+        if os.path.isdir(patient_dir):
+            return identifier
+
+        # Build MRN→GUID index lazily (once per accessor lifetime)
+        if self._mrn_index is None:
+            loop = asyncio.get_running_loop()
+            self._mrn_index = await loop.run_in_executor(None, self._build_mrn_index_sync)
+
+        resolved = self._mrn_index.get(identifier)
+        if resolved:
+            logger.info("Resolved MRN %s → PatientID %s", identifier, resolved)
+            return resolved
+
+        # No match found — return as-is (will fail downstream with empty results)
+        return identifier
+
+    def _build_mrn_index_sync(self) -> dict[str, str]:
+        """Scan all patient folders for MRN→PatientID mappings from demographics CSVs."""
+        index: dict[str, str] = {}
+        if not os.path.exists(self.data_dir):
+            return index
+        for folder in os.listdir(self.data_dir):
+            demo_path = os.path.join(self.data_dir, folder, "patient_demographics.csv")
+            if not os.path.isfile(demo_path):
+                continue
+            try:
+                with open(demo_path, "r", encoding="utf-8-sig") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        mrn = row.get("MRN", "").strip()
+                        if mrn:
+                            index[mrn] = folder
+            except Exception:
+                logger.debug("Could not read demographics for %s", folder)
+        logger.info("Built MRN→PatientID index: %d entries", len(index))
+        return index
 
     async def get_patients(self) -> list[str]:
         """Get the list of patient IDs from subdirectories."""
@@ -568,6 +615,9 @@ class CaboodleFileAccessor:
             raise ValueError(
                 f"Invalid file_type {file_type!r}. Must be one of: {sorted(self._VALID_FILE_TYPES)}"
             )
+
+        # Resolve MRN → GUID if the identifier doesn't match a folder
+        patient_id = await self.resolve_patient_id(patient_id)
 
         cache_key = (patient_id, file_type)
         if cache_key in self._cache:

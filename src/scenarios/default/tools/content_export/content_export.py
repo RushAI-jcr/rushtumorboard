@@ -198,12 +198,19 @@ tumor_markers: FULL HISTORY trend with all data points. Two formats accepted:
   - "CA-125: 194 (4/30/13) → 89 → 24 → 20 (2/25/26)"
   - "CA-125 declining (1073→614), CA19-9 rising (457→2418)"
   - "CA-125: 847→89→24→12 U/mL (normalized). HE4: stable 45 pmol/L"
+  Include Signatera/ctDNA results if available: "Signatera [date]: [positive/negative]"
+  or inline: "CA-125 normalized. Signatera 3/15 negative."
   Empty string only if no markers are being tracked.
 
 --- Column 3: Imaging ---
 imaging_findings: MOST RECENT FIRST (reverse chronological). Each study is a BLOCK, not a one-liner.
   Format: "Modality Date [OSH]" header on its own line, then the full impression/findings block below.
   NO "--" separator. NO bullets. Include ALL imaging studies — do NOT skip older studies.
+  MANDATORY OSH RULE: If any imaging was performed at an outside hospital, the '[OSH]' tag
+  MUST appear in the study header after the date. Do NOT omit OSH even if findings are unremarkable.
+  EXCEPTION: Rush Copley is a Rush affiliate — do NOT tag Copley imaging as OSH.
+  PENDING IMAGING: If imaging is scheduled but not yet completed, include it with
+  '[PENDING]' tag: e.g., "Lymphangiogram 3/13 [PENDING]" or "MRI Pelvis [ORDERED]".
   Each study block should include:
   - The radiologist's full IMPRESSION/CONCLUSION (if numbered, include ALL points on separate lines)
   - Comparison context (e.g., "In comparison to CT dated 04/18/2025:")

@@ -107,6 +107,12 @@ ONCOLOGIC_HISTORY_SYSTEM_PROMPT = """
     - Sort treatment_timeline and recurrence_history chronologically by date (oldest → newest).
     - DATES ARE MANDATORY: Every event in treatment_timeline and recurrence_history must have a date_range or date. Every molecular_profile result must include the date it was tested in parentheses, e.g., "BRCA1 pathogenic variant (tested 10/5/25)". Every tumor marker in current_tumor_markers must include its date, e.g., "CA-125 12 U/mL (3/15/26)".
     - For outside patients, clearly distinguish what was done at the outside institution vs. at this institution.
+    - When documenting imaging in treatment_timeline, include modality, date, key finding,
+      and whether performed at an outside hospital (OSH).
+      Example: "PET 12/13/25 (OSH): FDG-avid lymphadenopathy c/w disease progression"
+    - Rush Copley is a Rush affiliate, not an outside hospital.
+    - If imaging is described as "scheduled", "ordered", or "pending", include it in
+      treatment_timeline with a note that results are pending.
     - Calculate platinum-free interval if the patient had platinum-based chemotherapy and later recurred.
     - The summary_for_tumor_board should be written as if a physician is presenting the case:
       e.g., "This is a 62-year-old G3P3 postmenopausal woman with BRCA1-mutated FIGO IIIC high-grade serous

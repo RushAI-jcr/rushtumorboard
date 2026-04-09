@@ -6,6 +6,9 @@ from data_models.patient_demographics import PatientDemographics
 
 @runtime_checkable
 class ClinicalNoteAccessorProtocol(Protocol):
+    # --- Patient ID resolution (MRN → GUID) ---
+    async def resolve_patient_id(self, identifier: str) -> str: ...
+
     # --- Base methods: implemented by all accessors (Caboodle, FHIR, Fabric) ---
     async def get_patients(self) -> list[str]: ...
     async def get_metadata_list(self, patient_id: str) -> list[dict[str, str]]: ...

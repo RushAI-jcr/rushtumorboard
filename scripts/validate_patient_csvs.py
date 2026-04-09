@@ -33,6 +33,17 @@ REQUIRED_COLUMNS = {
     "diagnoses": ["PatientID", "DiagnosisName", "ICD10Code", "DateOfEntry", "Status"],
 }
 
+# Column aliases handled by CaboodleFileAccessor._COLUMN_ALIASES — accept either name.
+# Maps alternate column name -> canonical name (same mapping as the accessor).
+COLUMN_ALIASES: dict[str, str] = {
+    "NOTE_ID": "NoteID",
+    "NOTE_TYPE": "NoteType",
+    "NOTE_DATE": "EntryDate",
+    "CONCATENATED_TEXT": "NoteText",
+    "STATUS": "Status",
+    "Frequency (days)": "Frequency",
+}
+
 # These columns must have non-empty values in at least 1 row (only checked when rows > 0)
 TEXT_COLUMNS = {
     "clinical_notes": "NoteText",
@@ -62,9 +73,12 @@ def check_patient(patient_dir: str, patient_id: str) -> tuple[list[str], list[st
     for file_type, required_cols in REQUIRED_COLUMNS.items():
         csv_path = os.path.join(patient_dir, f"{file_type}.csv")
 
-        # 1. File exists
+        # 1. File exists (optional file types get a warning; required get an error)
         if not os.path.exists(csv_path):
-            errors.append(f"  MISSING: {file_type}.csv")
+            if file_type in OPTIONAL_FILE_TYPES:
+                warnings.append(f"  MISSING: {file_type}.csv — optional, agent uses 3-layer fallback")
+            else:
+                errors.append(f"  MISSING: {file_type}.csv")
             continue
 
         # Size check is skipped — empty files are caught by the row-count check below
@@ -78,8 +92,12 @@ def check_patient(patient_dir: str, patient_id: str) -> tuple[list[str], list[st
             errors.append(f"  UNREADABLE: {file_type}.csv — {e}")
             continue
 
-        # 3. Required columns present
-        missing_cols = [c for c in required_cols if c not in actual_cols]
+        # 3. Required columns present (accept aliases handled by CaboodleFileAccessor)
+        # Map actual column names to their canonical equivalents for comparison
+        canonical_cols = set()
+        for col in actual_cols:
+            canonical_cols.add(COLUMN_ALIASES.get(col, col))
+        missing_cols = [c for c in required_cols if c not in canonical_cols]
         if missing_cols:
             errors.append(f"  MISSING COLUMNS in {file_type}.csv: {missing_cols}")
             errors.append(f"    (found: {actual_cols})")
@@ -92,12 +110,20 @@ def check_patient(patient_dir: str, patient_id: str) -> tuple[list[str], list[st
                 errors.append(f"  EMPTY (0 rows): {file_type}.csv — required")
             continue
 
-        # 5. Text fields non-empty
+        # 5. Text fields non-empty (check canonical name and aliases)
         text_col = TEXT_COLUMNS.get(file_type)
-        if text_col and text_col in actual_cols:
-            non_empty = [r for r in rows if r.get(text_col, "").strip()]
-            if not non_empty:
-                errors.append(f"  ALL BLANK: {file_type}.csv column '{text_col}'")
+        if text_col:
+            # Find the actual column name (may be an alias)
+            actual_text_col = text_col if text_col in actual_cols else None
+            if not actual_text_col:
+                for alias, canonical in COLUMN_ALIASES.items():
+                    if canonical == text_col and alias in actual_cols:
+                        actual_text_col = alias
+                        break
+            if actual_text_col:
+                non_empty = [r for r in rows if r.get(actual_text_col, "").strip()]
+                if not non_empty:
+                    errors.append(f"  ALL BLANK: {file_type}.csv column '{actual_text_col}'")
 
         # 6. Lab results: check for tumor markers (warning only)
         if file_type == "lab_results" and "ComponentName" in actual_cols:

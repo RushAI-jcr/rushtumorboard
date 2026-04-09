@@ -211,6 +211,155 @@ def extract_mrn_from_notes(sheet_data):
     return resolved
 
 
+def extract_demographics_from_notes(sheet_data):
+    """Extract PatientName, DOB, and Sex from clinical note text.
+
+    Returns {pid: {"name": ..., "dob": ..., "sex": ...}}.
+    """
+    name_patterns = [
+        # "LAST, FIRST" in note headers (Epic format) — stop at whitespace run or newline
+        re.compile(r"PATIENT\s*NAME[:\s]+([A-Z][A-Z'-]+,\s*[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)?)\s{2,}", re.IGNORECASE),
+        # "Patient Name: First Last\n" (discharge/op notes) — stop at newline
+        re.compile(r"Patient\s+Name:\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*\n", re.IGNORECASE),
+    ]
+    dob_patterns = [
+        re.compile(r"(?:DOB|Date of Birth|D\.O\.B\.)[:\s]+(\d{1,2}/\d{1,2}/(?:19|20)\d{2})", re.IGNORECASE),
+        re.compile(r"(?:DOB|Date of Birth)[:\s]+(\d{4}-\d{2}-\d{2})", re.IGNORECASE),
+    ]
+    sex_pattern = re.compile(r"\b(\d{2,3})\s*(?:year|yr|y\.?o\.?)\s*old\s+(fe)?male\b", re.IGNORECASE)
+
+    # Find the clinical notes sheet
+    notes_key = None
+    for key, (headers, patient_rows) in sheet_data.items():
+        if match_sheet_name(key) == "clinical_notes.csv":
+            notes_key = key
+            break
+    if notes_key is None:
+        return {}
+
+    headers, patient_rows = sheet_data[notes_key]
+    text_col = None
+    for i, h in enumerate(headers):
+        if h and str(h).strip().upper() in ("CONCATENATED_TEXT", "NOTETEXT", "TEXT"):
+            text_col = i
+            break
+    if text_col is None:
+        return {}
+
+    results = {}
+    for pid, rows in patient_rows.items():
+        info = {"name": "", "dob": "", "sex": ""}
+        for row in rows[:20]:  # check first 20 notes
+            text = str(row[text_col]) if row[text_col] else ""
+            text_head = text[:5000]
+
+            if not info["name"]:
+                for pat in name_patterns:
+                    m = pat.search(text_head)
+                    if m:
+                        candidate = m.group(1).strip().rstrip(",").strip()
+                        if 3 < len(candidate) < 50 and not candidate.startswith("{"):
+                            info["name"] = candidate
+                            break
+
+            if not info["dob"]:
+                for pat in dob_patterns:
+                    m = pat.search(text_head)
+                    if m:
+                        info["dob"] = m.group(1).strip()
+                        break
+
+            if not info["sex"]:
+                m = sex_pattern.search(text_head)
+                if m:
+                    info["sex"] = "Female" if m.group(2) else "Male"
+
+            if info["name"] and info["dob"] and info["sex"]:
+                break
+
+        results[pid] = info
+    return results
+
+
+def validate_mrn_consistency(mrn_map, output_dir, mrn_map_file=None):
+    """Cross-validate extracted MRNs against existing demographics and optional mapping file.
+
+    Prints warnings for mismatches. Returns nothing.
+    """
+    mismatches = []
+
+    # Check against existing patient_demographics.csv files
+    for pid, extracted_mrn in mrn_map.items():
+        demo_path = os.path.join(output_dir, pid, "patient_demographics.csv")
+        if not os.path.isfile(demo_path):
+            continue
+        with open(demo_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            row = next(reader, {})
+        existing_mrn = row.get("MRN", "").strip()
+        if existing_mrn and extracted_mrn and existing_mrn != extracted_mrn:
+            mismatches.append((pid, existing_mrn, extracted_mrn))
+
+    # Check against optional MRN mapping file
+    if mrn_map_file and os.path.isfile(mrn_map_file):
+        with open(mrn_map_file, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                pid = row.get("PatientID", "").strip()
+                expected_mrn = row.get("MRN", "").strip()
+                extracted_mrn = mrn_map.get(pid, "")
+                if expected_mrn and extracted_mrn and expected_mrn != extracted_mrn:
+                    mismatches.append((pid, expected_mrn, extracted_mrn))
+
+    if mismatches:
+        print(f"\nWARNING: {len(mismatches)} MRN mismatch(es) detected:")
+        for pid, expected, got in mismatches:
+            print(f"  {pid}: existing/expected={expected}, extracted={got}")
+        print("  -> Verify correct MRN before running agents")
+
+
+def print_data_gap_report(new_patients, output_dir):
+    """Print a per-patient summary of available vs missing data."""
+    all_csv_types = [
+        "clinical_notes", "pathology_reports", "radiology_reports",
+        "lab_results", "cancer_staging", "medications", "diagnoses",
+    ]
+
+    print(f"\n{'='*80}")
+    print("DATA GAP REPORT")
+    print(f"{'='*80}")
+    print(f"{'Patient':<40s} {'notes':>6s} {'path':>5s} {'rad':>5s} {'labs':>5s} {'stage':>6s} {'meds':>5s} {'dx':>5s}")
+    print("-" * 80)
+
+    for pid in new_patients:
+        patient_dir = os.path.join(output_dir, pid)
+        counts = {}
+        for ft in all_csv_types:
+            csv_path = os.path.join(patient_dir, f"{ft}.csv")
+            if os.path.isfile(csv_path):
+                with open(csv_path, "r", encoding="utf-8-sig") as f:
+                    counts[ft] = sum(1 for _ in csv.DictReader(f))
+            else:
+                counts[ft] = -1  # missing
+
+        def fmt(n):
+            return "--" if n < 0 else str(n)
+
+        print(
+            f"{pid[:38]:<40s} "
+            f"{fmt(counts['clinical_notes']):>6s} "
+            f"{fmt(counts['pathology_reports']):>5s} "
+            f"{fmt(counts['radiology_reports']):>5s} "
+            f"{fmt(counts['lab_results']):>5s} "
+            f"{fmt(counts['cancer_staging']):>6s} "
+            f"{fmt(counts['medications']):>5s} "
+            f"{fmt(counts['diagnoses']):>5s}"
+        )
+
+    print("-" * 80)
+    print("'--' = CSV file missing (agent uses 3-layer fallback to clinical notes)")
+
+
 def write_csv(filepath, headers, rows):
     """Write rows to a CSV file."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -221,13 +370,13 @@ def write_csv(filepath, headers, rows):
             writer.writerow([format_value(v) for v in row])
 
 
-def write_demographics_csv(filepath, patient_id, mrn):
+def write_demographics_csv(filepath, patient_id, mrn, name="", dob="", sex=""):
     """Write patient_demographics.csv matching existing schema."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["PatientID", "MRN", "PatientName", "DOB", "Sex"])
-        writer.writerow([patient_id, mrn, "", "", ""])
+        writer.writerow([patient_id, mrn, name, dob, sex])
 
 
 def auto_detect_excel(directory):
@@ -261,6 +410,14 @@ def main():
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Preview what would be created without writing files."
+    )
+    parser.add_argument(
+        "--force-demographics", action="store_true",
+        help="Overwrite existing patient_demographics.csv (re-extract MRN/Name/DOB)."
+    )
+    parser.add_argument(
+        "--mrn-map",
+        help="Optional CSV file with PatientID,MRN columns for MRN cross-validation."
     )
     args = parser.parse_args()
 
@@ -312,6 +469,20 @@ def main():
         mrn = mrn_map.get(pid, "[NOT FOUND]")
         print(f"  {pid} -> {mrn}")
 
+    # Cross-validate MRNs
+    validate_mrn_consistency(mrn_map, output_dir, args.mrn_map)
+
+    # Extract demographics (name, DOB, sex) from notes
+    print(f"\nExtracting demographics from clinical notes...")
+    demo_map = extract_demographics_from_notes(sheet_data)
+    for pid in sorted(all_patients):
+        info = demo_map.get(pid, {})
+        name = info.get("name", "")
+        dob = info.get("dob", "")
+        sex = info.get("sex", "")
+        if name or dob or sex:
+            print(f"  {pid} -> Name={name or '?'}, DOB={dob or '?'}, Sex={sex or '?'}")
+
     # Determine new vs existing
     new_patients = sorted(all_patients - SKIP_PATIENTS)
     existing = set()
@@ -349,15 +520,23 @@ def main():
             write_csv(csv_path, headers, rows)
             print(f"  {csv_name}: {len(rows)} rows")
 
-        # Write demographics (only if doesn't already exist)
+        # Write demographics (only if doesn't already exist, or --force-demographics)
         mrn = mrn_map.get(pid, "")
+        demo_info = demo_map.get(pid, {})
         demo_path = os.path.join(patient_dir, "patient_demographics.csv")
-        if not os.path.exists(demo_path):
-            write_demographics_csv(demo_path, pid, mrn)
+        if not os.path.exists(demo_path) or args.force_demographics:
+            action_word = "OVERWRITING" if os.path.exists(demo_path) else "Creating"
+            write_demographics_csv(
+                demo_path, pid, mrn,
+                name=demo_info.get("name", ""),
+                dob=demo_info.get("dob", ""),
+                sex=demo_info.get("sex", ""),
+            )
             mrn_display = mrn if mrn else "[NOT FOUND - needs manual entry]"
-            print(f"  patient_demographics.csv: MRN={mrn_display}")
+            name_display = demo_info.get("name", "") or "?"
+            print(f"  patient_demographics.csv: {action_word} MRN={mrn_display}, Name={name_display}")
         else:
-            print(f"  patient_demographics.csv: EXISTS (skipped)")
+            print(f"  patient_demographics.csv: EXISTS (skipped, use --force-demographics to overwrite)")
 
     # Summary
     missing = [pid for pid in new_patients if pid not in mrn_map]
@@ -367,6 +546,9 @@ def main():
         for pid in missing:
             print(f"  {pid}")
         print("  -> Add MRN manually to patient_demographics.csv")
+
+    # Data gap report
+    print_data_gap_report(new_patients, output_dir)
 
     # Update local_patient_ids.json
     ids_path = os.path.join(REPO_ROOT, "src", "tests", "local_patient_ids.json")

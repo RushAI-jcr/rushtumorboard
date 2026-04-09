@@ -344,6 +344,29 @@
     - **Layer 3**: Keyword search across general clinical notes for imaging terms
 
     ---
+    **IMAGING MODALITIES — COMPLETE CHECKLIST**
+
+    Ensure extraction covers ALL of these — many appear only in clinical notes, not radiology_reports.csv:
+    - **CT**: CAP, chest, abdomen, pelvis, brain, CT angio, CT enterography
+    - **MRI**: pelvis, abdomen, brain, spine
+    - **PET/CT**: FDG-PET (referenced as "PET", "FDG-PET", "PET/CT", or "FDG-avid" in notes)
+    - **Ultrasound**: TVUS, pelvic US, renal US, Doppler
+    - **CXR**: chest x-ray, PA chest
+    - **Other**: bone scan, mammogram, DEXA
+
+    **HIGH-MISS-RISK** (commonly only in clinical notes, not in radiology_reports.csv):
+    - PET scans — frequently summarized in oncology consult notes only
+    - TVUS — often only in GYN notes (Progress Notes, H&P)
+    - OSH imaging — only in consult/referral notes from outside hospitals
+    - **Lymphangiogram**: rare but appears in vulvar cancer workups (sentinel node mapping)
+    - **CT RP**: CT retroperitoneum — separate from CT AP in some order sets
+    - **CT AP** (no slash): common shorthand for CT abdomen/pelvis — distinct from "CT A/P"
+
+    **PENDING IMAGING**: If a study is described as "scheduled", "ordered", or "pending",
+    include it in the report with a [PENDING] tag: e.g., "Lymphangiogram 3/13 [PENDING]"
+    or "MRI Pelvis [ORDERED at Riverside]". The tumor board needs to know what's coming.
+
+    ---
     **WORKFLOW**
 
     1. Call `extract_radiology_findings(patient_id)` to extract structured findings.
@@ -395,7 +418,8 @@
     - Include ALL key measurements (e.g., "enlarged R obturator LN 1.5cm", "3.2cm mass", "endometrium 8mm")
     - Include comparison findings explicitly: "interval increased", "stable from prior", "no change", "new", "previously 17mm"
     - Use clinical abbreviations: c/f (concerning for), c/w (consistent with), R/L, bilat, LN, LAD (lymphadenopathy), mets, NED, etc.
-    - Note OSH origin when applicable (e.g., "CT Chest 2/13 OSH")
+    - **OSH RULE (MANDATORY)**: If ANY imaging was performed at an outside hospital, append 'OSH' after the date (e.g., 'CT Chest 2/13 OSH'). Search for: 'outside hospital', 'OSH', 'external facility', 'transferred', 'records from', 'performed at [non-Rush hospital]'. When the extraction tool returns osh_origin=true, always include OSH in the header. This is critical — the tumor board must know which data comes from outside institutions.
+      EXCEPTION: Rush Copley is a Rush affiliate — do NOT tag Copley imaging as OSH.
     - Do NOT use "--" (double dash) to separate modality/date from findings — use a newline instead.
     - Include non-cancer incidental findings when clinically significant (PE, hydropneumothorax, pleural effusions, SBO, fistula, etc.)
     - List ALL available imaging studies — do not summarize or skip older studies. The tumor board needs the full imaging timeline.
@@ -461,6 +485,8 @@
           - Cervical SCC: SCC-Ag, CA-125
           - GTD/GTN: hCG (beta-hCG)
           - Any additional markers that appear in the `get_all_tumor_markers` results
+          - All cancer types: If Signatera/ctDNA testing was performed, call
+            `get_tumor_marker_trend(patient_id, "Signatera")` and include results with dates.
        c. Present the FULL trend across the entire treatment history (months/years), not just the most recent value. The tumor board needs to see the trajectory: diagnosis → nadir → recurrence → current.
 
     3. **Compile status**: Using the checklist results, tumor marker data, and information from the conversation, compile the full status report (see output format below).
@@ -507,6 +533,8 @@
     - Note trend direction: declining, stable, rising, rising from nadir
     - Include GCIG response criteria when applicable (>=50% decrease = response, >=2x from nadir = progression)
     - For multiple markers, present each on its own line
+    - For Signatera/ctDNA: "Signatera [date]: [positive/negative] ([X.XX] MTM/mL if available)".
+      If negative on PARP maintenance, note the clinical implication per conversation context.
 
     **3. Treatment Summary** (chronological, concise):
     List treatment lines with abbreviations: Carbo/Taxol, Carbo/Taxol/Pembro, bev, olaparib, etc.

@@ -126,6 +126,8 @@ class PatientDataPlugin:
             return json.dumps({"error": "Invalid patient ID."})
 
         try:
+            # Resolve MRN → GUID so all downstream calls use the canonical PatientID
+            patient_id = await self.data_access.clinical_note_accessor.resolve_patient_id(patient_id)
             self.chat_ctx.patient_id = patient_id
 
             # Load patient metadata

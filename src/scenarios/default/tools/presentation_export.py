@@ -118,12 +118,16 @@ Slide 3 — Previous Tx or Operative Findings (Col 2):
     - "Path 2/20 GSH: A-F specimens all benign. Washings negative."
     - "S/p 6 cycles Carbo/Taxol C1D1 3/15/25"
     - "CA-125: 657 (1/16/25) → 241 → 89 → 91 → 177 (1/28/26) — rising from nadir"
+    - "Signatera 3/15/26: negative"
   findings_chart_title: primary tumor marker name, e.g. "CA-125 Trend"
 
 Slide 4 — Imaging (Col 3):
   imaging_title: "Imaging"
   imaging_bullets: max 8 — MOST RECENT FIRST (reverse chronological). Each bullet is one study.
     Format: "Modality Date [OSH]" as the header, then impression/findings below. No "--" separator.
+    MANDATORY: If imaging was from outside hospital, '[OSH]' tag MUST appear after the date.
+    EXCEPTION: Rush Copley is a Rush affiliate — do NOT tag Copley imaging as OSH.
+    If imaging is scheduled but not yet done, include with [PENDING] tag.
     For slides, condense multi-point impressions into 1-3 key findings per study.
     Include:
     - Radiologist's IMPRESSION (most important — numbered points if present)

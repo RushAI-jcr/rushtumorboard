@@ -93,12 +93,18 @@ _NGS_PATTERNS = ["ngs", "next generation", "genomic panel", "myriad", "foundatio
 
 # Imaging procedure name patterns
 _CT_CAP_PATTERNS = ["ct chest, abdomen and pelvis", "ct chest abdomen pelvis",
-                    "ct chest abdomen & pelvis", "ct a/p", "ct cap",
-                    "ct chest/abdomen/pelvis"]
+                    "ct chest abdomen & pelvis", "ct a/p", "ct ap", "ct cap",
+                    "ctap", "ct chest/abdomen/pelvis", "ct rp"]
 _MRI_PEL_PATTERNS = ["mri pelvis", "mr pelvis", "mri of the pelvis"]
 _PET_PATTERNS = ["pet", "pet-ct", "pet/ct", "pet scan"]
 _CXR_PATTERNS = ["chest x-ray", "cxr", "chest radiograph", "pa chest",
                  "ct chest"]  # CT chest counts as chest imaging fallback
+_TVUS_PATTERNS = ["tvus", "transvaginal", "transvaginal ultrasound",
+                  "endovaginal", "pelvic ultrasound", "pelvic us"]
+_BONE_SCAN_PATTERNS = ["bone scan", "tc-99m", "bone scintigraphy"]
+_LYMPHANGIOGRAM_PATTERNS = ["lymphangiogram", "lymphoscintigraphy", "sentinel node mapping"]
+_SIGNATERA_PATTERNS = ["signatera", "ctdna", "ct-dna", "circulating tumor",
+                       "mrd", "natera"]
 
 # Consult note type keywords (NoteType = "Consults" / "Consult Note" / note text)
 _GYN_ONC_PATTERNS = ["gynecol", "gyn onc", "gynecologic oncol"]
@@ -352,7 +358,7 @@ class PreTumorBoardChecklistPlugin:
 
         # SCC antigen: cervical squamous cell carcinoma
         if ctype == "cervical":
-            results.append(_check("SCC-Ag", ["scc", "scc-ag", "squamous cell carcinoma antigen"], 28, conditional=False))
+            results.append(_check("SCC-Ag", ["scc", "scc-ag", "scc ag", "squamous cell carcinoma antigen"], 28, conditional=False))
 
         # CEA: mucinous carcinoma
         results.append(_check("CEA", _CEA_PATTERNS, 28, conditional=ctype != "mucinous"))
@@ -362,6 +368,9 @@ class PreTumorBoardChecklistPlugin:
 
         # HE4: ovarian (optional but useful)
         results.append(_check("HE4", _HE4_PATTERNS, 28, conditional=True))
+
+        # Signatera/ctDNA: conditional for all cancer types
+        results.append(_check("Signatera/ctDNA", _SIGNATERA_PATTERNS, 28, conditional=True))
 
         return results
 
@@ -410,6 +419,18 @@ class PreTumorBoardChecklistPlugin:
         results.append(_check_rad(
             "Chest imaging (CXR/CT chest)", _CXR_PATTERNS, 56,
             "RAD100625 or RADRAD300301", conditional=True,
+        ))
+        results.append(_check_rad(
+            "TVUS / Pelvic US", _TVUS_PATTERNS, 42,
+            "", conditional=True,
+        ))
+        results.append(_check_rad(
+            "Bone Scan", _BONE_SCAN_PATTERNS, 56,
+            "", conditional=True,
+        ))
+        results.append(_check_rad(
+            "Lymphangiogram", _LYMPHANGIOGRAM_PATTERNS, 56,
+            "", conditional=True,
         ))
 
         return results

@@ -24,10 +24,11 @@ RADIOLOGY_SYSTEM_PROMPT = """
     {
         "studies": [
             {
-                "modality": "CT/MRI/PET-CT/Ultrasound/CXR",
+                "modality": "CT/MRI/PET-CT/FDG-PET/Ultrasound/TVUS/CXR/Bone Scan/Nuclear Medicine",
                 "study_name": "full study name (e.g., CT CAP, MRI Pelvis, PET/CT, TVUS, CT Angio Chest)",
                 "study_date": "date in M/D/YY format",
                 "osh_origin": "true if from outside hospital, false otherwise",
+                "status": "completed/pending (default: completed)",
                 "indication": "clinical indication",
                 "comparison": "prior study compared to, if any",
                 "primary_tumor": {
@@ -92,6 +93,20 @@ RADIOLOGY_SYSTEM_PROMPT = """
     8. CHRONOLOGICAL ORDER IS MANDATORY: oldest study_date first, most recent last.
     9. For RECIST: calculate percent change as ((current - prior) / prior * 100).
        CR = complete resolution, PR = >=30% decrease, PD = >=20% increase, SD = neither.
+    10. If imaging was performed at an outside hospital (OSH), set osh_origin to true.
+        Look for: "outside hospital", "OSH", "external facility", "transferred from",
+        "records from [hospital]", "imaging from [hospital]". Include institution name
+        in study_name if mentioned.
+    11. Physicians often summarize outside imaging in clinical notes: "outside CT showed...",
+        "PET from OSH demonstrated...", "per report from [hospital]...". Extract these
+        with the same rigor as dedicated radiology reports.
+    12. If imaging is described as "scheduled", "ordered", or "pending", extract it with
+        status="pending" and include the scheduled date if mentioned. Example:
+        {"study_name": "Lymphangiogram", "date": "3/13/26", "status": "pending",
+         "findings": "Scheduled, results not yet available"}
+    13. Rush Copley is a Rush affiliate — do NOT flag Copley imaging as OSH.
+        Only flag as OSH when imaging is from non-Rush institutions (Riverside, Lutheran,
+        Good Samaritan/GSH, Edwards, or explicitly labeled "outside hospital"/"OSH").
 """
 
 
@@ -115,17 +130,44 @@ class RadiologyExtractorPlugin(MedicalReportExtractorBase):
         + ("Multidisciplinary Tumor Board",) + ADDENDUM_TYPES
     )
     layer3_keywords = (
+        # CT variants
         "ct scan", "ct chest", "ct abdomen", "ct pelvis", "ct a/p", "ct cap",
-        "mri", "mri pelvis", "mri abdomen",
-        "pet", "pet-ct", "pet/ct", "suv",
-        "ultrasound", "transvaginal", "tvus",
+        "ct angiography", "ct angio", "cta", "ct enterography", "ct w/wo",
+        # MRI variants
+        "mri", "mri pelvis", "mri abdomen", "mr pelvis", "mri brain", "mri spine",
+        # PET variants (high-miss-risk — often only in oncology notes)
+        "pet", "pet-ct", "pet/ct", "suv", "fdg", "fdg-pet", "fdg pet", "fdg avid",
+        # Ultrasound variants (high-miss-risk — often only in GYN notes)
+        "ultrasound", "transvaginal", "tvus", "transvaginal us", "endovaginal",
+        "pelvic ultrasound", "pelvic us", "renal ultrasound", "renal us", "doppler",
+        # General imaging terms
         "imaging", "radiolog",
         "recist", "lesion", "mass", "tumor", "nodule",
         "ascites", "peritoneal", "omental", "lymph node",
         # Additional imaging modalities
         "x-ray", "xray", "cxr", "chest x-ray", "bone scan", "mammogram", "dexa",
-        # OSH imaging
+        "nuclear medicine", "lymphoscintigraphy",
+        # OSH imaging (expanded — catches referral language)
         "outside imaging", "osh", "prior imaging", "outside hospital",
+        "outside facility", "external facility", "outside institution",
+        "referring hospital", "transferred from", "records from",
+        # CT variants — March 11 gap fills
+        "ct ap",          # no-slash variant of "ct a/p" — common in handouts
+        "ct rp",          # CT retroperitoneum
+        "ct cap w",       # CT CAP with contrast
+        "ctap",           # no-space variant
+        # Ultrasound variants — March 11 gap fills
+        "us pelvis",      # reversed word order of "pelvic us"
+        "tv us",          # space-separated variant of "tvus"
+        # MRI variants — March 11 gap fills
+        "pelvic mri",     # reversed word order of "mri pelvis"
+        "mri ap",         # MRI abdomen/pelvis
+        # Additional modalities — March 11 gap fills
+        "lymphangiogram", # rare but clinically significant (vulvar cancer workups)
+        # Pending/scheduled imaging keywords
+        "scheduled", "ordered", "pending",
+        # Named OSH hospitals (supplement generic OSH keywords)
+        "riverside", "lutheran", "good samaritan", "edwards",
     )
 
     @kernel_function(

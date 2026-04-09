@@ -19,6 +19,10 @@ class ClinicalNoteAccessorStubMixin:
     Stub methods log a WARNING on first call so silent data gaps are visible in production.
     """
 
+    async def resolve_patient_id(self, identifier: str) -> str:
+        """Default: return identifier as-is (no MRN→GUID resolution)."""
+        return identifier
+
     async def get_lab_results(self, patient_id: str, component_name: str | None = None) -> list[dict]:
         """Structured lab results are not available via this accessor."""
         logger.warning("%s.get_lab_results: stub — returning empty for patient %s", type(self).__name__, patient_id)

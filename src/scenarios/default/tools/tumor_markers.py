@@ -37,6 +37,9 @@ GYN_MARKERS = {
     "ldh": {"upper_normal": 250.0, "unit": "U/L"},
     "inhibin": {"upper_normal": 10.0, "unit": "pg/mL"},
     "scc": {"upper_normal": 1.5, "unit": "ng/mL"},
+    "scc-ag": {"upper_normal": 1.5, "unit": "ng/mL"},
+    "signatera": {"upper_normal": None, "unit": "ctDNA"},
+    "ctdna": {"upper_normal": None, "unit": "ctDNA"},
 }
 
 
@@ -58,13 +61,17 @@ class TumorMarkerPlugin:
         "ca-125", "ca125", "ca 125", "he4", "he-4",
         "hcg", "beta-hcg", "cea", "afp", "ca-19", "ca19",
         "ca 27", "ca2729", "ca 15", "ca153", "tumor marker",
-        "scc", "scc-ag", "squamous cell carcinoma antigen",
+        "scc", "scc-ag", "scc ag", "squamous cell carcinoma antigen",
+        # ctDNA / Signatera
+        "signatera", "ctdna", "ct-dna", "circulating tumor dna",
+        "minimal residual disease", "mrd", "natera",
     ]
     # Genomic testing companies whose pathology reports may contain tumor marker
     # and biomarker data (HRD scores, BRCA status, TMB, etc.)
     _GENOMIC_REPORT_KEYWORDS = [
         "tempus", "ambry", "foundation", "guardant", "caris",
         "neogenomics", "myriad", "invitae",
+        "natera", "signatera",
     ]
 
     def __init__(self, config: PluginConfiguration):
@@ -394,8 +401,9 @@ class TumorMarkerPlugin:
         marker_key = _normalize_marker(marker)
         for key, info in GYN_MARKERS.items():
             if _normalize_marker(key) == marker_key:
-                analysis["upper_normal"] = info["upper_normal"]
-                analysis["latest_above_normal"] = values[-1] > info["upper_normal"]
+                if info["upper_normal"] is not None:
+                    analysis["upper_normal"] = info["upper_normal"]
+                    analysis["latest_above_normal"] = values[-1] > info["upper_normal"]
                 break
 
         # GCIG response criteria (for CA-125)
